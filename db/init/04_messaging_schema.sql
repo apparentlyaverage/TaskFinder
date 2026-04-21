@@ -1,4 +1,4 @@
-﻿CREATE TABLE messages (
+CREATE TABLE messages (
     message_id  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     sender_id   UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     receiver_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,

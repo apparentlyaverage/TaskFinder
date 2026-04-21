@@ -1,5 +1,5 @@
-﻿// gateway/routes.js
-module.exports = {
+// gateway/routes.js
+export default {
   auth: {
     target: process.env.AUTH_SERVICE_URL || 'http://localhost:3001',
     description: 'Authentication & user management',

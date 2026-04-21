@@ -1,4 +1,4 @@
-﻿CREATE TABLE tasks (
+CREATE TABLE tasks (
     task_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     creator_id   UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     title        VARCHAR(255) NOT NULL,

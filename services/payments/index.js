@@ -1,4 +1,4 @@
-﻿// services/payments/index.js
+// services/payments/index.js
 import 'dotenv/config'
 import express from 'express'
 import Stripe from 'stripe'

@@ -1,4 +1,4 @@
-﻿CREATE TABLE task_matches (
+CREATE TABLE task_matches (
     match_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     task_id      UUID NOT NULL REFERENCES tasks(task_id) ON DELETE CASCADE,
     earner_id    UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,

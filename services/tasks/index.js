@@ -1,4 +1,4 @@
-﻿// services/tasks/index.js
+// services/tasks/index.js
 import 'dotenv/config'
 import express from 'express'
 import pg from 'pg'

@@ -1,4 +1,4 @@
-﻿// services/disputes/index.js
+// services/disputes/index.js
 import 'dotenv/config'
 import express from 'express'
 import pg from 'pg'

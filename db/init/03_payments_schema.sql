@@ -1,4 +1,4 @@
-﻿CREATE TABLE stripe_accounts (
+CREATE TABLE stripe_accounts (
     account_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id             UUID UNIQUE NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     stripe_account_id   TEXT UNIQUE NOT NULL,

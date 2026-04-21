@@ -1,4 +1,4 @@
-﻿// services/auth/index.js
+// services/auth/index.js
 import 'dotenv/config'
 import express from 'express'
 import bcrypt from 'bcrypt'

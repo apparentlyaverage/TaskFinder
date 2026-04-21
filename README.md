@@ -1,4 +1,4 @@
-﻿# TaskFinder Platform
+# TaskFinder Platform
 
 Peer-to-peer service marketplace. Creators post tasks, Earners bid and fulfil them.
 

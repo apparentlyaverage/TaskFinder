@@ -1,4 +1,4 @@
-﻿CREATE TABLE reviews (
+CREATE TABLE reviews (
     review_id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     task_id     UUID NOT NULL REFERENCES tasks(task_id) ON DELETE RESTRICT,
     reviewer_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,

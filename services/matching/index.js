@@ -1,8 +1,8 @@
-﻿// services/matching/index.js
+// services/matching/index.js
 import 'dotenv/config'
 import express from 'express'
 import pg from 'pg'
-import { connect as connectMQ, subscribe, publish } from '../messaging/eventBus.js'
+import { connect as connectMQ, subscribe, publish } from './eventBus.js'
 
 const { Pool } = pg
 const app = express()

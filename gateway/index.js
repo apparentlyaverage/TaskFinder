@@ -1,4 +1,4 @@
-﻿// gateway/index.js
+// gateway/index.js
 import 'dotenv/config'
 import express from 'express'
 import { createProxyMiddleware } from 'http-proxy-middleware'
@@ -8,11 +8,8 @@ import jwt from 'jsonwebtoken'
 import cors from 'cors'
 import { rateLimit } from 'express-rate-limit'
 import { createClient } from 'redis'
-import { createRequire } from 'module'
-
-const require = createRequire(import.meta.url)
-const routes = require('./routes.js')
-const { limiterConfigs } = require('./rateLimits.js')
+import routes from './routes.js'
+import { limiterConfigs } from './rateLimits.js'
 
 const app = express()
 const JWT_SECRET = process.env.JWT_SECRET
@@ -30,7 +27,7 @@ app.use(cors({
 }))
 
 morgan.token('user-id', (req) => req.user?.userId || 'anonymous')
-app.use(morgan(':method :url :status :response-time ms â€” user=:user-id', {
+app.use(morgan(':method :url :status :response-time ms — user=:user-id', {
   skip: (req) => req.url === '/health',
 }))
 
@@ -51,12 +48,16 @@ function buildLimiter(config) {
 
 function requireAuth(req, res, next) {
   const header = req.headers.authorization
-  if (!header?.startsWith('Bearer ')) return res.status(401).json({ message: 'Authentication required.' })
+  if (!header?.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'Authentication required.' })
+  }
   try {
     req.user = jwt.verify(header.split(' ')[1], JWT_SECRET)
     next()
   } catch (err) {
-    return res.status(401).json({ message: err.name === 'TokenExpiredError' ? 'Token has expired.' : 'Invalid token.' })
+    return res.status(401).json({
+      message: err.name === 'TokenExpiredError' ? 'Token has expired.' : 'Invalid token.',
+    })
   }
 }
 
@@ -67,24 +68,26 @@ function buildProxy(target) {
     on: {
       proxyReq: (proxyReq, req) => {
         if (req.user) {
-          proxyReq.setHeader('X-User-Id', req.user.userId)
-          proxyReq.setHeader('X-User-Role', req.user.role)
+          proxyReq.setHeader('X-User-Id',    req.user.userId)
+          proxyReq.setHeader('X-User-Role',  req.user.role)
           proxyReq.setHeader('X-User-Email', req.user.email || '')
         }
         proxyReq.removeHeader('Authorization')
       },
       error: (err, req, res) => {
-        console.error(`[gateway] Proxy error:`, err.message)
+        console.error('[gateway] Proxy error:', err.message)
         res.status(502).json({ message: 'Service temporarily unavailable.' })
       },
     },
   })
 }
 
+// Routes
 app.use('/auth/register', buildLimiter(limiterConfigs.register), buildProxy(routes.auth.target))
 app.use('/auth/login',    buildLimiter(limiterConfigs.login),    buildProxy(routes.auth.target))
+app.use('/auth',          requireAuth,                           buildProxy(routes.auth.target))
 app.use('/tasks',         buildLimiter(limiterConfigs.standard), requireAuth, buildProxy(routes.tasks.target))
-app.use('/payments/webhook', buildProxy(routes.payments.target))
+app.use('/payments/webhook',                                     buildProxy(routes.payments.target))
 app.use('/payments',      buildLimiter(limiterConfigs.payments), requireAuth, buildProxy(routes.payments.target))
 app.use('/messages',      buildLimiter(limiterConfigs.messaging), requireAuth, buildProxy(routes.messaging.target))
 app.use('/notifications', buildLimiter(limiterConfigs.standard), requireAuth, buildProxy(routes.messaging.target))
