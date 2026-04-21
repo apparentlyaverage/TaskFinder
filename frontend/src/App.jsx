@@ -1369,12 +1369,12 @@ function Messages() {
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [thread, typing])
 
   const REPLIES = [
-    'Got it, I'll get started on that right away.',
-    'Understood. I'll have an update for you by end of day.',
-    'Sure, that makes sense. Let me check and get back to you.',
-    'Perfect. I've noted that requirement.',
-    'Thanks for the context — makes things much clearer.',
-    'Can we jump on a quick call to align on the details?',
+    "Got it, I'll get started on that right away.",
+    "Understood. I'll have an update for you by end of day.",
+    "Sure, that makes sense. Let me check and get back to you.",
+    "Perfect. I've noted that requirement.",
+    "Thanks for the context — makes things much clearer.",
+    "Can we jump on a quick call to align on the details?",
   ]
 
   function send() {
