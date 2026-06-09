@@ -9,6 +9,8 @@
 *.sql  text eol=lf
 *.css  text eol=lf
 *.md   text eol=lf
+*.html text eol=lf
+*.svg  text eol=lf
 Dockerfile text eol=lf
 *.sh   text eol=lf
 *.bat  text eol=crlf

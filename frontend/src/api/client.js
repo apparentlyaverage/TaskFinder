@@ -1,26 +1,29 @@
-import axios from 'axios'
+// src/api/client.js
+// HTTP client — wires to the real backend when VITE_API_URL is set
 
-const client = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080',
-  timeout: 10000,
-})
+const BASE = import.meta.env.VITE_API_URL || ''
 
-client.interceptors.request.use((config) => {
-  const token = localStorage.getItem('tf_token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
+async function request(method, path, body, token) {
+  const headers = { 'Content-Type': 'application/json' }
+  if (token) headers['Authorization'] = `Bearer ${token}`
 
-client.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      localStorage.removeItem('tf_token')
-      localStorage.removeItem('tf_user')
-      window.location.href = '/login'
-    }
-    return Promise.reject(err)
-  }
-)
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  })
 
-export default client
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`)
+  return data
+}
+
+export const api = {
+  get:    (path, token)       => request('GET',    path, null, token),
+  post:   (path, body, token) => request('POST',   path, body, token),
+  patch:  (path, body, token) => request('PATCH',  path, body, token),
+  put:    (path, body, token) => request('PUT',    path, body, token),
+  delete: (path, token)       => request('DELETE', path, null, token),
+}
+
+export default api

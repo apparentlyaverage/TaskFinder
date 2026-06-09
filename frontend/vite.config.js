@@ -5,28 +5,19 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
-    open: true,
     proxy: {
-      '/auth':          { target: 'http://localhost:8080', changeOrigin: true },
-      '/tasks':         { target: 'http://localhost:8080', changeOrigin: true },
-      '/payments':      { target: 'http://localhost:8080', changeOrigin: true },
-      '/messages':      { target: 'http://localhost:8080', changeOrigin: true },
-      '/notifications': { target: 'http://localhost:8080', changeOrigin: true },
-      '/matching':      { target: 'http://localhost:8080', changeOrigin: true },
-      '/reviews':       { target: 'http://localhost:8080', changeOrigin: true },
-      '/disputes':      { target: 'http://localhost:8080', changeOrigin: true },
+      '/auth':          'http://localhost:8080',
+      '/tasks':         'http://localhost:8080',
+      '/payments':      'http://localhost:8080',
+      '/messages':      'http://localhost:8080',
+      '/notifications': 'http://localhost:8080',
+      '/matching':      'http://localhost:8080',
+      '/reviews':       'http://localhost:8080',
+      '/disputes':      'http://localhost:8080',
     },
   },
   build: {
     outDir: 'dist',
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          api:    ['axios'],
-          socket: ['socket.io-client'],
-        },
-      },
-    },
+    sourcemap: false,
   },
 })
