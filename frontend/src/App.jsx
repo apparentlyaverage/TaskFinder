@@ -571,12 +571,14 @@ function LandingFooter({ onNav }) {
 // ─── AUTH MODAL (unified — used from landing + dashboard sign out) ────────────
 
 function AuthModal({ mode, onClose, onSwitch, onLogin }) {
-  const [email, setEmail]     = useState('')
+  const { loginWithGoogle } = useAuth()
+  const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
-  const [name, setName]       = useState('')
-  const [role, setRole]       = useState('creator')
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
+  const [name, setName]         = useState('')
+  const [role, setRole]         = useState('creator')
+  const [loading, setLoading]   = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
+  const [error, setError]       = useState('')
 
   const presets = [
     { label:'Creator', role:'creator', email:'creator@demo.com' },
@@ -603,9 +605,14 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
     }, 700)
   }
 
+  // loginWithGoogle comes from AuthCtx (defined in App root)
+  // It redirects to /auth/google → Vite proxies to localhost:3001 → Google consent screen
+
   return (
     <div className="moverlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
         <div style={{ padding:'18px 22px 14px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div>
             <div style={{ fontFamily:'var(--fd)', fontSize:'1.25rem', fontWeight:800 }}>{mode==='login'?'Welcome back':'Create account'}</div>
@@ -613,46 +620,81 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
           </div>
           <button onClick={onClose} style={{ background:'none', border:'none', color:'var(--text-muted)', cursor:'pointer', fontSize:'1.1rem', padding:'4px 8px' }}>✕</button>
         </div>
-        <form onSubmit={submit} style={{ padding:22, display:'flex', flexDirection:'column', gap:13 }}>
-          {mode==='register' && <div><label>Display Name</label><input value={name} onChange={e => setName(e.target.value)} placeholder="Your full name" /></div>}
-          <div><label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@ru.ac.za" required /></div>
-          <div><label>Password {mode==='register'&&<span style={{ color:'#444' }}>(min 8 chars)</span>}</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
-          {mode==='register' && (
-            <div><label>I want to</label>
-              <select value={role} onChange={e => setRole(e.target.value)}>
-                <option value="creator">Post tasks and hire — Creator</option>
-                <option value="earner">Bid on tasks and earn — Earner</option>
-              </select>
-            </div>
-          )}
-          {mode==='login' && (
-            <div>
-              <Mono style={{ display:'block', marginBottom:8 }}>Quick demo login</Mono>
-              <div style={{ display:'flex', gap:6 }}>
-                {presets.map(p => (
-                  <button key={p.role} type="button" onClick={() => { setRole(p.role); setEmail(p.email) }}
-                    style={{ flex:1, padding:'6px 8px', background:role===p.role?'var(--accent-glow)':'var(--bg-elevated)', border:`1px solid ${role===p.role?'var(--accent)':'var(--border)'}`, color:role===p.role?'var(--accent)':'var(--text-muted)', borderRadius:'var(--radius-sm)', fontSize:'0.72rem', fontFamily:'var(--font-mono)', textTransform:'uppercase', letterSpacing:'0.06em', cursor:'pointer', transition:'all 150ms ease' }}>{p.label}</button>
-                ))}
-              </div>
-            </div>
-          )}
-          {mode==='register' && (
-            <div style={{ display:'flex', gap:8, alignItems:'flex-start' }}>
-              <input type="checkbox" required style={{ width:'auto', marginTop:3, flexShrink:0, accentColor:'var(--amber)' }} />
-              <span style={{ fontSize:'.76rem', color:'#666', lineHeight:1.5 }}>I agree to the <span style={{ color:'var(--amber)', cursor:'pointer' }}>Terms of Service</span> and <span style={{ color:'var(--amber)', cursor:'pointer' }}>Privacy Policy</span></span>
-            </div>
-          )}
-          {error && <div style={{ background:'rgba(239,68,68,.1)', border:'1px solid rgba(239,68,68,.3)', borderRadius:4, padding:'9px 13px', fontSize:'.82rem', color:'var(--red)' }}>{error}</div>}
-          <button type="submit" className="btn-p" style={{ width:'100%', justifyContent:'center', marginTop:4 }} disabled={loading}>
-            {loading ? <Spinner /> : mode==='login'?'Sign In →':'Create Account →'}
+
+        <div style={{ padding:22, display:'flex', flexDirection:'column', gap:13 }}>
+
+          {/* ── Google Sign-In button ── sits at the top, above the form ── */}
+          <button
+            type="button"
+            onClick={loginWithGoogle}
+            disabled={googleLoading || loading}
+            style={{ width:'100%', padding:'11px 14px', background:'var(--bg-elevated)', border:'1px solid var(--border-strong)', borderRadius:'var(--radius-sm)', color:'var(--text-primary)', fontFamily:'var(--font-body)', fontSize:'0.875rem', fontWeight:500, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:10, transition:'all 150ms ease', opacity:(googleLoading||loading)?0.5:1 }}
+            onMouseEnter={e => { if (!googleLoading && !loading) { e.currentTarget.style.background='var(--bg-hover)'; e.currentTarget.style.borderColor='var(--accent)' } }}
+            onMouseLeave={e => { e.currentTarget.style.background='var(--bg-elevated)'; e.currentTarget.style.borderColor='var(--border-strong)' }}>
+            {googleLoading ? <Spinner /> : (
+              <>
+                {/* Official Google "G" logo colours */}
+                <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+                  <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"/>
+                  <path d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z" fill="#FBBC05"/>
+                  <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.293C4.672 5.166 6.656 3.58 9 3.58z" fill="#EA4335"/>
+                </svg>
+                {mode==='login' ? 'Sign in with Google' : 'Sign up with Google'}
+              </>
+            )}
           </button>
-          <div style={{ textAlign:'center', fontSize:'.85rem', color:'#666' }}>
-            {mode==='login'?'No account? ':'Have an account? '}
-            <button type="button" onClick={onSwitch} style={{ background:'none', border:'none', color:'var(--amber)', cursor:'pointer', fontSize:'inherit' }}>
-              {mode==='login'?'Sign up free':'Sign in'}
-            </button>
+
+          {/* ── Divider between Google and email form ── */}
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ flex:1, height:1, background:'var(--border)' }} />
+            <span style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em' }}>or continue with email</span>
+            <div style={{ flex:1, height:1, background:'var(--border)' }} />
           </div>
-        </form>
+
+          {/* ── Email / password form ── */}
+          <form onSubmit={submit} style={{ display:'flex', flexDirection:'column', gap:13 }}>
+            {mode==='register' && <div><label>Display Name</label><input value={name} onChange={e => setName(e.target.value)} placeholder="Your full name" /></div>}
+            <div><label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@ru.ac.za" required /></div>
+            <div><label>Password {mode==='register'&&<span style={{ color:'#444' }}>(min 8 chars)</span>}</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
+            {mode==='register' && (
+              <div><label>I want to</label>
+                <select value={role} onChange={e => setRole(e.target.value)}>
+                  <option value="creator">Post tasks and hire — Creator</option>
+                  <option value="earner">Bid on tasks and earn — Earner</option>
+                </select>
+              </div>
+            )}
+            {mode==='login' && (
+              <div>
+                <Mono style={{ display:'block', marginBottom:8 }}>Quick demo login</Mono>
+                <div style={{ display:'flex', gap:6 }}>
+                  {presets.map(p => (
+                    <button key={p.role} type="button" onClick={() => { setRole(p.role); setEmail(p.email) }}
+                      style={{ flex:1, padding:'6px 8px', background:role===p.role?'var(--accent-glow)':'var(--bg-elevated)', border:`1px solid ${role===p.role?'var(--accent)':'var(--border)'}`, color:role===p.role?'var(--accent)':'var(--text-muted)', borderRadius:'var(--radius-sm)', fontSize:'0.72rem', fontFamily:'var(--font-mono)', textTransform:'uppercase', letterSpacing:'0.06em', cursor:'pointer', transition:'all 150ms ease' }}>{p.label}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {mode==='register' && (
+              <div style={{ display:'flex', gap:8, alignItems:'flex-start' }}>
+                <input type="checkbox" required style={{ width:'auto', marginTop:3, flexShrink:0, accentColor:'var(--amber)' }} />
+                <span style={{ fontSize:'.76rem', color:'#666', lineHeight:1.5 }}>I agree to the <span style={{ color:'var(--amber)', cursor:'pointer' }}>Terms of Service</span> and <span style={{ color:'var(--amber)', cursor:'pointer' }}>Privacy Policy</span></span>
+              </div>
+            )}
+            {error && <div style={{ background:'rgba(239,68,68,.1)', border:'1px solid rgba(239,68,68,.3)', borderRadius:4, padding:'9px 13px', fontSize:'.82rem', color:'var(--red)' }}>{error}</div>}
+            <button type="submit" className="btn-p" style={{ width:'100%', justifyContent:'center', marginTop:4 }} disabled={loading || googleLoading}>
+              {loading ? <Spinner /> : mode==='login'?'Sign In →':'Create Account →'}
+            </button>
+            <div style={{ textAlign:'center', fontSize:'.85rem', color:'#666' }}>
+              {mode==='login'?'No account? ':'Have an account? '}
+              <button type="button" onClick={onSwitch} style={{ background:'none', border:'none', color:'var(--amber)', cursor:'pointer', fontSize:'inherit' }}>
+                {mode==='login'?'Sign up free':'Sign in'}
+              </button>
+            </div>
+          </form>
+
+        </div>
       </div>
     </div>
   )
@@ -1375,6 +1417,60 @@ function ReportPage({ onNav }) {
         </form>
       )}
     </PageWrapper>
+  )
+}
+
+// ─── OAUTH CALLBACK PAGE ─────────────────────────────────────────────────────
+// Google redirects back to /oauth-callback?token=xxx&userId=xxx&email=xxx&role=xxx
+// This component reads those params and completes the login via context
+
+function OAuthCallback() {
+  const { handleOAuthCallback } = useAuth()
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    const params   = new URLSearchParams(window.location.search)
+    const token    = params.get('token')
+    const errParam = params.get('error')
+
+    if (errParam) {
+      setError(errParam.replace(/_/g, ' '))
+      return
+    }
+
+    if (!token) {
+      setError('No authentication token received from Google.')
+      return
+    }
+
+    // handleOAuthCallback sets user state and navigates to dashboard internally
+    const ok = handleOAuthCallback(params)
+    if (!ok) {
+      setError('Failed to process Google login. Please try again.')
+    }
+    // No redirect needed — handleOAuthCallback calls setView('dashboard')
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (error) {
+    return (
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh', background:'var(--bg-base)', color:'var(--text-primary)', padding:24 }}>
+        <div style={{ background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.3)', borderRadius:'var(--radius-md)', padding:24, maxWidth:400, textAlign:'center' }}>
+          <div style={{ fontSize:'2rem', marginBottom:12 }}>⚠️</div>
+          <h2 style={{ fontFamily:'var(--font-display)', fontSize:'1.3rem', marginBottom:8 }}>Authentication Error</h2>
+          <p style={{ color:'var(--text-secondary)', marginBottom:16 }}>{error}</p>
+          <button className="btn-p" onClick={() => window.location.href = '/'}>Back to Home</button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh', background:'var(--bg-base)', color:'var(--text-primary)' }}>
+      <div style={{ textAlign:'center' }}>
+        <Spinner size={32} />
+        <p style={{ marginTop:16, color:'var(--text-muted)', fontFamily:'var(--font-mono)', fontSize:'0.75rem', textTransform:'uppercase', letterSpacing:'0.1em' }}>Completing Google sign-in…</p>
+      </div>
+    </div>
   )
 }
 
@@ -2569,7 +2665,13 @@ function AdminUsers() {
 
 export default function App() {
   const [user, setUser]   = useState(null)
-  const [view, setView]   = useState('landing')   // 'landing' | 'dashboard' | info page id
+  const [view, setView] = useState(() => {
+  // Check if we're on the OAuth callback page
+  if (window.location.pathname === '/oauth-callback') {
+    return 'oauth-callback'
+  }
+  return 'landing'
+  })
   const [authModal, setAuthModal] = useState(null)
   const [dashPage, setDashPage]   = useState('dashboard')
   const [selectedTask,    setSelectedTask]    = useState(null)
@@ -2578,9 +2680,43 @@ export default function App() {
 
   const unreadCount = state.notifications.filter(n => !n.is_read).length
 
+  // Called after Google OAuth redirect returns to /oauth-callback
+  function handleOAuthCallback(params) {
+    try {
+      const token    = params.get('token')
+      const userId   = params.get('userId')
+      const email    = params.get('email')
+      const role     = params.get('role')
+      const name     = params.get('displayName') || email?.split('@')[0] || 'Google User'
+      const avatar   = params.get('avatarUrl') || null
+
+      if (!token || !userId) return false
+
+      // Store JWT so future API calls can use it
+      localStorage.setItem('tf_token', token)
+
+      const u = { userId, email, role, displayName: name, provider: 'google', avatarUrl: avatar }
+      setUser(u)
+      setView('dashboard')
+      setDashPage('dashboard')
+      setAuthModal(null)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   const authValue  = {
     user,
+    handleOAuthCallback,
+    loginWithGoogle: () => {
+      // Redirect browser to the backend Google OAuth entry point.
+      // Vite proxy forwards /auth/google → http://localhost:3001/auth/google
+      // which then redirects to Google's consent screen.
+      window.location.href = '/auth/google'
+    },
     logout: () => {
+      localStorage.removeItem('tf_token')
       setUser(null)
       setView('landing')
       setDashPage('dashboard')
@@ -2645,11 +2781,13 @@ export default function App() {
       default:                     return <Dashboard setPage={setDashPage} setSelectedTask={setSelectedTask} />
     }
   }
-
   return (
     <AuthCtx.Provider value={authValue}>
       <StoreCtx.Provider value={storeValue}>
         <ToastProvider>
+
+          {/* ── OAUTH CALLBACK — must be inside AuthCtx so useAuth() works ── */}
+          {view === 'oauth-callback' && <OAuthCallback />}
 
           {/* ── LANDING PAGE ─────────────────────────────────── */}
           {view==='landing' && (

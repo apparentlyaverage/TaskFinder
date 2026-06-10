@@ -6,14 +6,20 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/auth':          'http://localhost:8080',
-      '/tasks':         'http://localhost:8080',
-      '/payments':      'http://localhost:8080',
-      '/messages':      'http://localhost:8080',
-      '/notifications': 'http://localhost:8080',
-      '/matching':      'http://localhost:8080',
-      '/reviews':       'http://localhost:8080',
-      '/disputes':      'http://localhost:8080',
+      // During local Google OAuth testing, auth goes directly to the auth service
+      // so we don't need the gateway running
+      '/auth': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      // Everything else goes through the gateway (only needed if gateway is running)
+      '/tasks':         { target: 'http://localhost:8080', changeOrigin: true },
+      '/payments':      { target: 'http://localhost:8080', changeOrigin: true },
+      '/messages':      { target: 'http://localhost:8080', changeOrigin: true },
+      '/notifications': { target: 'http://localhost:8080', changeOrigin: true },
+      '/matching':      { target: 'http://localhost:8080', changeOrigin: true },
+      '/reviews':       { target: 'http://localhost:8080', changeOrigin: true },
+      '/disputes':      { target: 'http://localhost:8080', changeOrigin: true },
     },
   },
   build: {

@@ -10,6 +10,8 @@ build/
 .env
 .env.local
 .env.*.local
+services/**/.env
+frontend/.env
 
 # OS files
 .DS_Store
