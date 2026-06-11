@@ -1421,8 +1421,8 @@ function ReportPage({ onNav }) {
 }
 
 // ─── OAUTH CALLBACK PAGE ─────────────────────────────────────────────────────
-// Google redirects back to /oauth-callback?token=xxx&userId=xxx&email=xxx&role=xxx
-// This component reads those params and completes the login via context
+// Google redirects back to http://localhost:3000/oauth-callback?token=xxx&...
+// Vite serves index.html, React reads the query params and completes login.
 
 function OAuthCallback() {
   const { handleOAuthCallback } = useAuth()
@@ -1431,24 +1431,27 @@ function OAuthCallback() {
   useEffect(() => {
     const params   = new URLSearchParams(window.location.search)
     const token    = params.get('token')
-    const errParam = params.get('error')
+    const userId   = params.get('userId')
+    const errParam = params.get('auth_error') || params.get('error')
+
+    // Clear the sensitive params from the browser URL bar immediately
+    window.history.replaceState({}, document.title, '/oauth-callback')
 
     if (errParam) {
-      setError(errParam.replace(/_/g, ' '))
+      setError(decodeURIComponent(errParam).replace(/_/g, ' '))
       return
     }
 
-    if (!token) {
-      setError('No authentication token received from Google.')
+    if (!token || !userId) {
+      setError('No authentication data received. Please try signing in again.')
       return
     }
 
-    // handleOAuthCallback sets user state and navigates to dashboard internally
+    // handleOAuthCallback reads the params, sets user state, and calls setView('dashboard')
     const ok = handleOAuthCallback(params)
     if (!ok) {
       setError('Failed to process Google login. Please try again.')
     }
-    // No redirect needed — handleOAuthCallback calls setView('dashboard')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (error) {
@@ -2666,11 +2669,13 @@ function AdminUsers() {
 export default function App() {
   const [user, setUser]   = useState(null)
   const [view, setView] = useState(() => {
-  // Check if we're on the OAuth callback page
-  if (window.location.pathname === '/oauth-callback') {
-    return 'oauth-callback'
-  }
-  return 'landing'
+    // When Google redirects back after auth, the URL is:
+    // http://localhost:3000/oauth-callback?token=xxx&userId=xxx...
+    // Vite serves index.html for all paths so React handles this correctly.
+    if (window.location.pathname === '/oauth-callback') {
+      return 'oauth-callback'
+    }
+    return 'landing'
   })
   const [authModal, setAuthModal] = useState(null)
   const [dashPage, setDashPage]   = useState('dashboard')
