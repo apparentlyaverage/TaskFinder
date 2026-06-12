@@ -593,16 +593,56 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
     return null
   }
 
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault()
     const err = validate()
     if (err) { setError(err); return }
     setError(''); setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
-      onLogin({ userId:'u1', email, role, displayName: name || email.split('@')[0] })
+
+    try {
+      const endpoint = mode === 'login' ? '/auth/login' : '/auth/register'
+      const body     = mode === 'login'
+        ? { email, password }
+        : { email, password, role, displayName: name || email.split('@')[0] }
+
+      const res  = await fetch(endpoint, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.message || 'Something went wrong. Please try again.')
+        setLoading(false)
+        return
+      }
+
+      // Pass token + user info to handleLogin in App root
+      onLogin({
+        token:       data.token,
+        userId:      data.user.userId      || data.user.user_id,
+        email:       data.user.email,
+        role:        data.user.role,
+        displayName: data.user.displayName || data.user.display_name || email.split('@')[0],
+        avatarUrl:   data.user.avatarUrl   || data.user.avatar_url   || null,
+      })
       onClose()
-    }, 700)
+    } catch (err) {
+      // Network error — fall back to demo mode so app still works without backend
+      console.warn('[auth] Backend unreachable, using demo mode:', err.message)
+      onLogin({
+        token:       'demo-token',
+        userId:      'demo-' + Date.now(),
+        email,
+        role:        role || 'creator',
+        displayName: name || email.split('@')[0],
+        avatarUrl:   null,
+      })
+      onClose()
+    } finally {
+      setLoading(false)
+    }
   }
 
   // loginWithGoogle comes from AuthCtx (defined in App root)
@@ -1543,9 +1583,31 @@ function DashSidebar({ page, setPage, unreadCount, onGoHome }) {
         })}
       </nav>
       <div className="sidebar-user" style={{ borderTop:'1px solid var(--border)', paddingTop:14, marginTop:14 }}>
-        <Badge variant={user.role}>{user.role}</Badge>
-        <div style={{ fontSize:'0.78rem', color:'var(--text-secondary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', margin:'6px 0 4px' }}>{user.displayName || user.email}</div>
-        <div style={{ fontSize:'0.72rem', color:'var(--text-muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:10 }}>{user.email}</div>
+        {/* Avatar + user info */}
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+          {user.avatarUrl ? (
+            <img src={user.avatarUrl} alt={user.displayName}
+              style={{ width:34, height:34, borderRadius:'50%', objectFit:'cover', border:'1px solid var(--border-strong)', flexShrink:0 }} />
+          ) : (
+            <div style={{ width:34, height:34, borderRadius:'50%', background:'var(--accent-glow)', border:'1px solid var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'0.85rem', color:'var(--accent)', flexShrink:0 }}>
+              {(user.displayName || user.email || '?').charAt(0).toUpperCase()}
+            </div>
+          )}
+          <div style={{ flex:1, overflow:'hidden' }}>
+            <div style={{ fontSize:'0.78rem', fontWeight:600, color:'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+              {user.displayName || user.email?.split('@')[0] || 'User'}
+            </div>
+            <div style={{ fontSize:'0.68rem', color:'var(--text-muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+              {user.email}
+            </div>
+          </div>
+        </div>
+        <Badge variant={user.role} style={{ marginBottom:10 }}>{user.role}</Badge>
+        {user.provider === 'google' && (
+          <div style={{ fontFamily:'var(--font-mono)', fontSize:'0.58rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>
+            via Google
+          </div>
+        )}
         <button onClick={logout}
           onMouseEnter={() => setSignHov(true)} onMouseLeave={() => setSignHov(false)}
           style={{ background:'transparent', padding:'6px 12px', width:'100%', border:`1px solid ${signHov?'var(--danger)':'var(--border)'}`, color:signHov?'var(--danger)':'var(--text-muted)', borderRadius:'var(--radius-sm)', fontSize:'0.7rem', fontFamily:'var(--font-display)', textTransform:'uppercase', letterSpacing:'0.06em', cursor:'pointer', transition:'all 150ms ease' }}>
@@ -2323,11 +2385,11 @@ function Profile() {
   const { state } = useStore()
   const toast = useToast()
   const [tab, setTab] = useState('profile')
-  const [displayName, setName]  = useState(user.displayName||'Demo User')
-  const [bio, setBio]           = useState('Passionate developer with experience across full-stack web and mobile.')
-  const [skills, setSkills]     = useState('node.js, react, postgres, python')
-  const [portfolio, setPort]    = useState('https://github.com/demouser')
-  const [email, setEmail]       = useState(user.email)
+  const [displayName, setName]  = useState(user.displayName || user.email?.split('@')[0] || '')
+  const [bio, setBio]           = useState('')
+  const [skills, setSkills]     = useState('')
+  const [portfolio, setPort]    = useState('')
+  const [email, setEmail]       = useState(user.email || '')
   const [currentPw, setCurrentPw] = useState('')
   const [newPw, setNewPw]         = useState('')
   const [saving, setSaving]       = useState(false)
@@ -2376,7 +2438,7 @@ function Profile() {
           </DCard>
           <div style={{ display:'flex', gap:10 }}>
             <Btn loading={saving} onClick={saveProfile}>Save Changes</Btn>
-            <Btn variant="secondary" onClick={() => { setName(user.displayName||'Demo User'); setBio('Passionate developer with experience across full-stack web and mobile.') }}>Reset</Btn>
+            <Btn variant="secondary" onClick={() => { setName(user.displayName || user.email?.split('@')[0] || ''); setBio('') }}>Reset</Btn>
           </div>
         </div>
       )}
@@ -2667,14 +2729,10 @@ function AdminUsers() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function App() {
-  const [user, setUser]   = useState(null)
+  const [user, setUser]         = useState(null)
+  const [userLoading, setUserLoading] = useState(true) // true while restoring session
   const [view, setView] = useState(() => {
-    // When Google redirects back after auth, the URL is:
-    // http://localhost:3000/oauth-callback?token=xxx&userId=xxx...
-    // Vite serves index.html for all paths so React handles this correctly.
-    if (window.location.pathname === '/oauth-callback') {
-      return 'oauth-callback'
-    }
+    if (window.location.pathname === '/oauth-callback') return 'oauth-callback'
     return 'landing'
   })
   const [authModal, setAuthModal] = useState(null)
@@ -2685,23 +2743,106 @@ export default function App() {
 
   const unreadCount = state.notifications.filter(n => !n.is_read).length
 
-  // Called after Google OAuth redirect returns to /oauth-callback
+  // ── Session restore on every page load ──────────────────────────────────────
+  // Reads the JWT from localStorage, validates it, and fetches the user's
+  // current profile from the backend. If the token is expired or invalid,
+  // it clears everything and shows the landing page.
+  useEffect(() => {
+    async function restoreSession() {
+      const token = localStorage.getItem('tf_token')
+      if (!token) { setUserLoading(false); return }
+
+      try {
+        // Decode token to get userId without a network call
+        const payload = JSON.parse(atob(token.split('.')[1]))
+
+        // Check token isn't expired
+        if (payload.exp && payload.exp * 1000 < Date.now()) {
+          localStorage.removeItem('tf_token')
+          setUserLoading(false)
+          return
+        }
+
+        // Fetch fresh user profile from backend
+        const res = await fetch('/auth/me', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (res.ok) {
+          const data = await res.json()
+          const u = data.user
+          setUser({
+            userId:      u.user_id,
+            email:       u.email,
+            role:        u.role,
+            displayName: u.display_name || u.email?.split('@')[0] || 'User',
+            avatarUrl:   u.avatar_url   || u.google_avatar_url || null,
+            provider:    u.google_id ? 'google' : 'email',
+          })
+          // Only restore dashboard view if we were on dashboard before
+          const savedView = sessionStorage.getItem('tf_view')
+          if (savedView && savedView !== 'landing' && savedView !== 'oauth-callback') {
+            setView('dashboard')
+          }
+        } else {
+          // Token rejected by server — clear it
+          localStorage.removeItem('tf_token')
+        }
+      } catch {
+        // Token malformed or network error — clear silently
+        localStorage.removeItem('tf_token')
+      } finally {
+        setUserLoading(false)
+      }
+    }
+    restoreSession()
+  }, [])
+
+  // Persist current view so refresh restores dashboard
+  useEffect(() => {
+    if (view !== 'oauth-callback') {
+      sessionStorage.setItem('tf_view', view)
+    }
+  }, [view])
+
+  // ── Persist user to localStorage so sidebar always has latest info ──────────
+  function saveUser(u) {
+    if (!u) { localStorage.removeItem('tf_user'); return }
+    localStorage.setItem('tf_user', JSON.stringify(u))
+    setUser(u)
+  }
+
+  // ── Called after email/password login or registration ───────────────────────
+  function handleLogin(rawUser) {
+    const u = {
+      userId:      rawUser.userId      || rawUser.user_id,
+      email:       rawUser.email,
+      role:        rawUser.role,
+      displayName: rawUser.displayName || rawUser.display_name || rawUser.email?.split('@')[0] || 'User',
+      avatarUrl:   rawUser.avatarUrl   || rawUser.avatar_url   || null,
+      provider:    'email',
+    }
+    localStorage.setItem('tf_token', rawUser.token || '')
+    saveUser(u)
+    setView('dashboard')
+    setDashPage('dashboard')
+    setAuthModal(null)
+  }
+
+  // ── Called after Google OAuth redirect ──────────────────────────────────────
   function handleOAuthCallback(params) {
     try {
-      const token    = params.get('token')
-      const userId   = params.get('userId')
-      const email    = params.get('email')
-      const role     = params.get('role')
-      const name     = params.get('displayName') || email?.split('@')[0] || 'Google User'
-      const avatar   = params.get('avatarUrl') || null
+      const token       = params.get('token')
+      const userId      = params.get('userId')
+      const email       = params.get('email')
+      const role        = params.get('role')
+      const displayName = params.get('displayName') || email?.split('@')[0] || 'User'
+      const avatarUrl   = params.get('avatarUrl') || null
 
       if (!token || !userId) return false
 
-      // Store JWT so future API calls can use it
       localStorage.setItem('tf_token', token)
-
-      const u = { userId, email, role, displayName: name, provider: 'google', avatarUrl: avatar }
-      setUser(u)
+      saveUser({ userId, email, role, displayName, avatarUrl, provider: 'google' })
       setView('dashboard')
       setDashPage('dashboard')
       setAuthModal(null)
@@ -2711,21 +2852,34 @@ export default function App() {
     }
   }
 
-  const authValue  = {
+  // ── Logout — clears everything and returns to landing ───────────────────────
+  function logout() {
+    // Tell auth service to destroy the session (non-blocking)
+    const token = localStorage.getItem('tf_token')
+    if (token) {
+      fetch('/auth/logout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {})
+    }
+    // Clear all stored state
+    localStorage.removeItem('tf_token')
+    localStorage.removeItem('tf_user')
+    sessionStorage.removeItem('tf_view')
+    setUser(null)
+    setView('landing')
+    setDashPage('dashboard')
+    setAuthModal(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const authValue = {
     user,
+    userLoading,
     handleOAuthCallback,
-    loginWithGoogle: () => {
-      // Redirect browser to the backend Google OAuth entry point.
-      // Vite proxy forwards /auth/google → http://localhost:3001/auth/google
-      // which then redirects to Google's consent screen.
-      window.location.href = '/auth/google'
-    },
-    logout: () => {
-      localStorage.removeItem('tf_token')
-      setUser(null)
-      setView('landing')
-      setDashPage('dashboard')
-    },
+    handleLogin,
+    loginWithGoogle: () => { window.location.href = '/auth/google' },
+    logout,
   }
   const storeValue = { state, dispatch }
 
@@ -2737,13 +2891,6 @@ export default function App() {
     if (target==='dashboard') { if (user) setView('dashboard'); else setAuthModal('login'); return }
     if (INFO_PAGES.includes(target)) { setView(target); window.scrollTo({top:0,behavior:'smooth'}); return }
     setView('landing')
-  }
-
-  function handleLogin(u) {
-    setUser(u)
-    setView('dashboard')
-    setDashPage('dashboard')
-    setAuthModal(null)
   }
 
   function renderInfoPage() {
@@ -2786,6 +2933,19 @@ export default function App() {
       default:                     return <Dashboard setPage={setDashPage} setSelectedTask={setSelectedTask} />
     }
   }
+  // While restoring session from localStorage, show a minimal loading screen
+  // so the user doesn't see a flash of the landing page before the dashboard loads
+  if (userLoading) {
+    return (
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', background:'var(--bg-base)' }}>
+        <div style={{ textAlign:'center' }}>
+          <div style={{ background:'var(--amber)', color:'#000', fontFamily:'var(--fd)', fontWeight:800, fontSize:'1rem', padding:'8px 14px', borderRadius:4, marginBottom:16, display:'inline-block' }}>TF</div>
+          <div style={{ display:'block' }}><Spinner size={20} /></div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <AuthCtx.Provider value={authValue}>
       <StoreCtx.Provider value={storeValue}>
