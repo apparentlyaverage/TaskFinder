@@ -1,4 +1,4 @@
-// ─── UNIFIED TASKFINDER APP ──────────────────────────────────────────────────
+// ─── UNIFIED RELIV APP ──────────────────────────────────────────────────
 // Landing page → Auth → Dashboard
 // All legal, product, and support pages included
 // Single design system, single auth context, single router
@@ -16,49 +16,50 @@ import {
 // ─── FONTS & GLOBAL STYLES ───────────────────────────────────────────────────
 const _fl = document.createElement('link')
 _fl.rel = 'stylesheet'
-_fl.href = 'https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&family=DM+Mono:wght@400;500&display=swap'
+_fl.href = 'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,400&family=DM+Mono:wght@400;500&display=swap'
 document.head.appendChild(_fl)
 
 const _style = document.createElement('style')
 _style.textContent = `
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --black:         #080808;
-  --white:         #f5f2ed;
-  --amber:         #f59e0b;
-  --amber2:        #fbbf24;
-  --green:         #10b981;
-  --red:           #ef4444;
-  --blue:          #3b82f6;
-  --purple:        #a78bfa;
-  --bg-base:       #080808;
-  --bg-surface:    #111111;
-  --bg-elevated:   #1a1a1a;
-  --bg-hover:      #222222;
-  --border:        #1e1e1e;
-  --border-strong: #2a2a2a;
-  --text-primary:  #f5f2ed;
-  --text-secondary:#999999;
-  --text-muted:    #555555;
-  --accent:        #f59e0b;
-  --accent-dim:    #92400e;
-  --accent-glow:   rgba(245,158,11,0.15);
-  --success:       #10b981;
-  --danger:        #ef4444;
-  --info:          #3b82f6;
-  --warning:       #f59e0b;
-  --font-display:  'Syne', sans-serif;
+  --black:         #211c2e;
+  --white:         #faf9f6;
+  --amber:         #5b21b6;
+  --amber2:        #4c1d95;
+  --green:         #15803d;
+  --red:           #b91c1c;
+  --blue:          #1d4ed8;
+  --purple:        #b45309;
+  --highlight:     #ffd84d;
+  --bg-base:       #faf9f6;
+  --bg-surface:    #ffffff;
+  --bg-elevated:   #f3f1ec;
+  --bg-hover:      #ebe8e1;
+  --border:        #e7e4dc;
+  --border-strong: #d5d1c6;
+  --text-primary:  #211c2e;
+  --text-secondary:#5a5468;
+  --text-muted:    #948f9e;
+  --accent:        #5b21b6;
+  --accent-dim:    #ece4fb;
+  --accent-glow:   rgba(91,33,182,0.10);
+  --success:       #15803d;
+  --danger:        #b91c1c;
+  --info:          #1d4ed8;
+  --warning:       #b45309;
+  --font-display:  'Bricolage Grotesque', sans-serif;
   --font-body:     'DM Sans', sans-serif;
   --font-mono:     'DM Mono', monospace;
-  --fd: 'Syne', sans-serif;
+  --fd: 'Bricolage Grotesque', sans-serif;
   --fb: 'DM Sans', sans-serif;
   --fm: 'DM Mono', monospace;
-  --surface:       #111111;
-  --surface2:      #1a1a1a;
-  --muted:         #555555;
-  --radius-sm:     3px;
-  --radius-md:     6px;
-  --radius-lg:     12px;
+  --surface:       #ffffff;
+  --surface2:      #f3f1ec;
+  --muted:         #948f9e;
+  --radius-sm:     10px;
+  --radius-md:     14px;
+  --radius-lg:     20px;
   --transition:    150ms ease;
 }
 html { scroll-behavior: smooth; font-size: 16px; }
@@ -67,7 +68,7 @@ body {
   font-family: var(--font-body); font-size: 15px; line-height: 1.6;
   -webkit-font-smoothing: antialiased; overflow-x: hidden;
 }
-::selection { background: var(--amber); color: #000; }
+::selection { background: var(--amber); color: #fff; }
 a { color: inherit; text-decoration: none; }
 button { cursor: pointer; font-family: var(--font-body); border: none; }
 input, textarea, select { font-family: var(--font-body); font-size: inherit; }
@@ -90,44 +91,44 @@ input, textarea, select { font-family: var(--font-body); font-size: inherit; }
 .nav-link:hover { color:var(--text-primary); }
 .slabel { font-family:var(--fm); font-size:.68rem; font-weight:500; letter-spacing:.14em; text-transform:uppercase; color:var(--amber); display:flex; align-items:center; gap:8px; }
 .slabel::before { content:''; display:block; width:18px; height:1px; background:var(--amber); }
-.lcard { background:var(--bg-surface); border:1px solid var(--border); border-radius:8px; padding:26px; transition:border-color 200ms,transform 200ms,box-shadow 200ms; }
-.lcard:hover { border-color:var(--border-strong); transform:translateY(-3px); box-shadow:0 12px 40px rgba(0,0,0,.5); }
-.btn-p { background:var(--amber); color:#000; border:none; padding:12px 26px; border-radius:4px; font-family:var(--fd); font-weight:800; font-size:.82rem; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; transition:all 150ms; display:inline-flex; align-items:center; gap:7px; }
-.btn-p:hover { background:var(--amber2); transform:translateY(-2px); box-shadow:0 8px 24px rgba(245,158,11,.35); }
+.lcard { background:var(--bg-surface); border:1px solid var(--border); border-radius:14px; padding:26px; transition:border-color 200ms,transform 200ms,box-shadow 200ms; }
+.lcard:hover { border-color:var(--border-strong); transform:translateY(-3px); box-shadow:0 12px 40px rgba(33,28,46,.10); }
+.btn-p { background:var(--amber); color:#fff; border:none; padding:12px 26px; border-radius:10px; font-family:var(--fd); font-weight:700; font-size:.9rem; letter-spacing:.01em; cursor:pointer; transition:all 150ms; display:inline-flex; align-items:center; gap:7px; }
+.btn-p:hover { background:var(--amber2); transform:translateY(-2px); box-shadow:0 8px 24px rgba(91,33,182,.35); }
 .btn-p:disabled { opacity:.5; cursor:not-allowed; transform:none; }
-.btn-s { background:transparent; color:var(--text-primary); border:1px solid var(--border-strong); padding:12px 26px; border-radius:4px; font-family:var(--fd); font-weight:800; font-size:.82rem; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; transition:all 150ms; }
-.btn-s:hover { border-color:var(--text-primary); background:rgba(255,255,255,.04); }
+.btn-s { background:transparent; color:var(--text-primary); border:1px solid var(--border-strong); padding:12px 26px; border-radius:10px; font-family:var(--fd); font-weight:700; font-size:.9rem; letter-spacing:.01em; cursor:pointer; transition:all 150ms; }
+.btn-s:hover { border-color:var(--text-primary); background:rgba(33,28,46,.04); }
 .btn-g { background:transparent; color:var(--text-muted); border:none; padding:10px 18px; font-family:var(--font-body); font-size:.875rem; cursor:pointer; transition:color 150ms; }
 .btn-g:hover { color:var(--text-primary); }
 
 /* Forms */
-input, textarea, select { background:var(--bg-elevated); border:1px solid var(--border-strong); border-radius:4px; color:var(--text-primary); padding:11px 14px; font-size:.9rem; width:100%; outline:none; transition:border-color 150ms,box-shadow 150ms; }
-input:focus, textarea:focus, select:focus { border-color:var(--amber); box-shadow:0 0 0 3px rgba(245,158,11,.1); }
-input::placeholder, textarea::placeholder { color:#333; }
+input, textarea, select { background:var(--bg-elevated); border:1px solid var(--border-strong); border-radius:10px; color:var(--text-primary); padding:11px 14px; font-size:.9rem; width:100%; outline:none; transition:border-color 150ms,box-shadow 150ms; }
+input:focus, textarea:focus, select:focus { border-color:var(--amber); box-shadow:0 0 0 3px rgba(91,33,182,.1); }
+input::placeholder, textarea::placeholder { color:#b3aebc; }
 label { font-family:var(--fm); font-size:.62rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.1em; display:block; margin-bottom:6px; }
 
 /* Prose */
 .prose h2 { font-family:var(--fd); font-size:1.3rem; font-weight:800; margin:32px 0 12px; color:var(--text-primary); }
-.prose h3 { font-family:var(--fd); font-size:1.05rem; font-weight:700; margin:24px 0 8px; color:#ccc; }
-.prose p  { color:#888; line-height:1.8; margin-bottom:16px; font-size:.925rem; }
-.prose ul { color:#888; line-height:1.8; margin-bottom:16px; padding-left:20px; font-size:.925rem; }
+.prose h3 { font-family:var(--fd); font-size:1.05rem; font-weight:700; margin:24px 0 8px; color:#3b3548; }
+.prose p  { color:#5f5970; line-height:1.8; margin-bottom:16px; font-size:.925rem; }
+.prose ul { color:#5f5970; line-height:1.8; margin-bottom:16px; padding-left:20px; font-size:.925rem; }
 .prose li { margin-bottom:6px; }
 .prose a  { color:var(--amber); }
-.prose .highlight { background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.2); border-radius:6px; padding:16px 20px; margin:20px 0; }
-.prose .highlight p { color:#ccc; margin:0; }
+.prose .highlight { background:rgba(91,33,182,.08); border:1px solid rgba(91,33,182,.2); border-radius:6px; padding:16px 20px; margin:20px 0; }
+.prose .highlight p { color:#3b3548; margin:0; }
 .prose table { width:100%; border-collapse:collapse; font-size:.875rem; margin-bottom:16px; }
 .prose th { text-align:left; padding:8px 12px; font-family:var(--fm); font-size:.62rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.1em; font-weight:400; border-bottom:1px solid var(--border-strong); }
-.prose td { padding:10px 12px; color:#888; border-bottom:1px solid var(--border); }
+.prose td { padding:10px 12px; color:#5f5970; border-bottom:1px solid var(--border); }
 
 /* Drawer */
 .drawer { position:fixed; top:0; right:0; bottom:0; width:280px; background:var(--bg-surface); border-left:1px solid var(--border-strong); z-index:200; padding:24px; transform:translateX(100%); transition:transform 300ms ease; overflow-y:auto; }
 .drawer.open { transform:translateX(0); }
-.doverlay { position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:199; opacity:0; pointer-events:none; transition:opacity 300ms; }
+.doverlay { position:fixed; inset:0; background:rgba(33,28,46,.35); z-index:199; opacity:0; pointer-events:none; transition:opacity 300ms; }
 .doverlay.open { opacity:1; pointer-events:all; }
 
 /* Modal */
-.moverlay { position:fixed; inset:0; background:rgba(0,0,0,.85); display:flex; align-items:center; justify-content:center; z-index:300; padding:16px; animation:fadeIn .2s ease; backdrop-filter:blur(6px); }
-.modal { background:var(--bg-surface); border:1px solid var(--border-strong); border-radius:12px; width:100%; max-width:440px; animation:fadeUp .22s ease; overflow:hidden; max-height:92vh; overflow-y:auto; }
+.moverlay { position:fixed; inset:0; background:rgba(33,28,46,.45); display:flex; align-items:center; justify-content:center; z-index:300; padding:16px; animation:fadeIn .2s ease; backdrop-filter:blur(6px); }
+.modal { background:var(--bg-surface); border:1px solid var(--border-strong); border-radius:18px; width:100%; max-width:440px; animation:fadeUp .22s ease; overflow:hidden; max-height:92vh; overflow-y:auto; }
 
 /* Responsive */
 @media (max-width:768px) {
@@ -156,6 +157,27 @@ label { font-family:var(--fm); font-size:.62rem; color:var(--text-muted); text-t
 }
 @media (min-width:769px) {
   .show-m { display:none !important; }
+}
+
+/* ── Native PWA feel ── */
+html, body { overscroll-behavior-y: contain; }
+button, nav, .dash-nav-btn { -webkit-tap-highlight-color: transparent; }
+button { touch-action: manipulation; user-select: none; }
+button:active { transform: scale(.97); }
+.feed-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+.feed-scroll::-webkit-scrollbar { display: none; }
+@media (max-width:768px) {
+  input, textarea, select { font-size: 16px !important; } /* stops iOS auto-zoom */
+  .dash-sidebar { height: calc(64px + env(safe-area-inset-bottom)) !important; padding-bottom: env(safe-area-inset-bottom) !important; }
+  .dash-nav-btn:nth-child(n+6) { display: none !important; } /* native 5-tab bar */
+  .msg-shell { height: calc(100dvh - 200px) !important; }
+}
+@media (min-width:769px) {
+  .dash-sidebar { display:none !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
 `
 document.head.appendChild(_style)
@@ -212,7 +234,7 @@ function ToastProvider({ children }) {
     success: { bg:'rgba(16,185,129,0.15)',  border:'rgba(16,185,129,0.4)',  icon:'✓', color:'var(--success)' },
     error:   { bg:'rgba(239,68,68,0.15)',   border:'rgba(239,68,68,0.4)',   icon:'✗', color:'var(--danger)' },
     info:    { bg:'rgba(59,130,246,0.15)',   border:'rgba(59,130,246,0.4)',  icon:'ℹ', color:'var(--info)' },
-    warning: { bg:'rgba(245,158,11,0.15)',  border:'rgba(245,158,11,0.4)',  icon:'⚠', color:'var(--accent)' },
+    warning: { bg:'rgba(91,33,182,0.15)',  border:'rgba(91,33,182,0.4)',  icon:'⚠', color:'var(--accent)' },
   }
   return (
     <ToastCtx.Provider value={add}>
@@ -237,6 +259,14 @@ function ToastProvider({ children }) {
 // SHARED PRIMITIVES (used by both landing and dashboard)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+function timeAgo(d) {
+  const s = (Date.now() - new Date(d)) / 1000
+  if (s < 60) return 'just now'
+  if (s < 3600) return `${s/60|0}m ago`
+  if (s < 86400) return `${s/3600|0}h ago`
+  return `${s/86400|0}d ago`
+}
+
 function Spinner({ size = 14 }) {
   return <span style={{ width:size, height:size, border:'2px solid transparent', borderTopColor:'currentColor', borderRadius:'50%', animation:'spin .6s linear infinite', display:'inline-block' }} />
 }
@@ -244,8 +274,8 @@ function Spinner({ size = 14 }) {
 function Logo({ onClick }) {
   return (
     <div onClick={onClick} style={{ display:'flex', alignItems:'center', gap:9, cursor:'pointer', flexShrink:0 }}>
-      <div style={{ background:'var(--amber)', color:'#000', fontFamily:'var(--fd)', fontWeight:800, fontSize:'.88rem', padding:'4px 8px', borderRadius:4, letterSpacing:'.02em' }}>TF</div>
-      <span style={{ fontFamily:'var(--fd)', fontSize:'1.15rem', fontWeight:800, letterSpacing:'.02em' }}>TaskFinder</span>
+      <div style={{ background:'var(--amber)', color:'#fff', fontFamily:'var(--fd)', fontWeight:800, fontSize:'.88rem', padding:'4px 8px', borderRadius:8, letterSpacing:'.02em' }}>R</div>
+      <span style={{ fontFamily:'var(--fd)', fontSize:'1.15rem', fontWeight:800, letterSpacing:'.02em' }}>ReLiv</span>
     </div>
   )
 }
@@ -256,17 +286,17 @@ function Btn({ children, variant='primary', size='md', loading=false, fullWidth=
   const [hov, setHov] = useState(false)
   const sizes = { sm:{padding:'5px 12px',fontSize:'0.72rem'}, md:{padding:'9px 20px',fontSize:'0.82rem'}, lg:{padding:'13px 28px',fontSize:'0.94rem'} }
   const variants = {
-    primary:   { background:hov?'var(--amber2)':'var(--accent)', color:'#000', transform:hov?'translateY(-1px)':'none', boxShadow:hov?'0 4px 20px var(--accent-glow)':'none' },
+    primary:   { background:hov?'var(--amber2)':'var(--accent)', color:'#fff', transform:hov?'translateY(-1px)':'none', boxShadow:hov?'0 4px 20px var(--accent-glow)':'none' },
     secondary: { background:hov?'var(--bg-hover)':'transparent', color:'var(--text-primary)', border:'1px solid var(--border-strong)' },
     ghost:     { background:hov?'var(--bg-hover)':'transparent', color:hov?'var(--text-primary)':'var(--text-secondary)' },
     danger:    { background:hov?'rgba(239,68,68,0.12)':'transparent', color:'var(--danger)', border:'1px solid var(--danger)' },
     success:   { background:hov?'rgba(16,185,129,0.25)':'rgba(16,185,129,0.15)', color:'var(--success)', border:'1px solid rgba(16,185,129,0.3)' },
-    warning:   { background:hov?'rgba(245,158,11,0.2)':'rgba(245,158,11,0.1)', color:'var(--accent)', border:'1px solid rgba(245,158,11,0.3)' },
+    warning:   { background:hov?'rgba(91,33,182,0.2)':'rgba(91,33,182,0.1)', color:'var(--accent)', border:'1px solid rgba(91,33,182,0.3)' },
   }
   const v = variants[variant] || variants.primary
   return (
     <button onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:8, fontFamily:'var(--font-display)', fontWeight:700, letterSpacing:'0.05em', textTransform:'uppercase', borderRadius:'var(--radius-sm)', cursor:'pointer', transition:'all 150ms ease', whiteSpace:'nowrap', border:'none', ...(fullWidth?{width:'100%'}:{}), ...((loading||p.disabled)?{opacity:0.45,cursor:'not-allowed',transform:'none'}:{}), ...sizes[size], ...v, ...style }}
+      style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:8, fontFamily:'var(--font-display)', fontWeight:700, letterSpacing:'0.01em', borderRadius:'var(--radius-sm)', cursor:'pointer', transition:'all 150ms ease', whiteSpace:'nowrap', border:'none', ...(fullWidth?{width:'100%'}:{}), ...((loading||p.disabled)?{opacity:0.45,cursor:'not-allowed',transform:'none'}:{}), ...sizes[size], ...v, ...style }}
       disabled={loading||p.disabled} {...p}>
       {loading ? <Spinner /> : children}
     </button>
@@ -313,11 +343,11 @@ function Badge({ children, variant='default' }) {
     open:        { background:'rgba(16,185,129,0.15)',         color:'var(--success)' },
     in_progress: { background:'rgba(59,130,246,0.15)',         color:'var(--info)' },
     disputed:    { background:'rgba(239,68,68,0.15)',          color:'var(--danger)' },
-    completed:   { background:'rgba(245,158,11,0.15)',         color:'var(--accent)' },
+    completed:   { background:'rgba(91,33,182,0.15)',         color:'var(--accent)' },
     expired:     { background:'var(--bg-elevated)',            color:'var(--text-muted)' },
     admin:       { background:'rgba(239,68,68,0.15)',          color:'var(--danger)' },
     earner:      { background:'rgba(16,185,129,0.15)',         color:'var(--success)' },
-    creator:     { background:'rgba(245,158,11,0.15)',         color:'var(--accent)' },
+    creator:     { background:'rgba(91,33,182,0.15)',         color:'var(--accent)' },
     pending:     { background:'rgba(59,130,246,0.12)',         color:'var(--info)' },
     accepted:    { background:'rgba(16,185,129,0.15)',         color:'var(--success)' },
     rejected:    { background:'var(--bg-elevated)',            color:'var(--text-muted)' },
@@ -327,11 +357,11 @@ function Badge({ children, variant='default' }) {
   return <span style={{ display:'inline-flex', alignItems:'center', padding:'2px 8px', borderRadius:'var(--radius-sm)', fontFamily:'var(--font-mono)', fontSize:'0.63rem', fontWeight:500, letterSpacing:'0.06em', textTransform:'uppercase', ...v }}>{children}</span>
 }
 
-function DCard({ children, style={}, onClick, hover=true }) {
+function DCard({ children, style={}, onClick, hover=true, className='' }) {
   const [hov, setHov] = useState(false)
   return (
-    <div onClick={onClick} onMouseEnter={() => hover&&setHov(true)} onMouseLeave={() => hover&&setHov(false)}
-      style={{ background:'var(--bg-surface)', border:`1px solid ${hov?'var(--border-strong)':'var(--border)'}`, borderRadius:'var(--radius-md)', padding:20, transition:'all 150ms ease', ...(hover&&hov?{transform:'translateY(-2px)',boxShadow:'0 8px 32px rgba(0,0,0,0.4)'}:{}), ...(onClick?{cursor:'pointer'}:{}), ...style }}>
+    <div className={className} onClick={onClick} onMouseEnter={() => hover&&setHov(true)} onMouseLeave={() => hover&&setHov(false)}
+      style={{ background:'var(--bg-surface)', border:`1px solid ${hov?'var(--border-strong)':'var(--border)'}`, borderRadius:'var(--radius-md)', padding:20, transition:'all 150ms ease', ...(hover&&hov?{transform:'translateY(-2px)',boxShadow:'0 8px 32px rgba(33,28,46,.10)'}:{}), ...(onClick?{cursor:'pointer'}:{}), ...style }}>
       {children}
     </div>
   )
@@ -350,10 +380,10 @@ function Stars({ rating, interactive=false, onRate }) {
   const r = Number(rating) || 0
   const display = hov || r
   return (
-    <span style={{ fontFamily:'var(--font-mono)', fontSize:'1rem', color:'var(--accent)', cursor:interactive?'pointer':'default', letterSpacing:2 }}>
+    <span style={{ fontFamily:'var(--font-mono)', fontSize:'1rem', color:'#d97706', cursor:interactive?'pointer':'default', letterSpacing:2 }}>
       {[1,2,3,4,5].map(i => (
         <span key={i} onMouseEnter={() => interactive&&setHov(i)} onMouseLeave={() => interactive&&setHov(0)} onClick={() => interactive&&onRate&&onRate(i)}
-          style={{ color:i<=display?'var(--accent)':'var(--border-strong)', transition:'color 100ms ease' }}>★</span>
+          style={{ color:i<=display?'#d97706':'var(--border-strong)', transition:'color 100ms ease' }}>★</span>
       ))}
       {!interactive && <span style={{ color:'var(--text-muted)', marginLeft:4, fontSize:'0.75rem' }}>{r.toFixed(1)}</span>}
     </span>
@@ -365,7 +395,7 @@ function Divider({ style={} }) { return <div style={{ height:1, background:'var(
 function PageTitle({ children, sub }) {
   return (
     <div style={{ marginBottom:28 }}>
-      <h1 style={{ fontFamily:'var(--font-display)', fontSize:'2.4rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.04em', lineHeight:1 }}>{children}</h1>
+      <h1 style={{ fontFamily:'var(--font-display)', fontSize:'2.4rem', fontWeight:700, letterSpacing:'-0.01em', lineHeight:1 }}>{children}</h1>
       {sub && <Mono style={{ marginTop:6, display:'block' }}>{sub}</Mono>}
     </div>
   )
@@ -394,10 +424,10 @@ function Modal({ open, onClose, title, children, maxWidth=480 }) {
   useEffect(() => { if (open) document.body.style.overflow='hidden'; else document.body.style.overflow=''; return () => { document.body.style.overflow='' } }, [open])
   if (!open) return null
   return (
-    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:20, backdropFilter:'blur(4px)', animation:'fadeIn 0.2s ease' }}>
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(33,28,46,.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:20, backdropFilter:'blur(4px)', animation:'fadeIn 0.2s ease' }}>
       <div onClick={e => e.stopPropagation()} style={{ background:'var(--bg-surface)', border:'1px solid var(--border-strong)', borderRadius:'var(--radius-lg)', width:'100%', maxWidth, animation:'slideUp 0.2s ease both', overflow:'hidden' }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'16px 20px', borderBottom:'1px solid var(--border)' }}>
-          <span style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:'1.1rem', textTransform:'uppercase', letterSpacing:'0.04em' }}>{title}</span>
+          <span style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:'1.1rem', letterSpacing:'-0.01em' }}>{title}</span>
           <button onClick={onClose} style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'1.2rem', cursor:'pointer', lineHeight:1, padding:'2px 6px', borderRadius:'var(--radius-sm)' }}>✕</button>
         </div>
         <div style={{ padding:24 }}>{children}</div>
@@ -468,7 +498,7 @@ function LandingNavbar({ onOpenAuth, onNav }) {
 
   return (
     <>
-      <nav style={{ position:'fixed', top:0, left:0, right:0, zIndex:100, background:scrolled?'rgba(8,8,8,.96)':'transparent', borderBottom:scrolled?'1px solid var(--border-strong)':'1px solid transparent', backdropFilter:scrolled?'blur(14px)':'none', transition:'all 300ms ease', padding:'0 24px' }}>
+      <nav style={{ position:'fixed', top:0, left:0, right:0, zIndex:100, background:scrolled?'rgba(250,249,246,.92)':'transparent', borderBottom:scrolled?'1px solid var(--border-strong)':'1px solid transparent', backdropFilter:scrolled?'blur(14px)':'none', transition:'all 300ms ease', padding:'0 24px' }}>
         <div style={{ maxWidth:1200, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', height:66 }}>
           <Logo onClick={() => onNav('home')} />
           <div className="hide-m" style={{ display:'flex', alignItems:'center', gap:32 }}>
@@ -543,7 +573,7 @@ function LandingFooter({ onNav }) {
         <div className="footer-grid" style={{ display:'grid', gridTemplateColumns:'2fr repeat(4,1fr)', gap:44, marginBottom:44 }}>
           <div>
             <Logo onClick={() => onNav('home')} />
-            <p style={{ fontSize:'.875rem', color:'#555', lineHeight:1.75, maxWidth:220, margin:'14px 0 16px' }}>The peer-to-peer service marketplace built for Rhodes University students.</p>
+            <p style={{ fontSize:'.875rem', color:'#7c7585', lineHeight:1.75, maxWidth:220, margin:'14px 0 16px' }}>The peer-to-peer service marketplace built for Rhodes University students.</p>
             <div style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em' }}>Rhodes University · Makhanda, EC</div>
           </div>
           {Object.entries(links).map(([cat, items]) => (
@@ -560,7 +590,7 @@ function LandingFooter({ onNav }) {
         </div>
         <Divider style={{ marginBottom:20 }} />
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10 }}>
-          <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em' }}>© 2025 TaskFinder (PTY) Ltd · All rights reserved</span>
+          <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em' }}>© 2026 ReLiv (PTY) Ltd · All rights reserved</span>
           <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em' }}>Registered in South Africa · POPIA Compliant</span>
         </div>
       </div>
@@ -656,7 +686,7 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
         <div style={{ padding:'18px 22px 14px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div>
             <div style={{ fontFamily:'var(--fd)', fontSize:'1.25rem', fontWeight:800 }}>{mode==='login'?'Welcome back':'Create account'}</div>
-            <div style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em', marginTop:2 }}>TaskFinder · Rhodes Campus</div>
+            <div style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em', marginTop:2 }}>ReLiv · Rhodes Campus</div>
           </div>
           <button onClick={onClose} style={{ background:'none', border:'none', color:'var(--text-muted)', cursor:'pointer', fontSize:'1.1rem', padding:'4px 8px' }}>✕</button>
         </div>
@@ -696,7 +726,7 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
           <form onSubmit={submit} style={{ display:'flex', flexDirection:'column', gap:13 }}>
             {mode==='register' && <div><label>Display Name</label><input value={name} onChange={e => setName(e.target.value)} placeholder="Your full name" /></div>}
             <div><label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@ru.ac.za" required /></div>
-            <div><label>Password {mode==='register'&&<span style={{ color:'#444' }}>(min 8 chars)</span>}</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
+            <div><label>Password {mode==='register'&&<span style={{ color:'#9a94a4' }}>(min 8 chars)</span>}</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
             {mode==='register' && (
               <div><label>I want to</label>
                 <select value={role} onChange={e => setRole(e.target.value)}>
@@ -719,14 +749,14 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
             {mode==='register' && (
               <div style={{ display:'flex', gap:8, alignItems:'flex-start' }}>
                 <input type="checkbox" required style={{ width:'auto', marginTop:3, flexShrink:0, accentColor:'var(--amber)' }} />
-                <span style={{ fontSize:'.76rem', color:'#666', lineHeight:1.5 }}>I agree to the <span style={{ color:'var(--amber)', cursor:'pointer' }}>Terms of Service</span> and <span style={{ color:'var(--amber)', cursor:'pointer' }}>Privacy Policy</span></span>
+                <span style={{ fontSize:'.76rem', color:'#6d6678', lineHeight:1.5 }}>I agree to the <span style={{ color:'var(--amber)', cursor:'pointer' }}>Terms of Service</span> and <span style={{ color:'var(--amber)', cursor:'pointer' }}>Privacy Policy</span></span>
               </div>
             )}
-            {error && <div style={{ background:'rgba(239,68,68,.1)', border:'1px solid rgba(239,68,68,.3)', borderRadius:4, padding:'9px 13px', fontSize:'.82rem', color:'var(--red)' }}>{error}</div>}
+            {error && <div style={{ background:'rgba(239,68,68,.1)', border:'1px solid rgba(239,68,68,.3)', borderRadius:8, padding:'9px 13px', fontSize:'.82rem', color:'var(--red)' }}>{error}</div>}
             <button type="submit" className="btn-p" style={{ width:'100%', justifyContent:'center', marginTop:4 }} disabled={loading || googleLoading}>
               {loading ? <Spinner /> : mode==='login'?'Sign In →':'Create Account →'}
             </button>
-            <div style={{ textAlign:'center', fontSize:'.85rem', color:'#666' }}>
+            <div style={{ textAlign:'center', fontSize:'.85rem', color:'#6d6678' }}>
               {mode==='login'?'No account? ':'Have an account? '}
               <button type="button" onClick={onSwitch} style={{ background:'none', border:'none', color:'var(--amber)', cursor:'pointer', fontSize:'inherit' }}>
                 {mode==='login'?'Sign up free':'Sign in'}
@@ -777,28 +807,53 @@ const STATS_DATA = [
 ]
 
 const TESTIMONIALS_DATA = [
-  { name:'Sipho M.',   role:'3rd Year CS · Earner',       rating:5, text:'I made R2400 in my first two weeks just fixing bugs and building small scripts for other students. TaskFinder is the side hustle I didn\'t know I needed.' },
-  { name:'Anika V.',   role:'PostGrad Law · Creator',      rating:5, text:'Got my thesis transcribed, my room cleaned, and my laptop fixed all through TaskFinder. The escrow system means I never worried about paying upfront.' },
+  { name:'Sipho M.',   role:'3rd Year CS · Earner',       rating:5, text:'I made R2400 in my first two weeks just fixing bugs and building small scripts for other students. ReLiv is the side hustle I didn\'t know I needed.' },
+  { name:'Anika V.',   role:'PostGrad Law · Creator',      rating:5, text:'Got my thesis transcribed, my room cleaned, and my laptop fixed all through ReLiv. The escrow system means I never worried about paying upfront.' },
   { name:'Lethabo K.', role:'2nd Year Commerce · Earner',  rating:5, text:'The trust score system is what makes it different. People know I\'m a real Rhodes student, not some random from the internet.' },
 ]
+
+function CampusStrip() {
+  const slots = [
+    { label:'[Image: Student earner fixing a laptop in res]',                    caption:'Tech help, same day' },
+    { label:'[Image: Two students exchanging laundry bags outside Eden Grove]',  caption:'Errands, sorted' },
+    { label:'[Image: Tutoring session on the library lawn]',                     caption:'Skills, shared' },
+  ]
+  return (
+    <section style={{ padding:'72px 24px', borderBottom:'1px solid var(--border)' }}>
+      <div style={{ maxWidth:1200, margin:'0 auto' }}>
+        <div className="slabel" style={{ marginBottom:28 }}>Real campus, real tasks</div>
+        <div className="tasks-grid" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14 }}>
+          {slots.map((s,i) => (
+            <figure key={i} style={{ margin:0 }}>
+              <div style={{ aspectRatio:'4/3', borderRadius:18, background:'linear-gradient(135deg, var(--accent-dim), var(--bg-elevated))', border:'1px dashed var(--border-strong)', display:'flex', alignItems:'center', justifyContent:'center', padding:20, textAlign:'center' }}>
+                <Mono size="0.68rem">{s.label}</Mono>
+              </div>
+              <figcaption style={{ fontFamily:'var(--font-display)', fontWeight:700, marginTop:10, fontSize:'.95rem' }}>{s.caption}</figcaption>
+            </figure>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
 
 function Hero({ onOpenAuth }) {
   return (
     <section style={{ minHeight:'100vh', display:'flex', alignItems:'center', padding:'110px 24px 72px', position:'relative', overflow:'hidden' }}>
-      <div style={{ position:'absolute', inset:0, zIndex:0, backgroundImage:'linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px)', backgroundSize:'56px 56px' }} />
-      <div style={{ position:'absolute', top:'15%', right:'8%', width:500, height:500, background:'radial-gradient(circle,rgba(245,158,11,.07) 0%,transparent 70%)', zIndex:0 }} />
+      <div style={{ position:'absolute', inset:0, zIndex:0, backgroundImage:'linear-gradient(rgba(33,28,46,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(33,28,46,.05) 1px,transparent 1px)', backgroundSize:'56px 56px' }} />
+      <div style={{ position:'absolute', top:'15%', right:'8%', width:500, height:500, background:'radial-gradient(circle,rgba(91,33,182,.07) 0%,transparent 70%)', zIndex:0 }} />
       <div style={{ maxWidth:1200, margin:'0 auto', width:'100%', position:'relative', zIndex:1 }}>
         <div className="hero-inner" style={{ display:'flex', alignItems:'center', gap:60 }}>
           <div style={{ flex:1 }}>
-            <div style={{ display:'inline-flex', alignItems:'center', gap:8, background:'rgba(245,158,11,.1)', border:'1px solid rgba(245,158,11,.25)', borderRadius:100, padding:'5px 14px', marginBottom:28, animation:'fadeUp .6s ease both' }}>
+            <div style={{ display:'inline-flex', alignItems:'center', gap:8, background:'rgba(91,33,182,.1)', border:'1px solid rgba(91,33,182,.25)', borderRadius:100, padding:'5px 14px', marginBottom:28, animation:'fadeUp .6s ease both' }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--amber)', animation:'pulse 2s infinite', flexShrink:0 }} />
               <span style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', letterSpacing:'.1em', textTransform:'uppercase' }}>Now live on Rhodes Campus</span>
             </div>
             <h1 style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(2.8rem,6.5vw,5.2rem)', lineHeight:1.0, letterSpacing:'-.02em', marginBottom:24, animation:'fadeUp .6s .1s ease both', opacity:0, animationFillMode:'forwards' }}>
-              Your campus.<br /><span style={{ color:'var(--amber)' }}>Your economy.</span>
+              Live more.<br /><span style={{ background:'linear-gradient(100deg, transparent 0%, var(--highlight) 6%, var(--highlight) 94%, transparent 100%)', padding:'0 0.18em', borderRadius:12, WebkitBoxDecorationBreak:'clone', boxDecorationBreak:'clone' }}>stress less.</span>
             </h1>
-            <p style={{ fontSize:'clamp(.95rem,1.8vw,1.2rem)', color:'#888', lineHeight:1.75, maxWidth:520, marginBottom:36, animation:'fadeUp .6s .2s ease both', opacity:0, animationFillMode:'forwards' }}>
-              TaskFinder connects Rhodes University students. Post a task, earn money, or get things done — all with escrow-protected payments and verified student trust scores.
+            <p style={{ fontSize:'clamp(.95rem,1.8vw,1.2rem)', color:'#5f5970', lineHeight:1.75, maxWidth:520, marginBottom:36, animation:'fadeUp .6s .2s ease both', opacity:0, animationFillMode:'forwards' }}>
+              ReLiv connects Rhodes University students. Post a task, earn money, or get things done — all with escrow-protected payments and verified student trust scores.
             </p>
             <div style={{ display:'flex', gap:12, flexWrap:'wrap', animation:'fadeUp .6s .3s ease both', opacity:0, animationFillMode:'forwards' }}>
               <button className="btn-p" style={{ fontSize:'.95rem', padding:'14px 30px' }} onClick={() => onOpenAuth('register')}>Post a Task Free →</button>
@@ -808,15 +863,15 @@ function Hero({ onOpenAuth }) {
               No credit card required · Free to post · Pay only when done
             </p>
           </div>
-          <div className="hide-m" style={{ width:300, flexShrink:0, display:'flex', flexDirection:'column', gap:10, animation:'slideL .8s .4s ease both', opacity:0, animationFillMode:'forwards' }}>
+          <div className="hide-m" style={{ width:316, flexShrink:0, display:'flex', flexDirection:'column', gap:10, animation:'slideL .8s .4s ease both', opacity:0, animationFillMode:'forwards', border:'10px solid #211c2e', borderRadius:40, padding:'34px 14px 22px', background:'var(--bg-base)', boxShadow:'0 24px 64px rgba(33,28,46,.18)', position:'relative' }}>
             {TASK_EXAMPLES.slice(0,3).map((t,i) => (
-              <div key={i} style={{ background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:8, padding:'14px 16px', animation:`float ${3+i*.5}s ${i*.3}s ease-in-out infinite` }}>
+              <div key={i} style={{ background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:14, padding:'14px 16px', animation:`float ${3+i*.5}s ${i*.3}s ease-in-out infinite` }}>
                 <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
                   <span style={{ fontSize:'.84rem', fontWeight:500, lineHeight:1.3, maxWidth:180 }}>{t.title}</span>
                   <span style={{ fontFamily:'var(--fm)', fontSize:'.88rem', color:'var(--amber)', fontWeight:500, flexShrink:0, marginLeft:8 }}>{t.budget}</span>
                 </div>
                 <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
-                  {t.tags.map(tag => <span key={tag} style={{ background:'var(--bg-elevated)', border:'1px solid var(--border-strong)', color:'#555', fontFamily:'var(--fm)', fontSize:'.58rem', padding:'2px 7px', borderRadius:3, textTransform:'uppercase', letterSpacing:'.06em' }}>{tag}</span>)}
+                  {t.tags.map(tag => <span key={tag} style={{ background:'var(--bg-elevated)', border:'1px solid var(--border-strong)', color:'#7c7585', fontFamily:'var(--fm)', fontSize:'.58rem', padding:'2px 7px', borderRadius:3, textTransform:'uppercase', letterSpacing:'.06em' }}>{tag}</span>)}
                   <span style={{ marginLeft:'auto', fontFamily:'var(--fm)', fontSize:'.58rem', color:'var(--text-muted)' }}>{t.time}</span>
                 </div>
               </div>
@@ -858,11 +913,11 @@ function HowItWorks() {
           {STEPS_DATA.map((s,i) => (
             <div key={i} style={{ padding:'32px 26px', background:i%2===0?'var(--bg-surface)':'var(--bg-base)', border:'1px solid var(--border)', position:'relative' }}>
               <div style={{ fontFamily:'var(--fd)', fontSize:'3.5rem', fontWeight:800, color:'var(--border-strong)', lineHeight:1, marginBottom:16, userSelect:'none' }}>{s.n}</div>
-              <div style={{ display:'inline-block', background:s.color==='var(--amber)'?'rgba(245,158,11,.1)':s.color==='var(--green)'?'rgba(16,185,129,.1)':'rgba(167,139,250,.1)', border:`1px solid ${s.color==='var(--amber)'?'rgba(245,158,11,.3)':s.color==='var(--green)'?'rgba(16,185,129,.3)':'rgba(167,139,250,.3)'}`, borderRadius:100, padding:'3px 11px', marginBottom:12 }}>
+              <div style={{ display:'inline-block', background:s.color==='var(--amber)'?'rgba(91,33,182,.1)':s.color==='var(--green)'?'rgba(16,185,129,.1)':'rgba(180,83,9,.1)', border:`1px solid ${s.color==='var(--amber)'?'rgba(91,33,182,.3)':s.color==='var(--green)'?'rgba(16,185,129,.3)':'rgba(180,83,9,.3)'}`, borderRadius:100, padding:'3px 11px', marginBottom:12 }}>
                 <span style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:s.color, textTransform:'uppercase', letterSpacing:'.1em' }}>{s.role}</span>
               </div>
               <h3 style={{ fontFamily:'var(--fd)', fontSize:'1.15rem', fontWeight:700, marginBottom:10 }}>{s.title}</h3>
-              <p style={{ fontSize:'.875rem', color:'#777', lineHeight:1.7 }}>{s.desc}</p>
+              <p style={{ fontSize:'.875rem', color:'#665f72', lineHeight:1.7 }}>{s.desc}</p>
             </div>
           ))}
         </div>
@@ -880,16 +935,16 @@ function Features() {
             <div className="slabel" style={{ marginBottom:14 }}>Features</div>
             <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.8rem)', fontWeight:800, lineHeight:1.1 }}>Everything you need.<br />Nothing you don't.</h2>
           </div>
-          <p style={{ maxWidth:320, color:'#777', fontSize:'.9rem', lineHeight:1.7 }}>Built specifically for campus life. Lightweight, fast, and designed around the way students actually work.</p>
+          <p style={{ maxWidth:320, color:'#665f72', fontSize:'.9rem', lineHeight:1.7 }}>Built specifically for campus life. Lightweight, fast, and designed around the way students actually work.</p>
         </div>
-        <div className="feat-grid" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:1, border:'1px solid var(--border)', borderRadius:8, overflow:'hidden' }}>
+        <div className="feat-grid" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:1, border:'1px solid var(--border)', borderRadius:14, overflow:'hidden' }}>
           {FEATURES_DATA.map((f,i) => (
             <div key={i} style={{ padding:'32px 28px', background:'var(--bg-base)', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', transition:'background 200ms', cursor:'default' }}
               onMouseEnter={e => e.currentTarget.style.background='var(--bg-elevated)'}
               onMouseLeave={e => e.currentTarget.style.background='var(--bg-base)'}>
               <div style={{ fontSize:'1.7rem', marginBottom:14 }}>{f.icon}</div>
               <h3 style={{ fontFamily:'var(--fd)', fontSize:'1.1rem', fontWeight:700, marginBottom:9 }}>{f.title}</h3>
-              <p style={{ fontSize:'.875rem', color:'#666', lineHeight:1.7 }}>{f.desc}</p>
+              <p style={{ fontSize:'.875rem', color:'#6d6678', lineHeight:1.7 }}>{f.desc}</p>
             </div>
           ))}
         </div>
@@ -918,7 +973,7 @@ function LiveTasks({ onOpenAuth }) {
               </div>
               <h3 style={{ fontFamily:'var(--fd)', fontSize:'.98rem', fontWeight:700, marginBottom:10, lineHeight:1.3 }}>{t.title}</h3>
               <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginBottom:12 }}>
-                {t.tags.map(tag => <span key={tag} style={{ background:'var(--bg-elevated)', border:'1px solid var(--border-strong)', color:'#555', fontFamily:'var(--fm)', fontSize:'.58rem', padding:'2px 7px', borderRadius:3, textTransform:'uppercase', letterSpacing:'.06em' }}>{tag}</span>)}
+                {t.tags.map(tag => <span key={tag} style={{ background:'var(--bg-elevated)', border:'1px solid var(--border-strong)', color:'#7c7585', fontFamily:'var(--fm)', fontSize:'.58rem', padding:'2px 7px', borderRadius:3, textTransform:'uppercase', letterSpacing:'.06em' }}>{tag}</span>)}
               </div>
               <div style={{ display:'flex', justifyContent:'space-between', paddingTop:10, borderTop:'1px solid var(--border)' }}>
                 <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)' }}>📍 Rhodes Campus</span>
@@ -939,35 +994,35 @@ function Pricing({ onOpenAuth }) {
         <div style={{ marginBottom:56, textAlign:'center' }}>
           <div className="slabel" style={{ justifyContent:'center', marginBottom:14 }}>Pricing</div>
           <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.8rem)', fontWeight:800, lineHeight:1.1, marginBottom:14 }}>Simple. Fair. Transparent.</h2>
-          <p style={{ color:'#777', maxWidth:420, margin:'0 auto', lineHeight:1.7, fontSize:'.9rem' }}>No subscriptions. No hidden fees. We only make money when you do.</p>
+          <p style={{ color:'#665f72', maxWidth:420, margin:'0 auto', lineHeight:1.7, fontSize:'.9rem' }}>No subscriptions. No hidden fees. We only make money when you do.</p>
         </div>
         <div className="price-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:18, maxWidth:760, margin:'0 auto' }}>
-          <div style={{ background:'var(--bg-base)', border:'1px solid var(--border)', borderRadius:8, padding:'32px 28px' }}>
+          <div style={{ background:'var(--bg-base)', border:'1px solid var(--border)', borderRadius:14, padding:'32px 28px' }}>
             <div style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:16 }}>For Creators</div>
             <div style={{ fontFamily:'var(--fd)', fontSize:'3rem', fontWeight:800, lineHeight:1, marginBottom:5 }}>Free</div>
-            <p style={{ color:'#666', fontSize:'.875rem', marginBottom:24 }}>to post a task</p>
+            <p style={{ color:'#6d6678', fontSize:'.875rem', marginBottom:24 }}>to post a task</p>
             <Divider style={{ marginBottom:20 }} />
             {['Post unlimited tasks','Receive unlimited bids','Built-in messaging','Escrow payment protection','Dispute resolution support'].map(item => (
               <div key={item} style={{ display:'flex', gap:9, alignItems:'center', marginBottom:10 }}>
                 <span style={{ color:'var(--green)', fontSize:'.875rem', flexShrink:0 }}>✓</span>
-                <span style={{ fontSize:'.875rem', color:'#bbb' }}>{item}</span>
+                <span style={{ fontSize:'.875rem', color:'#454050' }}>{item}</span>
               </div>
             ))}
             <button className="btn-s" style={{ width:'100%', marginTop:24, justifyContent:'center', display:'flex' }} onClick={() => onOpenAuth('register')}>Post a Task Free</button>
           </div>
-          <div style={{ background:'var(--bg-base)', border:'1px solid var(--amber)', borderRadius:8, padding:'32px 28px', position:'relative', boxShadow:'0 0 40px rgba(245,158,11,.08)' }}>
-            <div style={{ position:'absolute', top:-11, left:'50%', transform:'translateX(-50%)', background:'var(--amber)', color:'#000', fontFamily:'var(--fm)', fontSize:'.58rem', fontWeight:500, textTransform:'uppercase', letterSpacing:'.1em', padding:'3px 12px', borderRadius:100 }}>Most Popular</div>
+          <div style={{ background:'var(--bg-base)', border:'1px solid var(--amber)', borderRadius:14, padding:'32px 28px', position:'relative', boxShadow:'0 0 40px rgba(91,33,182,.08)' }}>
+            <div style={{ position:'absolute', top:-11, left:'50%', transform:'translateX(-50%)', background:'var(--amber)', color:'#fff', fontFamily:'var(--fm)', fontSize:'.58rem', fontWeight:500, textTransform:'uppercase', letterSpacing:'.1em', padding:'3px 12px', borderRadius:100 }}>Most Popular</div>
             <div style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:16 }}>For Earners</div>
             <div style={{ display:'flex', alignItems:'baseline', gap:5, marginBottom:5 }}>
               <span style={{ fontFamily:'var(--fd)', fontSize:'3rem', fontWeight:800, lineHeight:1 }}>10%</span>
-              <span style={{ color:'#666', fontSize:'.875rem' }}>per completed task</span>
+              <span style={{ color:'#6d6678', fontSize:'.875rem' }}>per completed task</span>
             </div>
-            <p style={{ color:'#666', fontSize:'.875rem', marginBottom:24 }}>only when you get paid</p>
+            <p style={{ color:'#6d6678', fontSize:'.875rem', marginBottom:24 }}>only when you get paid</p>
             <Divider style={{ marginBottom:20 }} />
             {['Bid on any open task','Verified student trust score','Stripe-powered instant payouts','Build a campus reputation','Zero upfront cost'].map(item => (
               <div key={item} style={{ display:'flex', gap:9, alignItems:'center', marginBottom:10 }}>
                 <span style={{ color:'var(--amber)', fontSize:'.875rem', flexShrink:0 }}>✓</span>
-                <span style={{ fontSize:'.875rem', color:'#bbb' }}>{item}</span>
+                <span style={{ fontSize:'.875rem', color:'#454050' }}>{item}</span>
               </div>
             ))}
             <button className="btn-p" style={{ width:'100%', marginTop:24, justifyContent:'center', display:'flex' }} onClick={() => onOpenAuth('register')}>Start Earning →</button>
@@ -989,10 +1044,10 @@ function Testimonials() {
         <div className="test-grid" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16 }}>
           {TESTIMONIALS_DATA.map((t,i) => (
             <div key={i} className="lcard">
-              <div style={{ color:'var(--amber)', letterSpacing:2, marginBottom:14 }}>{'★'.repeat(t.rating)}</div>
-              <p style={{ fontSize:'.9rem', color:'#bbb', lineHeight:1.8, marginBottom:22, fontStyle:'italic' }}>"{t.text}"</p>
+              <div style={{ color:'#d97706', letterSpacing:2, marginBottom:14 }}>{'★'.repeat(t.rating)}</div>
+              <p style={{ fontSize:'.9rem', color:'#454050', lineHeight:1.8, marginBottom:22, fontStyle:'italic' }}>"{t.text}"</p>
               <div style={{ display:'flex', alignItems:'center', gap:11, paddingTop:18, borderTop:'1px solid var(--border)' }}>
-                <div style={{ width:36, height:36, borderRadius:'50%', background:'rgba(245,158,11,.12)', border:'1px solid rgba(245,158,11,.25)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--fd)', fontWeight:700, fontSize:'.85rem', color:'var(--amber)' }}>{t.name.charAt(0)}</div>
+                <div style={{ width:36, height:36, borderRadius:'50%', background:'rgba(91,33,182,.12)', border:'1px solid rgba(91,33,182,.25)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--fd)', fontWeight:700, fontSize:'.85rem', color:'var(--amber)' }}>{t.name.charAt(0)}</div>
                 <div>
                   <div style={{ fontWeight:600, fontSize:'.875rem' }}>{t.name}</div>
                   <div style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em' }}>{t.role}</div>
@@ -1012,12 +1067,12 @@ function LandingAbout() {
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
         <div className="about-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:72, alignItems:'center' }}>
           <div>
-            <div className="slabel" style={{ marginBottom:18 }}>About TaskFinder</div>
+            <div className="slabel" style={{ marginBottom:18 }}>About ReLiv</div>
             <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.6rem)', fontWeight:800, lineHeight:1.1, marginBottom:22 }}>Built for students,<br />by students.</h2>
-            <p style={{ color:'#777', lineHeight:1.8, marginBottom:18, fontSize:'.9rem' }}>TaskFinder started with a simple observation: Rhodes University has thousands of talented students who need extra income, and thousands more who need help getting things done. We built the infrastructure to connect them safely.</p>
-            <p style={{ color:'#777', lineHeight:1.8, fontSize:'.9rem' }}>Every feature — from the escrow payment system to the trust score engine — was designed with one campus in mind. No bloat. Just a fast, safe marketplace that works.</p>
+            <p style={{ color:'#665f72', lineHeight:1.8, marginBottom:18, fontSize:'.9rem' }}>ReLiv started with a simple observation: Rhodes University has thousands of talented students who need extra income, and thousands more who need help getting things done. We built the infrastructure to connect them safely.</p>
+            <p style={{ color:'#665f72', lineHeight:1.8, fontSize:'.9rem' }}>Every feature — from the escrow payment system to the trust score engine — was designed with one campus in mind. No bloat. Just a fast, safe marketplace that works.</p>
           </div>
-          <div style={{ background:'var(--bg-base)', border:'1px solid var(--border)', borderRadius:8, padding:26, fontFamily:'var(--fm)', fontSize:'.78rem', lineHeight:2, color:'#555' }}>
+          <div style={{ background:'var(--bg-base)', border:'1px solid var(--border)', borderRadius:14, padding:26, fontFamily:'var(--fm)', fontSize:'.78rem', lineHeight:2, color:'#7c7585' }}>
             <div style={{ color:'var(--text-muted)', marginBottom:8, fontSize:'.6rem', textTransform:'uppercase', letterSpacing:'.1em' }}>// Task lifecycle</div>
             {[
               { k:'task.status',       v:"'open'",        c:'var(--amber)' },
@@ -1041,13 +1096,13 @@ function LandingAbout() {
 function LandingCTA({ onOpenAuth }) {
   return (
     <section style={{ padding:'100px 24px', textAlign:'center', position:'relative', overflow:'hidden' }}>
-      <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:700, height:350, background:'radial-gradient(ellipse,rgba(245,158,11,.05) 0%,transparent 70%)', pointerEvents:'none' }} />
+      <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:700, height:350, background:'radial-gradient(ellipse,rgba(91,33,182,.05) 0%,transparent 70%)', pointerEvents:'none' }} />
       <div style={{ position:'relative', zIndex:1 }}>
         <div className="slabel" style={{ justifyContent:'center', marginBottom:18 }}>Get Started</div>
         <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(2.2rem,4.5vw,3.8rem)', fontWeight:800, lineHeight:1.05, marginBottom:20, letterSpacing:'-.02em' }}>
           Ready to join your<br /><span style={{ color:'var(--amber)' }}>campus economy?</span>
         </h2>
-        <p style={{ color:'#777', maxWidth:400, margin:'0 auto 36px', lineHeight:1.7, fontSize:'.9rem' }}>Join hundreds of Rhodes students already posting tasks, earning money, and getting things done.</p>
+        <p style={{ color:'#665f72', maxWidth:400, margin:'0 auto 36px', lineHeight:1.7, fontSize:'.9rem' }}>Join hundreds of Rhodes students already posting tasks, earning money, and getting things done.</p>
         <div style={{ display:'flex', gap:12, justifyContent:'center', flexWrap:'wrap' }}>
           <button className="btn-p" style={{ fontSize:'.95rem', padding:'14px 34px' }} onClick={() => onOpenAuth('register')}>Create Free Account →</button>
           <button className="btn-s" style={{ fontSize:'.95rem', padding:'14px 34px' }} onClick={() => onOpenAuth('login')}>Sign In</button>
@@ -1093,7 +1148,7 @@ function SidebarPage({ title, subtitle, sections, children, onNav }) {
             <div style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.12em', padding:'0 20px', marginBottom:12 }}>On this page</div>
             {sections.map(s => (
               <button key={s.id} onClick={() => { setActive(s.id); document.getElementById(s.id)?.scrollIntoView({ behavior:'smooth', block:'start' }) }}
-                style={{ display:'block', width:'100%', textAlign:'left', background:active===s.id?'rgba(245,158,11,.06)':'none', border:'none', borderLeft:active===s.id?'2px solid var(--amber)':'2px solid transparent', color:active===s.id?'var(--amber)':'var(--text-muted)', padding:'9px 20px', fontSize:'.85rem', cursor:'pointer', transition:'all 150ms' }}>
+                style={{ display:'block', width:'100%', textAlign:'left', background:active===s.id?'rgba(91,33,182,.06)':'none', border:'none', borderLeft:active===s.id?'2px solid var(--amber)':'2px solid transparent', color:active===s.id?'var(--amber)':'var(--text-muted)', padding:'9px 20px', fontSize:'.85rem', cursor:'pointer', transition:'all 150ms' }}>
                 {s.label}
               </button>
             ))}
@@ -1111,7 +1166,7 @@ function ComingSoonPage({ title, subtitle, onNav }) {
       <div style={{ textAlign:'center', padding:'60px 20px' }}>
         <div style={{ fontSize:'3rem', marginBottom:16, opacity:.3 }}>🚧</div>
         <h2 style={{ fontFamily:'var(--fd)', fontSize:'1.4rem', fontWeight:800, marginBottom:12 }}>Coming Soon</h2>
-        <p style={{ color:'#888', maxWidth:360, margin:'0 auto', lineHeight:1.7 }}>This page is being worked on and will be available shortly.</p>
+        <p style={{ color:'#5f5970', maxWidth:360, margin:'0 auto', lineHeight:1.7 }}>This page is being worked on and will be available shortly.</p>
         <button className="btn-s" style={{ marginTop:28 }} onClick={() => onNav('home')}>← Back to Home</button>
       </div>
     </PageWrapper>
@@ -1130,11 +1185,11 @@ function HowItWorksPage({ onNav }) {
     { id:'disputes',  label:'Disputes' },
   ]
   return (
-    <SidebarPage title="How TaskFinder Works" subtitle="Product" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>Overview</h2><p>TaskFinder is a peer-to-peer service marketplace designed exclusively for Rhodes University students. It connects people who need tasks done (Creators) with people who have the skills to do them (Earners).</p><div className="highlight"><p>🎓 TaskFinder is a Rhodes-first platform. Linking your university SSO boosts your trust score significantly.</p></div></div>
+    <SidebarPage title="How ReLiv Works" subtitle="Product" sections={sections} onNav={onNav}>
+      <div id="overview"><h2>Overview</h2><p>ReLiv is a peer-to-peer service marketplace designed exclusively for Rhodes University students. It connects people who need tasks done (Creators) with people who have the skills to do them (Earners).</p><div className="highlight"><p>🎓 ReLiv is a Rhodes-first platform. Linking your university SSO boosts your trust score significantly.</p></div></div>
       <div id="creators"><h2>For Creators</h2><h3>Posting a Task</h3><p>Creating a task takes less than 60 seconds. Provide a title, description, budget, deadline, and skill tags. Once posted, your task is immediately visible and earners with matching skills are notified automatically.</p><h3>Reviewing Bids</h3><p>Earners submit bids with a proposed price and pitch. You can review all bids, message earners directly, and take as long as you need before accepting.</p><h3>Accepting a Bid</h3><p>When you accept a bid, all other bids are automatically declined and the winning earner is notified. You are then prompted to fund the escrow — this secures the payment without charging you yet.</p><h3>Releasing Payment</h3><p>Once the task is complete to your satisfaction, you release the payment. Funds transfer immediately to the earner's account. You are then prompted to leave a review.</p></div>
       <div id="earners"><h2>For Earners</h2><h3>Finding Tasks</h3><p>Browse the task feed by skill, keyword, or campus zone. The Suggestions tab surfaces tasks specifically matched to your skill profile using our Jaccard similarity algorithm.</p><h3>Submitting a Bid</h3><p>Write a pitch explaining why you're the right person for the task and propose your price. You can bid on multiple tasks simultaneously and withdraw a bid at any time before it's accepted.</p><h3>Getting Paid</h3><p>Payments are processed via Stripe Connect and deposited directly to your linked bank account. The platform retains a 10% fee from your payout on each completed task.</p></div>
-      <div id="payments"><h2>Payments & Escrow</h2><p>TaskFinder uses an escrow model to protect both parties:</p><ul><li>Creator funds escrow → Stripe holds the money (no transfer yet)</li><li>Work is completed → Creator releases payment</li><li>Stripe captures the payment → Transfers to earner minus 10% platform fee</li><li>If disputed → Escrow is frozen until admin resolves it</li></ul><div className="highlight"><p>Your card is authorised but not charged until you release payment. If you raise a dispute before releasing, no charge is made.</p></div></div>
+      <div id="payments"><h2>Payments & Escrow</h2><p>ReLiv uses an escrow model to protect both parties:</p><ul><li>Creator funds escrow → Stripe holds the money (no transfer yet)</li><li>Work is completed → Creator releases payment</li><li>Stripe captures the payment → Transfers to earner minus 10% platform fee</li><li>If disputed → Escrow is frozen until admin resolves it</li></ul><div className="highlight"><p>Your card is authorised but not charged until you release payment. If you raise a dispute before releasing, no charge is made.</p></div></div>
       <div id="messaging"><h2>Messaging</h2><p>Every task has a built-in messaging thread between the creator and the accepted earner. Messages are stored and visible to admin in the event of a dispute — so keep communication professional and on-platform.</p></div>
       <div id="disputes"><h2>Disputes</h2><p>If something goes wrong, either party can raise a dispute. This immediately freezes the escrow and notifies our admin team. The admin reviews all messages, task requirements, and evidence submitted, then decides to either refund the creator or release payment to the earner.</p></div>
     </SidebarPage>
@@ -1152,9 +1207,9 @@ function FeaturesPage({ onNav }) {
   ]
   return (
     <SidebarPage title="Platform Features" subtitle="Product" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>All Features</h2><p>TaskFinder is built with a focused feature set designed around the realities of campus life. Everything was chosen because it solves a real problem for students.</p></div>
+      <div id="overview"><h2>All Features</h2><p>ReLiv is built with a focused feature set designed around the realities of campus life. Everything was chosen because it solves a real problem for students.</p></div>
       <div id="matching"><h2>Smart Matching Engine</h2><p>When a task is posted, our matching engine automatically identifies earners whose skill profiles overlap with the task's skill tags using Jaccard similarity scoring. Earners are ranked by skill overlap score, average rating bonus (up to +20% for 5-star earners), and account longevity.</p></div>
-      <div id="trust"><h2>Trust Score System</h2><p>Every user has a trust score between 0 and 100, calculated from:</p><ul><li><strong style={{color:'#ccc'}}>Identity (40pts)</strong> — Rhodes SSO link (30pts) + verified email (10pts)</li><li><strong style={{color:'#ccc'}}>Track record (40pts)</strong> — completed tasks (up to 20pts) + average rating (up to 20pts)</li><li><strong style={{color:'#ccc'}}>Longevity (20pts)</strong> — 5 points per month, capped at 20</li><li><strong style={{color:'#ccc'}}>Dispute penalty</strong> — -10pts per dispute raised against you</li></ul><div className="highlight"><p>Levels: Unverified (0–19) · New (20–49) · Established (50–79) · Verified (80–100)</p></div></div>
+      <div id="trust"><h2>Trust Score System</h2><p>Every user has a trust score between 0 and 100, calculated from:</p><ul><li><strong style={{color:'#3b3548'}}>Identity (40pts)</strong> — Rhodes SSO link (30pts) + verified email (10pts)</li><li><strong style={{color:'#3b3548'}}>Track record (40pts)</strong> — completed tasks (up to 20pts) + average rating (up to 20pts)</li><li><strong style={{color:'#3b3548'}}>Longevity (20pts)</strong> — 5 points per month, capped at 20</li><li><strong style={{color:'#3b3548'}}>Dispute penalty</strong> — -10pts per dispute raised against you</li></ul><div className="highlight"><p>Levels: Unverified (0–19) · New (20–49) · Established (50–79) · Verified (80–100)</p></div></div>
       <div id="escrow"><h2>Escrow System</h2><p>Our escrow is built on Stripe's PaymentIntent API with manual capture. Funds are authorised on the creator's card when escrow is funded, but no actual charge occurs until the creator releases payment. The 10% platform fee is deducted from the earner's payout, not added to the creator's charge.</p></div>
       <div id="messaging"><h2>Messaging</h2><p>Built-in real-time messaging via Socket.io. Features include task-scoped threads, pre-bid inquiry messages, read receipts, and message history preserved for dispute evidence.</p></div>
       <div id="admin"><h2>Admin Tools</h2><p>The admin dashboard provides a full dispute queue with FIFO ordering, complete message logs for any task, escrow state visibility, user management, audit timelines, and one-click refund or release from the dispute detail view.</p></div>
@@ -1172,9 +1227,9 @@ function PricingPage({ onNav, onOpenAuth }) {
   ]
   return (
     <SidebarPage title="Pricing" subtitle="Product" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>Pricing Overview</h2><p>TaskFinder uses a simple success-based pricing model. We make money only when transactions succeed — aligning our incentives with yours.</p><div className="highlight"><p>No monthly fees. No posting fees. No signup fees. 10% is deducted from the earner's payout on each completed task.</p></div></div>
+      <div id="overview"><h2>Pricing Overview</h2><p>ReLiv uses a simple success-based pricing model. We make money only when transactions succeed — aligning our incentives with yours.</p><div className="highlight"><p>No monthly fees. No posting fees. No signup fees. 10% is deducted from the earner's payout on each completed task.</p></div></div>
       <div id="creators"><h2>For Creators</h2><p>Posting tasks is completely free. You only pay the agreed task price when you release payment after the work is complete. There are no additional fees charged to creators beyond the agreed task price.</p></div>
-      <div id="earners"><h2>For Earners</h2><p>Bidding and winning tasks is free. When a task is completed and payment is released, TaskFinder retains 10% of the task value as a platform fee. Example: You win a R500 task. When the creator releases payment, you receive R450. TaskFinder retains R50.</p></div>
+      <div id="earners"><h2>For Earners</h2><p>Bidding and winning tasks is free. When a task is completed and payment is released, ReLiv retains 10% of the task value as a platform fee. Example: You win a R500 task. When the creator releases payment, you receive R450. ReLiv retains R50.</p></div>
       <div id="fees"><h2>Fee Breakdown</h2>
         <table><thead><tr><th>Action</th><th>Creator</th><th>Earner</th></tr></thead><tbody>
           {[['Post a task','Free','—'],['Submit a bid','—','Free'],['Task completed','Task price','Task price minus 10%'],['Dispute raised','Free','Free'],['Refund (dispute)','Full refund','No payout']].map(([a,c,e]) => (
@@ -1182,7 +1237,7 @@ function PricingPage({ onNav, onOpenAuth }) {
           ))}
         </tbody></table>
       </div>
-      <div id="faq"><h2>Frequently Asked Questions</h2><h3>What if a dispute is raised?</h3><p>If resolved in the creator's favour, escrow is cancelled and no charge is made. If resolved in the earner's favour, payment is released as normal minus the 10% platform fee.</p><h3>Are there VAT implications?</h3><p>TaskFinder is not currently VAT registered. Earners are responsible for declaring their earnings to SARS as individual income.</p><h3>Can prices be negotiated outside the platform?</h3><p>All transactions must go through TaskFinder's escrow system. Off-platform payments are not covered by our trust or dispute protection.</p></div>
+      <div id="faq"><h2>Frequently Asked Questions</h2><h3>What if a dispute is raised?</h3><p>If resolved in the creator's favour, escrow is cancelled and no charge is made. If resolved in the earner's favour, payment is released as normal minus the 10% platform fee.</p><h3>Are there VAT implications?</h3><p>ReLiv is not currently VAT registered. Earners are responsible for declaring their earnings to SARS as individual income.</p><h3>Can prices be negotiated outside the platform?</h3><p>All transactions must go through ReLiv's escrow system. Off-platform payments are not covered by our trust or dispute protection.</p></div>
     </SidebarPage>
   )
 }
@@ -1198,11 +1253,11 @@ function TrustSafetyPage({ onNav }) {
   ]
   return (
     <SidebarPage title="Trust & Safety" subtitle="Product" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>Our Commitment to Safety</h2><p>TaskFinder is built on the principle that two students from the same campus should be able to transact with confidence. Every feature exists to make that possible.</p><div className="highlight"><p>🔒 All payments are held in escrow and never leave the platform until both parties are satisfied — or an admin resolves a dispute.</p></div></div>
+      <div id="overview"><h2>Our Commitment to Safety</h2><p>ReLiv is built on the principle that two students from the same campus should be able to transact with confidence. Every feature exists to make that possible.</p><div className="highlight"><p>🔒 All payments are held in escrow and never leave the platform until both parties are satisfied — or an admin resolves a dispute.</p></div></div>
       <div id="trust-scores"><h2>Trust Scores</h2><p>Every user has a visible trust score calculated from verifiable signals: verified identity, completed transactions, earned ratings, and account history. A high trust score is not a guarantee of quality, but it is a meaningful signal that a user has a real, verified identity and a track record on the platform.</p></div>
       <div id="verification"><h2>Identity Verification</h2><p>To reach the highest trust tier, users must link their Rhodes University account (SSO). This verifies that the user is a current or recent Rhodes student and prevents anonymous bad-faith users from accumulating trust.</p></div>
-      <div id="escrow"><h2>Payment Safety</h2><p>TaskFinder never holds your money — it is held by Stripe, one of the world's most trusted payment processors (PCI DSS Level 1 certified). Your card details are never stored by TaskFinder.</p></div>
-      <div id="reporting"><h2>Reporting Issues</h2><p>If you encounter a problem:</p><ul><li><strong style={{color:'#ccc'}}>Raise a dispute</strong> — for unresolved task delivery issues. Freezes escrow immediately.</li><li><strong style={{color:'#ccc'}}>Report a user</strong> — for conduct violations, harassment, or fraud.</li><li><strong style={{color:'#ccc'}}>Contact support</strong> — for account issues or technical problems.</li></ul></div>
+      <div id="escrow"><h2>Payment Safety</h2><p>ReLiv never holds your money — it is held by Stripe, one of the world's most trusted payment processors (PCI DSS Level 1 certified). Your card details are never stored by ReLiv.</p></div>
+      <div id="reporting"><h2>Reporting Issues</h2><p>If you encounter a problem:</p><ul><li><strong style={{color:'#3b3548'}}>Raise a dispute</strong> — for unresolved task delivery issues. Freezes escrow immediately.</li><li><strong style={{color:'#3b3548'}}>Report a user</strong> — for conduct violations, harassment, or fraud.</li><li><strong style={{color:'#3b3548'}}>Contact support</strong> — for account issues or technical problems.</li></ul></div>
       <div id="prohibited"><h2>Prohibited Conduct</h2><p>The following result in immediate account suspension:</p><ul><li>Off-platform payment requests or arrangements</li><li>Creating fake reviews or inflating trust scores</li><li>Harassment, threats, or discriminatory language</li><li>Posting tasks or services that are illegal under South African law</li><li>Academic dishonesty services</li></ul></div>
     </SidebarPage>
   )
@@ -1225,15 +1280,15 @@ function TermsPage({ onNav }) {
   return (
     <SidebarPage title="Terms of Service" subtitle="Legal" sections={sections} onNav={onNav}>
       <p style={{ color:'var(--text-muted)', fontFamily:'var(--fm)', fontSize:'.62rem', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:24 }}>Last updated: 1 January 2025</p>
-      <div id="intro"><h2>1. Introduction</h2><p>These Terms of Service govern your access to and use of the TaskFinder platform, operated by TaskFinder (PTY) Ltd, registered in the Republic of South Africa. By creating an account or using the Platform, you agree to be bound by these Terms.</p></div>
-      <div id="eligibility"><h2>2. Eligibility</h2><p>To use TaskFinder you must be at least 18 years of age (or 16 with parental consent), be a current or recently enrolled student, staff member, or affiliate of Rhodes University, and have the legal capacity to enter into binding agreements under South African law.</p></div>
+      <div id="intro"><h2>1. Introduction</h2><p>These Terms of Service govern your access to and use of the ReLiv platform, operated by ReLiv (PTY) Ltd, registered in the Republic of South Africa. By creating an account or using the Platform, you agree to be bound by these Terms.</p></div>
+      <div id="eligibility"><h2>2. Eligibility</h2><p>To use ReLiv you must be at least 18 years of age (or 16 with parental consent), be a current or recently enrolled student, staff member, or affiliate of Rhodes University, and have the legal capacity to enter into binding agreements under South African law.</p></div>
       <div id="accounts"><h2>3. Accounts</h2><p>You are responsible for maintaining the confidentiality of your account credentials. You may only create one account per person. You agree to provide accurate, current, and complete information at registration and to keep this information updated.</p></div>
-      <div id="tasks"><h2>4. Tasks and Bids</h2><p>TaskFinder is a technology platform. We do not employ earners, control the quality of services rendered, or are a party to any agreement between a creator and an earner. All transactions must occur through the Platform's escrow system.</p></div>
-      <div id="payments"><h2>5. Payments</h2><p>Payment processing is handled by Stripe. TaskFinder charges a 10% platform fee deducted from the earner's payout on each completed transaction. No fees are charged to creators beyond the agreed task price.</p></div>
+      <div id="tasks"><h2>4. Tasks and Bids</h2><p>ReLiv is a technology platform. We do not employ earners, control the quality of services rendered, or are a party to any agreement between a creator and an earner. All transactions must occur through the Platform's escrow system.</p></div>
+      <div id="payments"><h2>5. Payments</h2><p>Payment processing is handled by Stripe. ReLiv charges a 10% platform fee deducted from the earner's payout on each completed transaction. No fees are charged to creators beyond the agreed task price.</p></div>
       <div id="prohibited"><h2>6. Prohibited Use</h2><p>You agree not to use the Platform to post or fulfil services illegal under South African law, facilitate academic dishonesty, harass or threaten any user, create fake reviews, circumvent the escrow system, or impersonate any person.</p></div>
-      <div id="liability"><h2>7. Limitation of Liability</h2><p>TaskFinder's liability in connection with any transaction or dispute is limited to the platform fees collected on that specific transaction. We are not liable for the quality of services, losses arising from transactions between users, or technical failures.</p></div>
+      <div id="liability"><h2>7. Limitation of Liability</h2><p>ReLiv's liability in connection with any transaction or dispute is limited to the platform fees collected on that specific transaction. We are not liable for the quality of services, losses arising from transactions between users, or technical failures.</p></div>
       <div id="termination"><h2>8. Termination</h2><p>You may close your account at any time after resolving pending transactions. We reserve the right to suspend or terminate any account for violations of these Terms.</p></div>
-      <div id="governing"><h2>9. Governing Law</h2><p>These Terms are governed by the laws of the Republic of South Africa. Any disputes shall be subject to the jurisdiction of the South African courts.</p><div className="highlight"><p>Questions? Email <a href="mailto:legal@taskfinder.co.za">legal@taskfinder.co.za</a></p></div></div>
+      <div id="governing"><h2>9. Governing Law</h2><p>These Terms are governed by the laws of the Republic of South Africa. Any disputes shall be subject to the jurisdiction of the South African courts.</p><div className="highlight"><p>Questions? Email <a href="mailto:legal@reliv.co.za">legal@reliv.co.za</a></p></div></div>
     </SidebarPage>
   )
 }
@@ -1252,14 +1307,14 @@ function PrivacyPage({ onNav }) {
   return (
     <SidebarPage title="Privacy Policy" subtitle="Legal" sections={sections} onNav={onNav}>
       <p style={{ color:'var(--text-muted)', fontFamily:'var(--fm)', fontSize:'.62rem', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:24 }}>Last updated: 1 January 2025</p>
-      <div id="intro"><h2>1. Introduction</h2><p>TaskFinder (PTY) Ltd is committed to protecting your personal information in accordance with the Protection of Personal Information Act 4 of 2013 (POPIA) and all other applicable South African law.</p></div>
+      <div id="intro"><h2>1. Introduction</h2><p>ReLiv (PTY) Ltd is committed to protecting your personal information in accordance with the Protection of Personal Information Act 4 of 2013 (POPIA) and all other applicable South African law.</p></div>
       <div id="collect"><h2>2. What We Collect</h2><p>We collect: name and email at registration, profile information (bio, skills, portfolio), task descriptions and messages, identity verification documents (for Stripe), IP address and device info, and transaction history.</p></div>
       <div id="use"><h2>3. How We Use It</h2><p>We use your information to operate the Platform, process transactions, calculate trust scores, send transactional notifications, resolve disputes, comply with legal obligations, and detect fraud. We do not use your information for advertising or sell it to third parties.</p></div>
       <div id="share"><h2>4. Who We Share With</h2><p>We share only with: Stripe (payment processing), Neon.tech (database hosting in EU), Vercel (frontend hosting), and law enforcement where required by law. We do not sell or share your data with advertisers.</p></div>
       <div id="retention"><h2>5. Data Retention</h2><p>We retain your personal information for as long as your account is active, plus a further period required by law (typically 5 years for financial records). When you delete your account, we anonymise your personal information within 30 days.</p></div>
       <div id="rights"><h2>6. Your Rights Under POPIA</h2><p>You have the right to access, correct, or delete your personal information, object to processing, and lodge a complaint with the Information Regulator.</p><div className="highlight"><p>Information Regulator: <a href="https://inforeg.org.za">inforeg.org.za</a> · complaints.IR@justice.gov.za</p></div></div>
       <div id="security"><h2>7. Security</h2><p>We implement TLS encryption for all data in transit, AES-256 encryption for sensitive data at rest, JWT-based authentication, rate limiting and DDoS protection, and regular security reviews. In the event of a data breach we will notify you and the Information Regulator within 72 hours.</p></div>
-      <div id="contact"><h2>8. Contact</h2><p>Email: <a href="mailto:privacy@taskfinder.co.za">privacy@taskfinder.co.za</a><br />Address: Rhodes University, Makhanda, Eastern Cape, 6140</p></div>
+      <div id="contact"><h2>8. Contact</h2><p>Email: <a href="mailto:privacy@reliv.co.za">privacy@reliv.co.za</a><br />Address: Rhodes University, Makhanda, Eastern Cape, 6140</p></div>
     </SidebarPage>
   )
 }
@@ -1275,9 +1330,9 @@ function CookiesPage({ onNav }) {
     <SidebarPage title="Cookie Policy" subtitle="Legal" sections={sections} onNav={onNav}>
       <p style={{ color:'var(--text-muted)', fontFamily:'var(--fm)', fontSize:'.62rem', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:24 }}>Last updated: 1 January 2025</p>
       <div id="what"><h2>1. What Are Cookies</h2><p>Cookies are small text files stored in your browser when you visit a website. They allow websites to remember information about your visit.</p></div>
-      <div id="use"><h2>2. How We Use Cookies</h2><p>TaskFinder uses cookies to keep you logged in between sessions, remember your preferences, ensure security by detecting unusual activity, and understand how you use the Platform. We do not use cookies for advertising.</p></div>
+      <div id="use"><h2>2. How We Use Cookies</h2><p>ReLiv uses cookies to keep you logged in between sessions, remember your preferences, ensure security by detecting unusual activity, and understand how you use the Platform. We do not use cookies for advertising.</p></div>
       <div id="types"><h2>3. Types of Cookies We Use</h2><h3>Strictly Necessary</h3><p>Required for the Platform to function. Includes your authentication token (JWT). You cannot opt out of these.</p><h3>Functional</h3><p>Remember your preferences such as display settings.</p><h3>Analytics</h3><p>Help us understand how users interact with the Platform. Data is aggregated and anonymised.</p></div>
-      <div id="control"><h2>4. Your Control</h2><p>You can control and delete cookies through your browser settings. Disabling strictly necessary cookies will prevent you from logging in.</p><div className="highlight"><p>Questions? Email <a href="mailto:privacy@taskfinder.co.za">privacy@taskfinder.co.za</a></p></div></div>
+      <div id="control"><h2>4. Your Control</h2><p>You can control and delete cookies through your browser settings. Disabling strictly necessary cookies will prevent you from logging in.</p><div className="highlight"><p>Questions? Email <a href="mailto:privacy@reliv.co.za">privacy@reliv.co.za</a></p></div></div>
     </SidebarPage>
   )
 }
@@ -1294,11 +1349,11 @@ function POPIAPage({ onNav }) {
   return (
     <SidebarPage title="POPIA Compliance" subtitle="Legal" sections={sections} onNav={onNav}>
       <p style={{ color:'var(--text-muted)', fontFamily:'var(--fm)', fontSize:'.62rem', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:24 }}>Last updated: 1 January 2025</p>
-      <div id="overview"><h2>POPIA Compliance Statement</h2><p>TaskFinder (PTY) Ltd is committed to compliance with the Protection of Personal Information Act 4 of 2013 (POPIA), South Africa's primary data protection legislation.</p><div className="highlight"><p>POPIA came into full effect on 1 July 2021. It gives South Africans rights over their personal information and places obligations on organisations that process it.</p></div></div>
+      <div id="overview"><h2>POPIA Compliance Statement</h2><p>ReLiv (PTY) Ltd is committed to compliance with the Protection of Personal Information Act 4 of 2013 (POPIA), South Africa's primary data protection legislation.</p><div className="highlight"><p>POPIA came into full effect on 1 July 2021. It gives South Africans rights over their personal information and places obligations on organisations that process it.</p></div></div>
       <div id="lawful"><h2>Lawful Bases for Processing</h2><p>We process personal information on the following lawful bases: contractual necessity (to deliver Platform services), consent (for non-essential communications), legal obligation (financial record-keeping), and legitimate interests (fraud detection and Platform security).</p></div>
-      <div id="officer"><h2>Information Officer</h2><p>TaskFinder has designated an Information Officer responsible for overseeing POPIA compliance. Contact: <a href="mailto:privacy@taskfinder.co.za">privacy@taskfinder.co.za</a> · Rhodes University, Makhanda, Eastern Cape, 6140.</p></div>
+      <div id="officer"><h2>Information Officer</h2><p>ReLiv has designated an Information Officer responsible for overseeing POPIA compliance. Contact: <a href="mailto:privacy@reliv.co.za">privacy@reliv.co.za</a> · Rhodes University, Makhanda, Eastern Cape, 6140.</p></div>
       <div id="rights"><h2>Data Subject Rights</h2><p>Under POPIA, you have the right to be notified of processing, access your information, request correction or deletion, object to processing, and lodge a complaint with the Information Regulator.</p><div className="highlight"><p>Information Regulator: <a href="https://inforeg.org.za">inforeg.org.za</a> · +27 10 023 5207 · complaints.IR@justice.gov.za</p></div></div>
-      <div id="breaches"><h2>Data Breaches</h2><p>In the event of a security breach, TaskFinder will notify the Information Regulator within 72 hours of becoming aware, notify affected data subjects as soon as reasonably possible, document the breach and remedial actions, and cooperate fully with any investigation.</p></div>
+      <div id="breaches"><h2>Data Breaches</h2><p>In the event of a security breach, ReLiv will notify the Information Regulator within 72 hours of becoming aware, notify affected data subjects as soon as reasonably possible, document the breach and remedial actions, and cooperate fully with any investigation.</p></div>
       <div id="transfers"><h2>Cross-Border Data Transfers</h2><p>Some personal information is processed outside South Africa: Stripe (United States — PCI DSS Level 1), Neon.tech (EU Frankfurt — GDPR compliant), Vercel (United States — SOC 2). All transfers are governed by appropriate data processing agreements.</p></div>
     </SidebarPage>
   )
@@ -1322,7 +1377,7 @@ function HelpCentrePage({ onNav }) {
       <div id="earners"><h2>For Earners</h2><h3>How do I write a good pitch?</h3><p>Be specific. Reference the task directly, explain your relevant experience, give a realistic timeline, and be honest about your price. Generic pitches get ignored.</p><h3>How quickly do I get paid?</h3><p>Once the creator releases payment, Stripe processes the transfer. Payout timing is typically 1–3 business days for South African bank accounts.</p></div>
       <div id="payments"><h2>Payments</h2><h3>My payment failed. What do I do?</h3><p>Check your card details are correct and that you have sufficient funds. If the problem persists, try a different card or contact your bank.</p><h3>Can I get a refund if I'm not happy?</h3><p>Refunds are only processed through the dispute resolution system. Do not release payment until you are satisfied — once released we cannot reverse the transfer.</p></div>
       <div id="account"><h2>My Account</h2><h3>How do I change my password?</h3><p>Go to Profile → Security → Change Password. You will need your current password to set a new one.</p><h3>How do I delete my account?</h3><p>Go to Profile → Security → Delete Account. Pending transactions must be resolved before deletion.</p></div>
-      <div id="technical"><h2>Technical Issues</h2><h3>The app doesn't work on my phone.</h3><p>TaskFinder is designed to work on all modern mobile browsers. Try Chrome on Android or Safari on iOS. If the problem persists, please report it.</p><div className="highlight"><p>Still stuck? Email <a href="mailto:support@taskfinder.co.za">support@taskfinder.co.za</a> — we respond within 24 hours.</p></div></div>
+      <div id="technical"><h2>Technical Issues</h2><h3>The app doesn't work on my phone.</h3><p>ReLiv is designed to work on all modern mobile browsers. Try Chrome on Android or Safari on iOS. If the problem persists, please report it.</p><div className="highlight"><p>Still stuck? Email <a href="mailto:support@reliv.co.za">support@reliv.co.za</a> — we respond within 24 hours.</p></div></div>
     </SidebarPage>
   )
 }
@@ -1343,15 +1398,15 @@ function ContactPage({ onNav }) {
     <PageWrapper title="Contact Us" subtitle="Support" onNav={onNav}>
       <div className="about-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:48 }}>
         <div>
-          <p style={{ color:'#888', lineHeight:1.8, marginBottom:28, fontSize:'.9rem' }}>Have a question, problem, or feedback? We read every message and respond within 24 hours on business days.</p>
+          <p style={{ color:'#5f5970', lineHeight:1.8, marginBottom:28, fontSize:'.9rem' }}>Have a question, problem, or feedback? We read every message and respond within 24 hours on business days.</p>
           <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
             {[
-              { icon:'📧', label:'General enquiries', value:'hello@taskfinder.co.za' },
-              { icon:'🔒', label:'Privacy & data',    value:'privacy@taskfinder.co.za' },
-              { icon:'⚖️', label:'Legal',             value:'legal@taskfinder.co.za' },
-              { icon:'🛠️', label:'Technical support', value:'support@taskfinder.co.za' },
+              { icon:'📧', label:'General enquiries', value:'hello@reliv.co.za' },
+              { icon:'🔒', label:'Privacy & data',    value:'privacy@reliv.co.za' },
+              { icon:'⚖️', label:'Legal',             value:'legal@reliv.co.za' },
+              { icon:'🛠️', label:'Technical support', value:'support@reliv.co.za' },
             ].map(item => (
-              <div key={item.label} style={{ background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:6, padding:'14px 16px', display:'flex', gap:12, alignItems:'center' }}>
+              <div key={item.label} style={{ background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:12, padding:'14px 16px', display:'flex', gap:12, alignItems:'center' }}>
                 <span style={{ fontSize:'1.2rem', flexShrink:0 }}>{item.icon}</span>
                 <div>
                   <div style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:2 }}>{item.label}</div>
@@ -1366,7 +1421,7 @@ function ContactPage({ onNav }) {
             <div style={{ textAlign:'center', padding:'40px 20px' }}>
               <div style={{ fontSize:'2.5rem', marginBottom:12 }}>✓</div>
               <div style={{ fontFamily:'var(--fd)', fontSize:'1.3rem', fontWeight:800, marginBottom:8 }}>Message sent!</div>
-              <p style={{ color:'#888', fontSize:'.875rem' }}>We'll get back to you within 24 hours.</p>
+              <p style={{ color:'#5f5970', fontSize:'.875rem' }}>We'll get back to you within 24 hours.</p>
             </div>
           ) : (
             <form onSubmit={submit} style={{ display:'flex', flexDirection:'column', gap:14 }}>
@@ -1403,12 +1458,12 @@ function GuidelinesPage({ onNav }) {
   ]
   return (
     <SidebarPage title="Community Guidelines" subtitle="Support" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>Our Community Standards</h2><p>TaskFinder works because students trust each other. These guidelines exist to protect that trust and ensure the platform remains a safe, fair place for everyone on campus.</p></div>
-      <div id="respect"><h2>Respect</h2><p>Every person on TaskFinder is a member of the Rhodes community. Treat them accordingly.</p><ul><li>Communicate professionally, even when disagreements arise</li><li>No harassment, threats, hate speech, or discriminatory language</li><li>Respect boundaries — if someone withdraws from a transaction, accept it</li><li>Do not share other users' personal information outside the platform</li></ul></div>
+      <div id="overview"><h2>Our Community Standards</h2><p>ReLiv works because students trust each other. These guidelines exist to protect that trust and ensure the platform remains a safe, fair place for everyone on campus.</p></div>
+      <div id="respect"><h2>Respect</h2><p>Every person on ReLiv is a member of the Rhodes community. Treat them accordingly.</p><ul><li>Communicate professionally, even when disagreements arise</li><li>No harassment, threats, hate speech, or discriminatory language</li><li>Respect boundaries — if someone withdraws from a transaction, accept it</li><li>Do not share other users' personal information outside the platform</li></ul></div>
       <div id="honesty"><h2>Honesty</h2><ul><li>Represent your skills and experience accurately</li><li>Describe tasks accurately — do not misrepresent scope or requirements</li><li>Do not create fake reviews or manipulate trust scores</li><li>Do not impersonate other users or create multiple accounts</li></ul></div>
       <div id="tasks"><h2>Acceptable Tasks</h2><p>Not permitted:</p><ul><li>Anything illegal under South African law</li><li>Academic dishonesty — writing essays for submission as original work</li><li>Adult or sexual content of any kind</li><li>Services designed to harm or harass an individual</li></ul><p>Tutoring, explaining concepts, proofreading with attribution, and study assistance are acceptable.</p></div>
       <div id="payments"><h2>Payment Integrity</h2><ul><li>All payments must go through the escrow system</li><li>Do not release payment if the work is not completed to the agreed standard</li><li>Do not raise frivolous disputes to delay payment</li></ul></div>
-      <div id="enforcement"><h2>Enforcement</h2><p>Depending on severity: Warning → Trust score penalty → Temporary suspension → Permanent ban → Referral to university or law enforcement.</p><div className="highlight"><p>Report violations: <a href="mailto:trust@taskfinder.co.za">trust@taskfinder.co.za</a></p></div></div>
+      <div id="enforcement"><h2>Enforcement</h2><p>Depending on severity: Warning → Trust score penalty → Temporary suspension → Permanent ban → Referral to university or law enforcement.</p><div className="highlight"><p>Report violations: <a href="mailto:trust@reliv.co.za">trust@reliv.co.za</a></p></div></div>
     </SidebarPage>
   )
 }
@@ -1427,12 +1482,12 @@ function ReportPage({ onNav }) {
 
   return (
     <PageWrapper title="Report an Issue" subtitle="Support" onNav={onNav}>
-      <p style={{ color:'#888', lineHeight:1.8, marginBottom:32, fontSize:'.9rem', maxWidth:560 }}>Use this form to report a user, task, or platform issue. All reports are reviewed within 24 hours and kept confidential.</p>
+      <p style={{ color:'#5f5970', lineHeight:1.8, marginBottom:32, fontSize:'.9rem', maxWidth:560 }}>Use this form to report a user, task, or platform issue. All reports are reviewed within 24 hours and kept confidential.</p>
       {sent ? (
         <div style={{ textAlign:'center', padding:'40px 20px', maxWidth:400 }}>
           <div style={{ fontSize:'2.5rem', marginBottom:12 }}>✓</div>
           <div style={{ fontFamily:'var(--fd)', fontSize:'1.3rem', fontWeight:800, marginBottom:8 }}>Report submitted</div>
-          <p style={{ color:'#888', fontSize:'.875rem' }}>Our team will review your report and take appropriate action.</p>
+          <p style={{ color:'#5f5970', fontSize:'.875rem' }}>Our team will review your report and take appropriate action.</p>
         </div>
       ) : (
         <form onSubmit={submit} style={{ display:'flex', flexDirection:'column', gap:16, maxWidth:560 }}>
@@ -1475,7 +1530,7 @@ function OAuthCallback() {
     const errParam = params.get('auth_error') || params.get('error')
 
     // Clear the sensitive params from the browser URL bar immediately
-    window.history.replaceState({}, document.title, '/oauth-callback')
+    window.history.replaceState({}, document.title, '/')
 
     if (errParam) {
       setError(decodeURIComponent(errParam).replace(/_/g, ' '))
@@ -1522,22 +1577,24 @@ function OAuthCallback() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const NAV = {
+  // First 5 = native bottom-tab bar on mobile; the rest stay desktop-only
   creator: [
-    { id:'dashboard',     label:'Dashboard', icon:'⊞' },
-    { id:'tasks-new',     label:'Post Task',  icon:'+' },
-    { id:'tasks-mine',    label:'My Tasks',   icon:'▤' },
-    { id:'messages',      label:'Messages',   icon:'◎' },
-    { id:'notifications', label:'Alerts',     icon:'◉' },
-    { id:'profile',       label:'Profile',    icon:'◷' },
+    { id:'tasks-browse',  label:'Home',      icon:'⌂' },
+    { id:'tasks-new',     label:'Post',      icon:'＋' },
+    { id:'tasks-mine',    label:'My Tasks',  icon:'▤' },
+    { id:'messages',      label:'Messages',  icon:'◎' },
+    { id:'profile',       label:'Profile',   icon:'◷' },
+    { id:'dashboard',     label:'Stats',     icon:'⊞' },
+    { id:'notifications', label:'Alerts',    icon:'◉' },
   ],
   earner: [
-    { id:'dashboard',     label:'Dashboard',  icon:'⊞' },
-    { id:'tasks-browse',  label:'Browse',     icon:'◈' },
-    { id:'suggestions',   label:'For You',    icon:'◎' },
-    { id:'my-bids',       label:'My Bids',    icon:'▤' },
-    { id:'messages',      label:'Messages',   icon:'◉' },
-    { id:'notifications', label:'Alerts',     icon:'◐' },
-    { id:'profile',       label:'Profile',    icon:'◷' },
+    { id:'tasks-browse',  label:'Home',      icon:'⌂' },
+    { id:'suggestions',   label:'For You',   icon:'◈' },
+    { id:'my-bids',       label:'My Bids',   icon:'▤' },
+    { id:'messages',      label:'Messages',  icon:'◎' },
+    { id:'profile',       label:'Profile',   icon:'◷' },
+    { id:'dashboard',     label:'Stats',     icon:'⊞' },
+    { id:'notifications', label:'Alerts',    icon:'◐' },
   ],
   admin: [
     { id:'dashboard',       label:'Dashboard', icon:'⊞' },
@@ -1546,6 +1603,71 @@ const NAV = {
     { id:'tasks-browse',    label:'All Tasks', icon:'▤' },
     { id:'notifications',   label:'Alerts',    icon:'◐' },
   ],
+}
+
+function TopBar({ page, setPage, unreadCount, onGoHome }) {
+  const { user, logout } = useAuth()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const isCreator = user.role === 'creator'
+  return (
+    <header style={{ position:'sticky', top:0, zIndex:90, background:'var(--bg-surface)', borderBottom:'1px solid var(--border)' }}>
+      <div style={{ maxWidth:1280, margin:'0 auto', display:'flex', alignItems:'center', gap:14, height:60, padding:'0 20px' }}>
+        <Logo onClick={onGoHome} />
+
+        {/* Search — desktop only; tapping it lands on the feed where real search lives */}
+        <div className="hide-m" style={{ flex:1, maxWidth:480, margin:'0 12px' }}>
+          <button onClick={() => setPage('tasks-browse')}
+            style={{ width:'100%', textAlign:'left', padding:'9px 16px', borderRadius:100, border:'1px solid var(--border)', background:'var(--bg-elevated)', color:'var(--text-muted)', fontSize:'.875rem', cursor:'pointer' }}>
+            ⌕ Search tasks…
+          </button>
+        </div>
+
+        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6 }}>
+          {isCreator && (
+            <button className="hide-m btn-p" style={{ padding:'9px 18px', fontSize:'.85rem' }} onClick={() => setPage('tasks-new')}>＋ Post a Task</button>
+          )}
+          <button onClick={() => setPage('messages')} title="Messages"
+            style={{ width:38, height:38, borderRadius:'50%', border:'none', background:page==='messages'?'var(--accent-glow)':'transparent', color:page==='messages'?'var(--accent)':'var(--text-secondary)', fontSize:'1.05rem', cursor:'pointer' }}>◎</button>
+          <button onClick={() => setPage('notifications')} title="Alerts"
+            style={{ position:'relative', width:38, height:38, borderRadius:'50%', border:'none', background:page==='notifications'?'var(--accent-glow)':'transparent', color:page==='notifications'?'var(--accent)':'var(--text-secondary)', fontSize:'1.05rem', cursor:'pointer' }}>
+            ◉{unreadCount>0 && <span style={{ position:'absolute', top:4, right:4, background:'var(--danger)', color:'#fff', fontFamily:'var(--font-mono)', fontSize:'.55rem', fontWeight:700, minWidth:15, height:15, lineHeight:'15px', borderRadius:8, textAlign:'center', padding:'0 3px' }}>{unreadCount}</span>}
+          </button>
+
+          {/* Avatar menu */}
+          <div style={{ position:'relative' }}>
+            <button onClick={() => setMenuOpen(o => !o)} style={{ background:'none', border:'none', padding:2, cursor:'pointer', display:'flex' }}>
+              {user.avatarUrl
+                ? <img src={user.avatarUrl} alt="" style={{ width:34, height:34, borderRadius:'50%', objectFit:'cover', border:'2px solid var(--accent-dim)' }} />
+                : <span style={{ width:34, height:34, borderRadius:'50%', background:'var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:800, fontSize:'.9rem', color:'var(--accent)' }}>{(user.displayName||user.email||'?').charAt(0).toUpperCase()}</span>}
+            </button>
+            {menuOpen && (
+              <>
+                <div onClick={() => setMenuOpen(false)} style={{ position:'fixed', inset:0, zIndex:91 }} />
+                <div style={{ position:'absolute', right:0, top:44, zIndex:92, background:'var(--bg-surface)', border:'1px solid var(--border-strong)', borderRadius:14, boxShadow:'0 12px 32px rgba(33,28,46,.14)', minWidth:200, overflow:'hidden', animation:'fadeUp .15s ease both' }}>
+                  <div style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)' }}>
+                    <div style={{ fontWeight:700, fontSize:'.9rem' }}>{user.displayName || user.email?.split('@')[0]}</div>
+                    <Mono>{user.email}</Mono>
+                  </div>
+                  {[
+                    { label:'My Profile', go:'profile' },
+                    { label:isCreator?'My Tasks':'My Bids', go:isCreator?'tasks-mine':'my-bids' },
+                    { label:'Stats & Activity', go:'dashboard' },
+                  ].map(item => (
+                    <button key={item.go} onClick={() => { setPage(item.go); setMenuOpen(false) }}
+                      style={{ display:'block', width:'100%', textAlign:'left', padding:'11px 16px', background:'none', border:'none', fontSize:'.875rem', color:'var(--text-secondary)', cursor:'pointer' }}
+                      onMouseEnter={e => e.currentTarget.style.background='var(--bg-hover)'}
+                      onMouseLeave={e => e.currentTarget.style.background='none'}>{item.label}</button>
+                  ))}
+                  <button onClick={logout}
+                    style={{ display:'block', width:'100%', textAlign:'left', padding:'11px 16px', background:'none', border:'none', borderTop:'1px solid var(--border)', fontSize:'.875rem', color:'var(--danger)', cursor:'pointer' }}>Sign Out</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </header>
+  )
 }
 
 function DashSidebar({ page, setPage, unreadCount, onGoHome }) {
@@ -1557,8 +1679,8 @@ function DashSidebar({ page, setPage, unreadCount, onGoHome }) {
     <aside className="dash-sidebar" style={{ background:'var(--bg-surface)', borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', padding:'20px 14px', position:'sticky', top:0, height:'100vh', overflowY:'auto', width:220, flexShrink:0 }}>
       <div className="sidebar-logo" style={{ display:'flex', alignItems:'center', gap:10, marginBottom:24 }}>
         <div onClick={onGoHome} style={{ display:'flex', alignItems:'center', gap:9, cursor:'pointer' }}>
-          <div style={{ background:'var(--accent)', color:'#000', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'0.85rem', padding:'4px 8px', borderRadius:'var(--radius-sm)', letterSpacing:'0.06em' }}>TF</div>
-          <span style={{ fontFamily:'var(--font-display)', fontSize:'1.05rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em' }}>TaskFinder</span>
+          <div style={{ background:'var(--accent)', color:'#fff', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'0.85rem', padding:'4px 8px', borderRadius:'var(--radius-sm)', letterSpacing:'0.06em' }}>R</div>
+          <span style={{ fontFamily:'var(--font-display)', fontSize:'1.05rem', fontWeight:700, letterSpacing:'-0.01em' }}>ReLiv</span>
         </div>
       </div>
       <div className="sidebar-status" style={{ display:'flex', alignItems:'center', gap:6, fontFamily:'var(--font-mono)', fontSize:'0.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:20 }}>
@@ -1574,9 +1696,9 @@ function DashSidebar({ page, setPage, unreadCount, onGoHome }) {
               style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'9px 12px', borderRadius:'var(--radius-sm)', fontSize:'0.875rem', fontWeight:500, fontFamily:'var(--font-body)', cursor:'pointer', textAlign:'left', transition:'all 150ms ease', border:'none', color:active?'var(--accent)':'var(--text-secondary)', background:active?'var(--accent-glow)':'transparent', borderLeft:active?'2px solid var(--accent)':'2px solid transparent' }}
               onMouseEnter={e => { if (!active) { e.currentTarget.style.background='var(--bg-hover)'; e.currentTarget.style.color='var(--text-primary)' } }}
               onMouseLeave={e => { if (!active) { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='var(--text-secondary)' } }}>
-              <span>{item.label}</span>
+              <span style={{ display:'flex', alignItems:'center', gap:10 }}><span style={{ fontSize:'1.05rem', width:20, textAlign:'center', lineHeight:1 }}>{item.icon}</span><span>{item.label}</span></span>
               {item.id==='notifications' && unreadCount>0 && (
-                <span style={{ background:'var(--accent)', color:'#000', fontFamily:'var(--font-mono)', fontSize:'0.6rem', fontWeight:700, padding:'1px 6px', borderRadius:10, minWidth:18, textAlign:'center' }}>{unreadCount}</span>
+                <span style={{ background:'var(--accent)', color:'#fff', fontFamily:'var(--font-mono)', fontSize:'0.6rem', fontWeight:700, padding:'1px 6px', borderRadius:10, minWidth:18, textAlign:'center' }}>{unreadCount}</span>
               )}
             </button>
           )
@@ -1638,7 +1760,7 @@ function Dashboard({ setPage, setSelectedTask }) {
           <StatCard label="Tasks Posted" value={myTasks.length} />
           <StatCard label="Open Bids"    value={state.bids.filter(b=>state.tasks.find(t=>t.creator_id==='u1'&&t.task_id===b.task_id)&&b.status==='pending').length} accent />
           <StatCard label="Completed"    value={doneCount} />
-          <StatCard label="Total Spent"  value={`$${myTasks.filter(t=>t.status==='completed').reduce((s,t)=>s+parseFloat(t.budget||0),0).toLocaleString()}`} />
+          <StatCard label="Total Spent"  value={`R${myTasks.filter(t=>t.status==='completed').reduce((s,t)=>s+parseFloat(t.budget||0),0).toLocaleString()}`} />
         </>}
         {user.role==='earner' && <>
           <StatCard label="Open Tasks"   value={openCount} />
@@ -1650,7 +1772,7 @@ function Dashboard({ setPage, setSelectedTask }) {
           <StatCard label="Open Disputes" value={state.disputes.filter(d=>d.status==='open').length} accent />
           <StatCard label="Total Tasks"   value={state.tasks.length} />
           <StatCard label="Active Users"  value="24" />
-          <StatCard label="Platform Fees" value="$340" />
+          <StatCard label="Platform Fees" value="R340" />
         </>}
       </div>
       <div style={{ display:'flex', gap:10, marginBottom:28, flexWrap:'wrap' }}>
@@ -1684,7 +1806,7 @@ function Dashboard({ setPage, setSelectedTask }) {
               <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>{task.skill_tags.slice(0,3).map(t => <Tag key={t}>{t}</Tag>)}</div>
             </div>
             <div style={{ textAlign:'right', flexShrink:0 }}>
-              <div style={{ fontFamily:'var(--font-mono)', fontSize:'1.05rem', color:'var(--accent)', fontWeight:500 }}>${task.budget}</div>
+              <div style={{ fontFamily:'var(--font-mono)', fontSize:'1.05rem', color:'var(--accent)', fontWeight:500 }}>R{task.budget}</div>
               <Mono>{new Date(task.deadline).toLocaleDateString()}</Mono>
             </div>
           </DCard>
@@ -1694,14 +1816,47 @@ function Dashboard({ setPage, setSelectedTask }) {
   )
 }
 
+// ─── MARKETPLACE CATEGORY SYSTEM ─────────────────────────────────────────────
+// Every task gets illustrated cover art derived from its tags — gradient +
+// icon — so the feed reads like a marketplace of services, not a data table.
+const CATEGORIES = [
+  { name:'Tech & Coding',   icon:'💻', g:['#ede9fe','#c4b5fd'], kw:['python','react','node','javascript','debug','api','postgres','sql','database','mobile','firebase','etl','machine','rest'] },
+  { name:'Tutoring',        icon:'📚', g:['#fef3c7','#fcd34d'], kw:['tutor','math','lesson','teach','study','exam'] },
+  { name:'Errands',         icon:'🛵', g:['#dcfce7','#86efac'], kw:['laundry','delivery','errand','pickup','shopping','collect'] },
+  { name:'Design',          icon:'🎨', g:['#fce7f3','#f9a8d4'], kw:['design','figma','ui','ux','logo','poster'] },
+  { name:'Writing',         icon:'✍️', g:['#e0f2fe','#7dd3fc'], kw:['writing','editing','proofread','essay','translat','lang','transcrib'] },
+  { name:'Music & Arts',    icon:'🎸', g:['#fee2e2','#fca5a5'], kw:['music','guitar','piano','art','photo'] },
+  { name:'Moving & Labour', icon:'📦', g:['#ffedd5','#fdba74'], kw:['moving','furniture','labour','clean','garden'] },
+  { name:'Other',           icon:'✨', g:['#f3f1ec','#ddd8cb'], kw:[] },
+]
+
+function categoryFor(task) {
+  const hay = ((task.skill_tags || []).join(' ') + ' ' + (task.title || '')).toLowerCase()
+  return CATEGORIES.find(c => c.kw.some(k => hay.includes(k))) || CATEGORIES[CATEGORIES.length - 1]
+}
+
+function CardCover({ task, height = 108 }) {
+  const c = categoryFor(task)
+  return (
+    <div style={{ height, background:`linear-gradient(135deg, ${c.g[0]}, ${c.g[1]})`, position:'relative', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden' }}>
+      <div style={{ position:'absolute', width:130, height:130, borderRadius:'50%', background:'rgba(255,255,255,.35)', top:-58, left:-34 }} />
+      <div style={{ position:'absolute', width:90, height:90, borderRadius:'50%', background:'rgba(255,255,255,.25)', bottom:-44, right:36 }} />
+      <span style={{ fontSize:'2.5rem', position:'relative', filter:'drop-shadow(0 2px 6px rgba(33,28,46,.15))' }}>{c.icon}</span>
+      <div style={{ position:'absolute', top:10, left:10 }}><Badge variant={task.status}>{task.status.replace('_',' ')}</Badge></div>
+      <span style={{ position:'absolute', right:10, bottom:10, background:'rgba(255,255,255,.94)', color:'var(--text-primary)', fontFamily:'var(--font-display)', fontWeight:800, padding:'4px 11px', borderRadius:10, fontSize:'.95rem', boxShadow:'0 1px 4px rgba(33,28,46,.12)' }}>R{task.budget}</span>
+    </div>
+  )
+}
+
 function TaskBrowse({ setPage, setSelectedTask }) {
   const { state } = useStore()
   const [skill, setSkill]   = useState('')
+  const [cat, setCat]       = useState(null)
   const [status, setStatus] = useState('all')
   const [sort, setSort]     = useState('newest')
 
   const filtered = state.tasks
-    .filter(t => (status==='all'||t.status===status) && (!skill||t.skill_tags.some(s=>s.toLowerCase().includes(skill.toLowerCase()))||t.title.toLowerCase().includes(skill.toLowerCase())))
+    .filter(t => (status==='all'||t.status===status) && (!cat || categoryFor(t).name===cat) && (!skill||t.skill_tags.some(s=>s.toLowerCase().includes(skill.toLowerCase()))||t.title.toLowerCase().includes(skill.toLowerCase())))
     .sort((a,b) => {
       if (sort==='newest')    return new Date(b.created_at)-new Date(a.created_at)
       if (sort==='budget-hi') return parseFloat(b.budget)-parseFloat(a.budget)
@@ -1710,13 +1865,36 @@ function TaskBrowse({ setPage, setSelectedTask }) {
       return 0
     })
 
-  const filtersActive = skill||status!=='all'||sort!=='newest'
+  const filtersActive = skill||cat||status!=='all'||sort!=='newest'
 
   return (
     <div className="page-enter">
-      <PageTitle sub={`${filtered.length} tasks found`}>Browse Tasks</PageTitle>
-      <div style={{ display:'flex', gap:10, marginBottom:24, flexWrap:'wrap', alignItems:'flex-end' }}>
-        <Input placeholder="Search by skill or keyword…" value={skill} onChange={e => setSkill(e.target.value)} style={{ width:240 }} />
+      {/* Marketplace hero — search-first, like Fiverr/FB Marketplace */}
+      <div style={{ marginBottom:18 }}>
+        <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'clamp(1.5rem,3vw,2.1rem)', letterSpacing:'-0.01em', marginBottom:14 }}>What do you need done?</h1>
+        <div style={{ position:'relative', maxWidth:560 }}>
+          <span style={{ position:'absolute', left:16, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', fontSize:'1.05rem' }}>⌕</span>
+          <input placeholder="Search — laundry, python, tutoring…" value={skill} onChange={e => setSkill(e.target.value)}
+            style={{ padding:'14px 16px 14px 44px', borderRadius:14, fontSize:'1rem', background:'var(--bg-surface)', boxShadow:'0 1px 4px rgba(33,28,46,.07)' }} />
+        </div>
+      </div>
+
+      {/* Illustrated category rail */}
+      <div className="feed-scroll" style={{ display:'flex', gap:8, overflowX:'auto', marginBottom:18, paddingBottom:4 }}>
+        {CATEGORIES.map(c => {
+          const active = cat === c.name
+          return (
+            <button key={c.name} onClick={() => setCat(active ? null : c.name)}
+              style={{ display:'flex', alignItems:'center', gap:7, padding:'8px 14px', borderRadius:100, whiteSpace:'nowrap', cursor:'pointer', transition:'all 150ms ease', border:`1.5px solid ${active?'var(--accent)':'var(--border)'}`, background:active?'var(--accent-glow)':'var(--bg-surface)', color:active?'var(--accent)':'var(--text-secondary)', fontWeight:600, fontSize:'.85rem', fontFamily:'var(--font-body)' }}>
+              <span style={{ fontSize:'1rem' }}>{c.icon}</span>{c.name}
+            </button>
+          )
+        })}
+      </div>
+
+      <div style={{ display:'flex', gap:10, marginBottom:18, flexWrap:'wrap', alignItems:'center', justifyContent:'space-between' }}>
+        <Mono>{filtered.length} open task{filtered.length!==1?'s':''} near Rhodes</Mono>
+        <div style={{ display:'flex', gap:8, alignItems:'flex-end' }}>
         <SelectField value={status} onChange={e => setStatus(e.target.value)} style={{ minWidth:150 }}>
           <option value="all">All Statuses</option>
           <option value="open">Open</option>
@@ -1730,26 +1908,26 @@ function TaskBrowse({ setPage, setSelectedTask }) {
           <option value="budget-lo">Budget: Low → High</option>
           <option value="deadline">Deadline: Soonest</option>
         </SelectField>
-        {filtersActive && <Btn variant="ghost" size="sm" onClick={() => { setSkill(''); setStatus('all'); setSort('newest') }}>✕ Clear</Btn>}
+          {filtersActive && <Btn variant="ghost" size="sm" onClick={() => { setSkill(''); setCat(null); setStatus('all'); setSort('newest') }}>✕ Clear</Btn>}
+        </div>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(310px,1fr))', gap:14 }}>
         {filtered.map(task => (
-          <DCard key={task.task_id} onClick={() => { setSelectedTask(task.task_id); setPage('task-detail') }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-              <Badge variant={task.status}>{task.status.replace('_',' ')}</Badge>
-              <span style={{ fontFamily:'var(--font-mono)', fontSize:'1.05rem', color:'var(--accent)', fontWeight:500 }}>${task.budget}</span>
-            </div>
-            <h2 style={{ fontFamily:'var(--font-display)', fontSize:'1.1rem', fontWeight:600, marginBottom:8, lineHeight:1.3 }}>{task.title}</h2>
-            <p style={{ fontSize:'0.85rem', color:'var(--text-secondary)', marginBottom:12, lineHeight:1.5 }}>{task.description.slice(0,110)}…</p>
-            <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:12 }}>{task.skill_tags.slice(0,4).map(t => <Tag key={t}>{t}</Tag>)}</div>
-            <Divider style={{ marginBottom:10 }} />
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <Mono>Due {new Date(task.deadline).toLocaleDateString()}</Mono>
-              <Mono>{state.bids.filter(b=>b.task_id===task.task_id&&b.status!=='withdrawn').length} bids</Mono>
+          <DCard key={task.task_id} onClick={() => { setSelectedTask(task.task_id); setPage('task-detail') }} style={{ padding:0, overflow:'hidden' }}>
+            <CardCover task={task} />
+            <div style={{ padding:'14px 16px 16px' }}>
+              <h2 style={{ fontFamily:'var(--font-display)', fontSize:'1.05rem', fontWeight:700, marginBottom:6, lineHeight:1.3 }}>{task.title}</h2>
+              <Mono style={{ display:'block', marginBottom:10 }}>📍 {task.campus_zone || 'Rhodes Campus'} · {timeAgo(task.created_at)}</Mono>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:12 }}>{task.skill_tags.slice(0,3).map(t => <Tag key={t}>{t}</Tag>)}</div>
+              <Divider style={{ marginBottom:10 }} />
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <Mono>Due {new Date(task.deadline).toLocaleDateString()}</Mono>
+                <Mono>{state.bids.filter(b=>b.task_id===task.task_id&&b.status!=='withdrawn').length} bid{state.bids.filter(b=>b.task_id===task.task_id&&b.status!=='withdrawn').length!==1?'s':''}</Mono>
+              </div>
             </div>
           </DCard>
         ))}
-        {filtered.length===0 && <div style={{ gridColumn:'1/-1' }}><EmptyState icon="◻" message="No tasks match your filter" action={filtersActive?<Btn variant="secondary" size="sm" onClick={() => { setSkill(''); setStatus('all'); setSort('newest') }}>Clear Filters</Btn>:null} /></div>}
+        {filtered.length===0 && <div style={{ gridColumn:'1/-1' }}><EmptyState icon="◻" message="No tasks match your filter" action={filtersActive?<Btn variant="secondary" size="sm" onClick={() => { setSkill(''); setCat(null); setStatus('all'); setSort('newest') }}>Clear Filters</Btn>:null} /></div>}
       </div>
     </div>
   )
@@ -1801,7 +1979,7 @@ function TaskDetail({ taskId, setPage }) {
     setTimeout(() => {
       const newBid = { bid_id:`b${Date.now()}`, task_id:taskId, bidder_id:'u3', amount:bidAmount, pitch:bidPitch.trim(), status:'pending', display_name:user.displayName||'You', avg_rating:4.2, created_at:new Date().toISOString() }
       dispatch({ type:'ADD_BID', bid:newBid })
-      toast(`Bid of $${bidAmount} submitted!`, 'success')
+      toast(`Bid of R${bidAmount} submitted!`, 'success')
       setBidLoading(false); setBidAmount(''); setBidPitch('')
     }, 900)
   }
@@ -1832,7 +2010,7 @@ function TaskDetail({ taskId, setPage }) {
     setTimeout(() => {
       dispatch({ type:'UPDATE_TASK', task_id:taskId, changes:{status:'completed'} })
       dispatch({ type:'SET_ESCROW', task_id:taskId, status:'released' })
-      toast(`$${task.budget} released to earner!`, 'success')
+      toast(`R${task.budget} released to earner!`, 'success')
       setReleaseLoading(false); setReleaseModal(false)
       setTimeout(() => setReviewModal(true), 600)
     }, 1100)
@@ -1872,18 +2050,18 @@ function TaskDetail({ taskId, setPage }) {
           <h1 style={{ fontFamily:'var(--font-display)', fontSize:'1.9rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.03em', lineHeight:1.1, maxWidth:580 }}>{task.title}</h1>
         </div>
         <div style={{ textAlign:'right' }}>
-          <div style={{ fontFamily:'var(--font-mono)', fontSize:'1.6rem', color:'var(--accent)', fontWeight:500 }}>${task.budget}</div>
+          <div style={{ fontFamily:'var(--font-mono)', fontSize:'1.6rem', color:'var(--accent)', fontWeight:500 }}>R{task.budget}</div>
           <Mono>Due {new Date(task.deadline).toLocaleDateString()}</Mono>
         </div>
       </div>
 
       {escrow&&isCreator&&(
-        <div style={{ marginBottom:20, padding:'14px 18px', borderRadius:'var(--radius-md)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap', ...(escrow.status==='funded'?{background:'rgba(16,185,129,0.1)',border:'1px solid rgba(16,185,129,0.3)'}:escrow.status==='released'?{background:'rgba(245,158,11,0.1)',border:'1px solid rgba(245,158,11,0.3)'}:escrow.status==='disputed'?{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)'}:{background:'rgba(59,130,246,0.1)',border:'1px solid rgba(59,130,246,0.3)'}) }}>
+        <div style={{ marginBottom:20, padding:'14px 18px', borderRadius:'var(--radius-md)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap', ...(escrow.status==='funded'?{background:'rgba(16,185,129,0.1)',border:'1px solid rgba(16,185,129,0.3)'}:escrow.status==='released'?{background:'rgba(91,33,182,0.1)',border:'1px solid rgba(91,33,182,0.3)'}:escrow.status==='disputed'?{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)'}:{background:'rgba(59,130,246,0.1)',border:'1px solid rgba(59,130,246,0.3)'}) }}>
           <div style={{ display:'flex', gap:10, alignItems:'center' }}>
             <span style={{ fontSize:'1.1rem' }}>{escrow.status==='funded'?'🔒':escrow.status==='released'?'✓':escrow.status==='disputed'?'⚠':'💳'}</span>
             <div>
               <div style={{ fontWeight:600, fontSize:'0.88rem' }}>{escrow.status==='pending_payment'?'Escrow awaiting payment':escrow.status==='funded'?'Escrow funded — work in progress':escrow.status==='released'?'Payment released to earner':escrow.status==='disputed'?'Disputed — under admin review':'Escrow status'}</div>
-              {escrow.status==='funded'&&<Mono size="0.65rem">{`$${task.budget} held securely`}</Mono>}
+              {escrow.status==='funded'&&<Mono size="0.65rem">{`R${task.budget} held securely`}</Mono>}
             </div>
           </div>
           {escrow.status==='pending_payment'&&<Btn variant="primary" size="sm" onClick={() => setFundModal(true)}>Fund Escrow — ${task.budget}</Btn>}
@@ -1908,7 +2086,7 @@ function TaskDetail({ taskId, setPage }) {
                         <div style={{ marginTop:3 }}><Stars rating={bid.avg_rating} /></div>
                       </div>
                       <div style={{ textAlign:'right', display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4 }}>
-                        <span style={{ fontFamily:'var(--font-mono)', fontSize:'1.05rem', color:'var(--accent)' }}>${bid.amount}</span>
+                        <span style={{ fontFamily:'var(--font-mono)', fontSize:'1.05rem', color:'var(--accent)' }}>R{bid.amount}</span>
                         <Badge variant={bid.status}>{bid.status}</Badge>
                       </div>
                     </div>
@@ -1947,7 +2125,7 @@ function TaskDetail({ taskId, setPage }) {
             <DCard hover={false}>
               <Mono size="0.68rem" color="var(--accent)" style={{ display:'block', marginBottom:14 }}>Submit Your Bid</Mono>
               <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-                <Input label={`Your Price ($) — Budget: $${task.budget}`} type="number" min="1" placeholder="e.g. 750" value={bidAmount} onChange={e => { setBidAmount(e.target.value); setBidErrors(v=>({...v,amount:null})) }} error={bidErrors.amount} />
+                <Input label={`Your Price (R) — Budget: R${task.budget}`} type="number" min="1" placeholder="e.g. 750" value={bidAmount} onChange={e => { setBidAmount(e.target.value); setBidErrors(v=>({...v,amount:null})) }} error={bidErrors.amount} />
                 <Textarea label="Pitch (min 20 characters)" placeholder="Why are you the best fit?" value={bidPitch} onChange={e => { setBidPitch(e.target.value); setBidErrors(v=>({...v,pitch:null})) }} style={{ minHeight:120 }} error={bidErrors.pitch} />
                 <Btn fullWidth loading={bidLoading} onClick={submitBid}>Submit Bid</Btn>
               </div>
@@ -1956,7 +2134,7 @@ function TaskDetail({ taskId, setPage }) {
           {isEarner&&alreadyBid&&myBid.status==='pending'&&(
             <DCard hover={false} style={{ border:'1px solid var(--info)' }}>
               <Mono size="0.68rem" color="var(--info)" style={{ display:'block', marginBottom:10 }}>Your Bid</Mono>
-              <div style={{ fontFamily:'var(--font-mono)', fontSize:'1.3rem', color:'var(--accent)', marginBottom:6 }}>${myBid.amount}</div>
+              <div style={{ fontFamily:'var(--font-mono)', fontSize:'1.3rem', color:'var(--accent)', marginBottom:6 }}>R{myBid.amount}</div>
               <p style={{ fontSize:'0.83rem', color:'var(--text-secondary)', marginBottom:14, lineHeight:1.5 }}>{myBid.pitch}</p>
               <Btn variant="danger" size="sm" fullWidth onClick={() => { dispatch({type:'WITHDRAW_BID',bid_id:myBid.bid_id}); toast('Bid withdrawn','info') }}>Withdraw Bid</Btn>
             </DCard>
@@ -1970,7 +2148,7 @@ function TaskDetail({ taskId, setPage }) {
           )}
           <DCard hover={false}>
             <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:14 }}>Task Details</Mono>
-            {[['Budget',`$${task.budget}`],['Deadline',new Date(task.deadline).toLocaleDateString()],['Status',currentStatus?.replace('_',' ')],['Posted',new Date(task.created_at).toLocaleDateString()],['Bids',`${bids.length} bid${bids.length!==1?'s':''}`],['Task ID',`#${task.task_id}`]].map(([k,v]) => (
+            {[['Budget',`R${task.budget}`],['Deadline',new Date(task.deadline).toLocaleDateString()],['Status',currentStatus?.replace('_',' ')],['Posted',new Date(task.created_at).toLocaleDateString()],['Bids',`${bids.length} bid${bids.length!==1?'s':''}`],['Task ID',`#${task.task_id}`]].map(([k,v]) => (
               <div key={k} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 0', borderBottom:'1px solid var(--border)' }}>
                 <Mono>{k}</Mono><span style={{ fontSize:'0.85rem', color:'var(--text-primary)', fontWeight:500 }}>{v}</span>
               </div>
@@ -1980,11 +2158,11 @@ function TaskDetail({ taskId, setPage }) {
         </div>
       </div>
 
-      <ConfirmModal open={!!acceptModal} onClose={() => setAcceptModal(null)} onConfirm={confirmAccept} loading={acceptLoading} title="Accept This Bid" confirmLabel="Accept & Move to Escrow" confirmVariant="primary" message={acceptModal?`Accept ${acceptModal.display_name}'s bid of $${acceptModal.amount}? All other bids will be rejected.`:''} />
+      <ConfirmModal open={!!acceptModal} onClose={() => setAcceptModal(null)} onConfirm={confirmAccept} loading={acceptLoading} title="Accept This Bid" confirmLabel="Accept & Move to Escrow" confirmVariant="primary" message={acceptModal?`Accept ${acceptModal.display_name}'s bid of R${acceptModal.amount}? All other bids will be rejected.`:''} />
       <Modal open={fundModal} onClose={() => setFundModal(false)} title="Fund Escrow" maxWidth={440}>
         <p style={{ color:'var(--text-secondary)', lineHeight:1.65, marginBottom:16 }}>Fund escrow for <strong style={{ color:'var(--text-primary)' }}>{task.title}</strong>.</p>
         <div style={{ background:'var(--bg-elevated)', borderRadius:'var(--radius-md)', padding:'14px 16px', marginBottom:20 }}>
-          {[['Task Budget',`$${task.budget}`],['Platform Fee (10%)',`$${(parseFloat(task.budget)*0.1).toFixed(2)}`],['Total',`$${(parseFloat(task.budget)*1.1).toFixed(2)}`]].map(([k,v]) => (
+          {[['Task Budget',`R${task.budget}`],['Platform Fee (10%)',`R${(parseFloat(task.budget)*0.1).toFixed(2)}`],['Total',`R${(parseFloat(task.budget)*1.1).toFixed(2)}`]].map(([k,v]) => (
             <div key={k} style={{ display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid var(--border)' }}>
               <Mono>{k}</Mono><span style={{ fontFamily:'var(--font-mono)', color:k==='Total'?'var(--accent)':'var(--text-primary)', fontWeight:k==='Total'?600:400 }}>{v}</span>
             </div>
@@ -1996,7 +2174,7 @@ function TaskDetail({ taskId, setPage }) {
           <Btn variant="primary" onClick={confirmFund} loading={fundLoading}>Confirm & Fund Escrow</Btn>
         </div>
       </Modal>
-      <ConfirmModal open={releaseModal} onClose={() => setReleaseModal(false)} onConfirm={confirmRelease} loading={releaseLoading} title="Release Payment" confirmLabel="Release Funds" confirmVariant="success" message={`Release $${task.budget} to the earner? This confirms the work is complete. This action cannot be undone.`} />
+      <ConfirmModal open={releaseModal} onClose={() => setReleaseModal(false)} onConfirm={confirmRelease} loading={releaseLoading} title="Release Payment" confirmLabel="Release Funds" confirmVariant="success" message={`Release R${task.budget} to the earner? This confirms the work is complete. This action cannot be undone.`} />
       <Modal open={disputeModal} onClose={() => setDisputeModal(false)} title="Raise a Dispute" maxWidth={500}>
         <p style={{ color:'var(--text-secondary)', fontSize:'0.875rem', marginBottom:16, lineHeight:1.6 }}>Raising a dispute freezes the escrow and notifies our admin team. Be specific about what was agreed vs what was delivered.</p>
         <Textarea label="Reason for dispute (min 20 characters)" value={disputeText} onChange={e => setDisputeText(e.target.value)} placeholder="Describe the issue clearly…" style={{ minHeight:140 }} />
@@ -2061,7 +2239,7 @@ function TaskNew({ setPage, setSelectedTask }) {
     <div className="page-enter" style={{ maxWidth:580 }}>
       <DCard hover={false} style={{ textAlign:'center', padding:'48px 32px', border:'1px solid var(--success)' }}>
         <div style={{ fontSize:'3rem', marginBottom:12 }}>✓</div>
-        <h2 style={{ fontFamily:'var(--font-display)', fontSize:'1.6rem', fontWeight:700, textTransform:'uppercase', marginBottom:8 }}>Task Posted!</h2>
+        <h2 style={{ fontFamily:'var(--font-display)', fontSize:'1.6rem', fontWeight:700, marginBottom:8 }}>Task Posted!</h2>
         <p style={{ color:'var(--text-muted)', marginBottom:24, lineHeight:1.6 }}>Your task is live. Earners with matching skills have been notified.</p>
         <div style={{ display:'flex', gap:10, justifyContent:'center', flexWrap:'wrap' }}>
           <Btn onClick={() => { setSelectedTask(createdId); setPage('task-detail') }}>View Task</Btn>
@@ -2082,13 +2260,13 @@ function TaskNew({ setPage, setSelectedTask }) {
           <Textarea label="Description" placeholder="Describe what you need done in detail." value={desc} onChange={e=>{setDesc(e.target.value);setErrors(v=>({...v,desc:null}))}} style={{ minHeight:160 }} error={errors.desc} />
         </div>}
         {step===1&&<div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:18 }}>
-          <Input label="Budget ($)" type="number" min="1" placeholder="e.g. 500" value={budget} onChange={e=>{setBudget(e.target.value);setErrors(v=>({...v,budget:null}))}} error={errors.budget} />
+          <Input label="Budget (R)" type="number" min="1" placeholder="e.g. 500" value={budget} onChange={e=>{setBudget(e.target.value);setErrors(v=>({...v,budget:null}))}} error={errors.budget} />
           <Input label="Deadline" type="date" value={deadline} onChange={e=>{setDead(e.target.value);setErrors(v=>({...v,deadline:null}))}} error={errors.deadline} />
         </div>}
         {step===2&&<Input label="Skill Tags (comma separated)" placeholder="e.g. react, node.js, postgres" value={tags} onChange={e=>{setTags(e.target.value);setErrors(v=>({...v,tags:null}))}} hint="Used to automatically match and notify earners" error={errors.tags} />}
         {step===3&&<div style={{ display:'flex', flexDirection:'column', gap:16 }}>
           <Mono style={{ display:'block', marginBottom:4 }}>Review your task</Mono>
-          {[['Title',title],['Budget',`$${budget}`],['Deadline',deadline?new Date(deadline).toLocaleDateString():'—'],['Skills',tags||'—']].map(([k,v]) => (
+          {[['Title',title],['Budget',`R${budget}`],['Deadline',deadline?new Date(deadline).toLocaleDateString():'—'],['Skills',tags||'—']].map(([k,v]) => (
             <div key={k} style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid var(--border)' }}>
               <Mono>{k}</Mono><span style={{ fontSize:'0.875rem', color:'var(--text-primary)', maxWidth:320, textAlign:'right' }}>{v}</span>
             </div>
@@ -2121,10 +2299,10 @@ function MyTasks({ setPage, setSelectedTask }) {
         <PageTitle sub={`${myTasks.length} tasks posted`}>My Tasks</PageTitle>
         <Btn onClick={() => setPage('tasks-new')}>+ New Task</Btn>
       </div>
-      <div style={{ display:'flex', gap:6, marginBottom:20, flexWrap:'wrap' }}>
+      <div className="feed-scroll" style={{ display:'flex', gap:2, marginBottom:20, background:'var(--bg-elevated)', borderRadius:12, padding:3, overflowX:'auto', maxWidth:'fit-content' }}>
         {['all','open','in_progress','completed','disputed','expired'].map(s => (
           <button key={s} onClick={() => setFilter(s)}
-            style={{ padding:'5px 14px', borderRadius:20, fontSize:'0.78rem', fontFamily:'var(--font-mono)', textTransform:'uppercase', letterSpacing:'0.06em', cursor:'pointer', transition:'all 150ms ease', border:`1px solid ${filter===s?'var(--accent)':'var(--border)'}`, background:filter===s?'var(--accent-glow)':'transparent', color:filter===s?'var(--accent)':'var(--text-muted)' }}>
+            style={{ padding:'7px 14px', borderRadius:9, fontSize:'0.8rem', fontFamily:'var(--font-body)', fontWeight:600, cursor:'pointer', transition:'all 150ms ease', border:'none', whiteSpace:'nowrap', background:filter===s?'var(--bg-surface)':'transparent', color:filter===s?'var(--accent)':'var(--text-muted)', boxShadow:filter===s?'0 1px 3px rgba(33,28,46,.14)':'none' }}>
             {s.replace('_',' ')} ({s==='all'?myTasks.length:myTasks.filter(t=>t.status===s).length})
           </button>
         ))}
@@ -2145,7 +2323,7 @@ function MyTasks({ setPage, setSelectedTask }) {
               <div style={{ display:'flex', gap:24, alignItems:'center', flexShrink:0 }}>
                 {pendingBids>0&&<div style={{ textAlign:'center' }}><div style={{ fontFamily:'var(--font-mono)', fontSize:'1.2rem', fontWeight:500, color:'var(--accent)' }}>{pendingBids}</div><Mono>new bids</Mono></div>}
                 <div style={{ textAlign:'right' }}>
-                  <div style={{ fontFamily:'var(--font-mono)', color:'var(--accent)', fontWeight:500 }}>${task.budget}</div>
+                  <div style={{ fontFamily:'var(--font-mono)', color:'var(--accent)', fontWeight:500 }}>R{task.budget}</div>
                   <Mono>Due {new Date(task.deadline).toLocaleDateString()}</Mono>
                 </div>
               </div>
@@ -2167,10 +2345,10 @@ function MyBids({ setPage, setSelectedTask }) {
   return (
     <div className="page-enter">
       <PageTitle sub={`${myBids.length} bids placed`}>My Bids</PageTitle>
-      <div style={{ display:'flex', gap:6, marginBottom:20, flexWrap:'wrap' }}>
+      <div className="feed-scroll" style={{ display:'flex', gap:2, marginBottom:20, background:'var(--bg-elevated)', borderRadius:12, padding:3, overflowX:'auto', maxWidth:'fit-content' }}>
         {['all','pending','accepted','rejected','withdrawn'].map(s => (
           <button key={s} onClick={() => setFilter(s)}
-            style={{ padding:'5px 14px', borderRadius:20, fontSize:'0.78rem', fontFamily:'var(--font-mono)', textTransform:'uppercase', letterSpacing:'0.06em', cursor:'pointer', transition:'all 150ms ease', border:`1px solid ${filter===s?'var(--accent)':'var(--border)'}`, background:filter===s?'var(--accent-glow)':'transparent', color:filter===s?'var(--accent)':'var(--text-muted)' }}>
+            style={{ padding:'7px 14px', borderRadius:9, fontSize:'0.8rem', fontFamily:'var(--font-body)', fontWeight:600, cursor:'pointer', transition:'all 150ms ease', border:'none', whiteSpace:'nowrap', background:filter===s?'var(--bg-surface)':'transparent', color:filter===s?'var(--accent)':'var(--text-muted)', boxShadow:filter===s?'0 1px 3px rgba(33,28,46,.14)':'none' }}>
             {s} ({s==='all'?myBids.length:myBids.filter(b=>b.status===s).length})
           </button>
         ))}
@@ -2190,7 +2368,7 @@ function MyBids({ setPage, setSelectedTask }) {
                   <Mono>{new Date(bid.created_at).toLocaleDateString()}</Mono>
                 </div>
                 <div style={{ textAlign:'right', flexShrink:0, marginLeft:16 }}>
-                  <div style={{ fontFamily:'var(--font-mono)', fontSize:'1.1rem', color:'var(--accent)', fontWeight:500 }}>${bid.amount}</div>
+                  <div style={{ fontFamily:'var(--font-mono)', fontSize:'1.1rem', color:'var(--accent)', fontWeight:500 }}>R{bid.amount}</div>
                   {task&&<Mono>Budget: ${task.budget}</Mono>}
                 </div>
               </div>
@@ -2230,7 +2408,7 @@ function Suggestions({ setPage, setSelectedTask }) {
                 </div>
                 <div style={{ display:'flex', gap:6, marginBottom:12, flexWrap:'wrap' }}>{s.skill_tags.map(t=><Tag key={t}>{t}</Tag>)}</div>
                 <div style={{ display:'flex', gap:16, flexWrap:'wrap', marginBottom:14 }}>
-                  <Mono>Budget: <span style={{ color:'var(--accent)' }}>${s.budget}</span></Mono>
+                  <Mono>Budget: <span style={{ color:'var(--accent)' }}>R{s.budget}</span></Mono>
                   <Mono>Due: {new Date(s.deadline).toLocaleDateString()}</Mono>
                 </div>
                 <div style={{ display:'flex', gap:10 }}>
@@ -2279,7 +2457,7 @@ function Messages() {
   return (
     <div className="page-enter" style={{ maxWidth:900 }}>
       <PageTitle sub="Direct messages">Messages</PageTitle>
-      <DCard hover={false} style={{ display:'flex', height:580, padding:0, overflow:'hidden' }}>
+      <DCard hover={false} className="msg-shell" style={{ display:'flex', height:580, padding:0, overflow:'hidden' }}>
         <div style={{ width:220, borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', flexShrink:0 }}>
           <div style={{ padding:'12px 14px', borderBottom:'1px solid var(--border)' }}><Mono size="0.65rem">Conversations</Mono></div>
           {CONTACTS.map(c => {
@@ -2318,10 +2496,10 @@ function Messages() {
               const mine = m.sender_id==='u1'
               return (
                 <div key={m.message_id} style={{ display:'flex', justifyContent:mine?'flex-end':'flex-start' }}>
-                  <div style={{ maxWidth:'72%', background:mine?'var(--accent-glow)':'var(--bg-elevated)', border:`1px solid ${mine?'var(--accent-dim)':'var(--border)'}`, borderRadius:'var(--radius-md)', padding:'10px 14px' }}>
+                  <div style={{ maxWidth:'72%', background:mine?'var(--accent-glow)':'var(--bg-elevated)', border:`1px solid ${mine?'var(--accent-dim)':'var(--border)'}`, borderRadius:'var(--radius-md)', ...(mine?{borderBottomRightRadius:4}:{borderBottomLeftRadius:4}), padding:'10px 14px' }}>
                     {!mine&&<Mono size="0.62rem" color="var(--accent)" style={{ display:'block', marginBottom:4 }}>{m.sender_name}</Mono>}
                     <p style={{ fontSize:'0.88rem', lineHeight:1.55 }}>{m.content}</p>
-                    <Mono size="0.6rem" style={{ display:'block', textAlign:mine?'right':'left', marginTop:5 }}>{new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</Mono>
+                    <Mono size="0.6rem" style={{ display:'block', textAlign:mine?'right':'left', marginTop:5 }}>{new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}{mine ? '  ✓✓' : ''}</Mono>
                   </div>
                 </div>
               )
@@ -2394,14 +2572,82 @@ function Profile() {
   const [newPw, setNewPw]         = useState('')
   const [saving, setSaving]       = useState(false)
   const [savingPw, setSavingPw]   = useState(false)
+  const [loadingProfile, setLoadingProfile] = useState(true)
   const myReviews = state.reviews.filter(r=>r.reviewee_id==='u1'||r.reviewer_id==='u1')
   const avgRating = myReviews.length?(myReviews.reduce((s,r)=>s+r.rating,0)/myReviews.length).toFixed(1):null
 
-  function saveProfile() { setSaving(true); setTimeout(()=>{setSaving(false);toast('Profile saved','success')},700) }
-  function changePassword() {
-    if (!currentPw) { toast('Enter your current password','error'); return }
-    if (newPw.length<8) { toast('New password must be at least 8 characters','error'); return }
-    setSavingPw(true); setTimeout(()=>{setSavingPw(false);setCurrentPw('');setNewPw('');toast('Password changed','success')},800)
+  const token = () => localStorage.getItem('rl_token')
+
+  // ── Load saved profile from backend on mount ────────────────────────────────
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch('/profile', { headers: { Authorization: `Bearer ${token()}` } })
+        if (!res.ok) throw new Error('not ok')
+        const { profile } = await res.json()
+        if (cancelled || !profile) return
+        setName(profile.display_name || user.displayName || '')
+        setBio(profile.bio || '')
+        setSkills(Array.isArray(profile.skills) ? profile.skills.join(', ') : (profile.skills || ''))
+        setPort(profile.portfolio_url || '')
+        setEmail(profile.email || user.email || '')
+      } catch {
+        // Backend unreachable — keep whatever we have from context (demo mode)
+      } finally {
+        if (!cancelled) setLoadingProfile(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Save profile to backend ─────────────────────────────────────────────────
+  async function saveProfile() {
+    setSaving(true)
+    try {
+      const res = await fetch('/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({
+          displayName,
+          bio,
+          skills,                       // server splits the comma string into an array
+          portfolioUrl: portfolio,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.message || 'Save failed')
+      }
+      toast('Profile saved', 'success')
+    } catch (err) {
+      toast(err.message === 'Failed to fetch' ? 'Backend offline — changes not saved' : err.message, 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ── Change password ─────────────────────────────────────────────────────────
+  async function changePassword() {
+    if (!currentPw) { toast('Enter your current password', 'error'); return }
+    if (newPw.length < 8) { toast('New password must be at least 8 characters', 'error'); return }
+    setSavingPw(true)
+    try {
+      const res = await fetch('/profile/password', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || 'Could not change password')
+      setCurrentPw(''); setNewPw('')
+      toast('Password changed', 'success')
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setSavingPw(false)
+    }
   }
 
   return (
@@ -2410,6 +2656,31 @@ function Profile() {
         <PageTitle sub="Manage your account settings">Profile</PageTitle>
         {avgRating&&<div style={{ textAlign:'center' }}><div style={{ fontFamily:'var(--font-mono)', fontSize:'1.5rem', color:'var(--accent)' }}>{avgRating}</div><Stars rating={parseFloat(avgRating)} /><Mono>{myReviews.length} reviews</Mono></div>}
       </div>
+      {/* Trust header — avatar, identity, key stats */}
+      <DCard hover={false} style={{ display:'flex', alignItems:'center', gap:16, marginBottom:24, flexWrap:'wrap' }}>
+        {user.avatarUrl
+          ? <img src={user.avatarUrl} alt="" style={{ width:64, height:64, borderRadius:'50%', objectFit:'cover', border:'2px solid var(--accent-dim)', flexShrink:0 }} />
+          : <div style={{ width:64, height:64, borderRadius:'50%', background:'var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.5rem', color:'var(--accent)', flexShrink:0 }}>{(user.displayName || user.email || '?').charAt(0).toUpperCase()}</div>}
+        <div style={{ minWidth:140 }}>
+          <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:'1.25rem', lineHeight:1.2 }}>{user.displayName || user.email?.split('@')[0]}</div>
+          <Mono>{user.email}</Mono>
+        </div>
+        <div style={{ marginLeft:'auto', display:'flex', gap:28 }}>
+          <div style={{ textAlign:'center' }}>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.3rem', color:'#d97706' }}>{avgRating || '—'}</div>
+            <Mono>rating</Mono>
+          </div>
+          <div style={{ textAlign:'center' }}>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.3rem' }}>{state.tasks.filter(t=>t.status==='completed').length}</div>
+            <Mono>completed</Mono>
+          </div>
+          <div style={{ textAlign:'center' }}>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.3rem', color:'var(--success)' }}>{user.provider==='google' ? '✓' : '—'}</div>
+            <Mono>verified</Mono>
+          </div>
+        </div>
+      </DCard>
+
       <div style={{ display:'flex', gap:0, marginBottom:24, borderBottom:'1px solid var(--border)' }}>
         {['profile','security','reviews'].map(t => (
           <button key={t} onClick={() => setTab(t)}
@@ -2442,7 +2713,15 @@ function Profile() {
           </div>
         </div>
       )}
-      {tab==='security'&&(
+      {tab==='security'&&user.provider==='google'&&(
+        <DCard hover={false}>
+          <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:12 }}>Password</Mono>
+          <p style={{ fontSize:'0.875rem', color:'var(--text-secondary)', lineHeight:1.6 }}>
+            You signed in with Google, so there's no password to manage here. Your account security is handled by your Google account.
+          </p>
+        </DCard>
+      )}
+      {tab==='security'&&user.provider!=='google'&&(
         <DCard hover={false}>
           <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:16 }}>Change Password</Mono>
           <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
@@ -2480,10 +2759,10 @@ function AdminDisputes({ setPage, setSelectedDispute }) {
   return (
     <div className="page-enter">
       <PageTitle sub="Review and resolve platform disputes">Dispute Queue</PageTitle>
-      <div style={{ display:'flex', gap:6, marginBottom:20, flexWrap:'wrap' }}>
+      <div className="feed-scroll" style={{ display:'flex', gap:2, marginBottom:20, background:'var(--bg-elevated)', borderRadius:12, padding:3, overflowX:'auto', maxWidth:'fit-content' }}>
         {['all','open','under_review','resolved_creator','resolved_earner'].map(s => (
           <button key={s} onClick={() => setFilter(s)}
-            style={{ padding:'5px 14px', borderRadius:20, fontSize:'0.78rem', fontFamily:'var(--font-mono)', textTransform:'uppercase', letterSpacing:'0.06em', cursor:'pointer', transition:'all 150ms ease', border:`1px solid ${filter===s?'var(--accent)':'var(--border)'}`, background:filter===s?'var(--accent-glow)':'transparent', color:filter===s?'var(--accent)':'var(--text-muted)' }}>
+            style={{ padding:'7px 14px', borderRadius:9, fontSize:'0.8rem', fontFamily:'var(--font-body)', fontWeight:600, cursor:'pointer', transition:'all 150ms ease', border:'none', whiteSpace:'nowrap', background:filter===s?'var(--bg-surface)':'transparent', color:filter===s?'var(--accent)':'var(--text-muted)', boxShadow:filter===s?'0 1px 3px rgba(33,28,46,.14)':'none' }}>
             {s.replace('_',' ')} ({s==='all'?state.disputes.length:state.disputes.filter(d=>d.status===s).length})
           </button>
         ))}
@@ -2504,7 +2783,7 @@ function AdminDisputes({ setPage, setSelectedDispute }) {
                   </div>
                 </div>
                 <div style={{ textAlign:'right', marginLeft:20, flexShrink:0 }}>
-                  <div style={{ fontFamily:'var(--font-mono)', fontSize:'1.2rem', color:'var(--accent)', fontWeight:500 }}>${(d.amount_cents/100).toFixed(0)}</div>
+                  <div style={{ fontFamily:'var(--font-mono)', fontSize:'1.2rem', color:'var(--accent)', fontWeight:500 }}>R{(d.amount_cents/100).toFixed(0)}</div>
                   <Mono>in escrow</Mono>
                 </div>
               </div>
@@ -2559,9 +2838,9 @@ function AdminDisputeDetail({ disputeId, setPage }) {
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:24, flexWrap:'wrap', gap:12 }}>
         <div>
           <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:8 }}><Badge variant={isResolved?'completed':'disputed'}>{dispute.status.replace('_',' ')}</Badge><Mono>Dispute #{dispute.dispute_id}</Mono></div>
-          <h1 style={{ fontFamily:'var(--font-display)', fontSize:'1.8rem', fontWeight:700, textTransform:'uppercase' }}>{dispute.task_title}</h1>
+          <h1 style={{ fontFamily:'var(--font-display)', fontSize:'1.8rem', fontWeight:700 }}>{dispute.task_title}</h1>
         </div>
-        <div style={{ textAlign:'right' }}><div style={{ fontFamily:'var(--font-mono)', fontSize:'1.5rem', color:'var(--accent)', fontWeight:500 }}>${(dispute.amount_cents/100).toFixed(0)}</div><Mono>{isResolved?'resolved':'held in escrow'}</Mono></div>
+        <div style={{ textAlign:'right' }}><div style={{ fontFamily:'var(--font-mono)', fontSize:'1.5rem', color:'var(--accent)', fontWeight:500 }}>R{(dispute.amount_cents/100).toFixed(0)}</div><Mono>{isResolved?'resolved':'held in escrow'}</Mono></div>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 300px', gap:20 }}>
         <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
@@ -2643,7 +2922,7 @@ function AdminDisputeDetail({ disputeId, setPage }) {
           {task&&(
             <DCard hover={false}>
               <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:10 }}>Task Info</Mono>
-              {[['Budget',`$${task.budget}`],['Status',task.status.replace('_',' ')],['Deadline',new Date(task.deadline).toLocaleDateString()]].map(([k,v]) => (
+              {[['Budget',`R${task.budget}`],['Status',task.status.replace('_',' ')],['Deadline',new Date(task.deadline).toLocaleDateString()]].map(([k,v]) => (
                 <div key={k} style={{ display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom:'1px solid var(--border)' }}>
                   <Mono>{k}</Mono><span style={{ fontSize:'0.84rem', color:'var(--text-primary)' }}>{v}</span>
                 </div>
@@ -2656,7 +2935,7 @@ function AdminDisputeDetail({ disputeId, setPage }) {
         title={resolveModal==='refund'?'Refund Creator':'Release to Earner'}
         confirmLabel={resolveModal==='refund'?'Confirm Refund':'Confirm Release'}
         confirmVariant={resolveModal==='refund'?'danger':'success'}
-        message={resolveModal==='refund'?`This will cancel the PaymentIntent and return $${(dispute.amount_cents/100).toFixed(0)} to the creator. This cannot be undone.`:`This will transfer $${(dispute.amount_cents/100).toFixed(0)} to the earner's Stripe account. This cannot be undone.`} />
+        message={resolveModal==='refund'?`This will cancel the PaymentIntent and return R${(dispute.amount_cents/100).toFixed(0)} to the creator. This cannot be undone.`:`This will transfer R${(dispute.amount_cents/100).toFixed(0)} to the earner's Stripe account. This cannot be undone.`} />
     </div>
   )
 }
@@ -2702,7 +2981,7 @@ function AdminUsers() {
                 <td style={{ padding:'12px 16px' }}><Badge variant={u.role}>{u.role}</Badge></td>
                 <td style={{ padding:'12px 16px' }}><Badge variant={u.status==='active'?'open':'disputed'}>{u.status}</Badge></td>
                 <td style={{ padding:'12px 16px' }}><Mono>{new Date(u.created_at).toLocaleDateString()}</Mono></td>
-                <td style={{ padding:'12px 16px' }}><Mono>{u.tasks} tasks · </Mono><Mono color="var(--accent)">{u.spent?`$${u.spent} spent`:`$${u.earned} earned`}</Mono></td>
+                <td style={{ padding:'12px 16px' }}><Mono>{u.tasks} tasks · </Mono><Mono color="var(--accent)">{u.spent?`R${u.spent} spent`:`R${u.earned} earned`}</Mono></td>
                 <td style={{ padding:'12px 16px' }}>
                   <div style={{ display:'flex', gap:8 }}>
                     <Btn variant="ghost" size="sm" onClick={() => toast(`Viewing ${u.displayName}'s profile`,'info')}>View</Btn>
@@ -2736,7 +3015,7 @@ export default function App() {
     return 'landing'
   })
   const [authModal, setAuthModal] = useState(null)
-  const [dashPage, setDashPage]   = useState('dashboard')
+  const [dashPage, setDashPage]   = useState('tasks-browse')
   const [selectedTask,    setSelectedTask]    = useState(null)
   const [selectedDispute, setSelectedDispute] = useState(null)
   const [state, dispatch] = useReducer(appReducer, initialState)
@@ -2749,7 +3028,7 @@ export default function App() {
   // it clears everything and shows the landing page.
   useEffect(() => {
     async function restoreSession() {
-      const token = localStorage.getItem('tf_token')
+      const token = localStorage.getItem('rl_token')
       if (!token) { setUserLoading(false); return }
 
       try {
@@ -2758,7 +3037,7 @@ export default function App() {
 
         // Check token isn't expired
         if (payload.exp && payload.exp * 1000 < Date.now()) {
-          localStorage.removeItem('tf_token')
+          localStorage.removeItem('rl_token')
           setUserLoading(false)
           return
         }
@@ -2780,17 +3059,17 @@ export default function App() {
             provider:    u.google_id ? 'google' : 'email',
           })
           // Only restore dashboard view if we were on dashboard before
-          const savedView = sessionStorage.getItem('tf_view')
+          const savedView = sessionStorage.getItem('rl_view')
           if (savedView && savedView !== 'landing' && savedView !== 'oauth-callback') {
             setView('dashboard')
           }
         } else {
           // Token rejected by server — clear it
-          localStorage.removeItem('tf_token')
+          localStorage.removeItem('rl_token')
         }
       } catch {
         // Token malformed or network error — clear silently
-        localStorage.removeItem('tf_token')
+        localStorage.removeItem('rl_token')
       } finally {
         setUserLoading(false)
       }
@@ -2801,14 +3080,14 @@ export default function App() {
   // Persist current view so refresh restores dashboard
   useEffect(() => {
     if (view !== 'oauth-callback') {
-      sessionStorage.setItem('tf_view', view)
+      sessionStorage.setItem('rl_view', view)
     }
   }, [view])
 
   // ── Persist user to localStorage so sidebar always has latest info ──────────
   function saveUser(u) {
-    if (!u) { localStorage.removeItem('tf_user'); return }
-    localStorage.setItem('tf_user', JSON.stringify(u))
+    if (!u) { localStorage.removeItem('rl_user'); return }
+    localStorage.setItem('rl_user', JSON.stringify(u))
     setUser(u)
   }
 
@@ -2822,10 +3101,10 @@ export default function App() {
       avatarUrl:   rawUser.avatarUrl   || rawUser.avatar_url   || null,
       provider:    'email',
     }
-    localStorage.setItem('tf_token', rawUser.token || '')
+    localStorage.setItem('rl_token', rawUser.token || '')
     saveUser(u)
     setView('dashboard')
-    setDashPage('dashboard')
+    setDashPage('tasks-browse')
     setAuthModal(null)
   }
 
@@ -2841,10 +3120,10 @@ export default function App() {
 
       if (!token || !userId) return false
 
-      localStorage.setItem('tf_token', token)
+      localStorage.setItem('rl_token', token)
       saveUser({ userId, email, role, displayName, avatarUrl, provider: 'google' })
       setView('dashboard')
-      setDashPage('dashboard')
+      setDashPage('tasks-browse')
       setAuthModal(null)
       return true
     } catch {
@@ -2855,7 +3134,7 @@ export default function App() {
   // ── Logout — clears everything and returns to landing ───────────────────────
   function logout() {
     // Tell auth service to destroy the session (non-blocking)
-    const token = localStorage.getItem('tf_token')
+    const token = localStorage.getItem('rl_token')
     if (token) {
       fetch('/auth/logout', {
         method: 'POST',
@@ -2863,12 +3142,12 @@ export default function App() {
       }).catch(() => {})
     }
     // Clear all stored state
-    localStorage.removeItem('tf_token')
-    localStorage.removeItem('tf_user')
-    sessionStorage.removeItem('tf_view')
+    localStorage.removeItem('rl_token')
+    localStorage.removeItem('rl_user')
+    sessionStorage.removeItem('rl_view')
     setUser(null)
     setView('landing')
-    setDashPage('dashboard')
+    setDashPage('tasks-browse')
     setAuthModal(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -2908,7 +3187,7 @@ export default function App() {
       case 'contact':           return <ContactPage         {...props} />
       case 'report':            return <ReportPage          {...props} />
       case 'guidelines':        return <GuidelinesPage      {...props} />
-      case 'about-page':        return <ComingSoonPage title="About TaskFinder" subtitle="Company" onNav={navigate} />
+      case 'about-page':        return <ComingSoonPage title="About ReLiv" subtitle="Company" onNav={navigate} />
       case 'blog':              return <ComingSoonPage title="Blog"             subtitle="Company" onNav={navigate} />
       case 'careers':           return <ComingSoonPage title="Careers"          subtitle="Company" onNav={navigate} />
       default:                  return null
@@ -2939,7 +3218,7 @@ export default function App() {
     return (
       <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', background:'var(--bg-base)' }}>
         <div style={{ textAlign:'center' }}>
-          <div style={{ background:'var(--amber)', color:'#000', fontFamily:'var(--fd)', fontWeight:800, fontSize:'1rem', padding:'8px 14px', borderRadius:4, marginBottom:16, display:'inline-block' }}>TF</div>
+          <div style={{ background:'var(--amber)', color:'#fff', fontFamily:'var(--fd)', fontWeight:800, fontSize:'1rem', padding:'8px 14px', borderRadius:8, marginBottom:16, display:'inline-block' }}>R</div>
           <div style={{ display:'block' }}><Spinner size={20} /></div>
         </div>
       </div>
@@ -2960,6 +3239,7 @@ export default function App() {
               <LandingNavbar onOpenAuth={setAuthModal} onNav={navigate} />
               <Hero         onOpenAuth={setAuthModal} />
               <StatsBar />
+              <CampusStrip />
               <HowItWorks />
               <Features />
               <LiveTasks    onOpenAuth={setAuthModal} />
@@ -2982,14 +3262,11 @@ export default function App() {
 
           {/* ── DASHBOARD ────────────────────────────────────── */}
           {view==='dashboard' && user && (
-            <div className="dash-shell" style={{ display:'grid', gridTemplateColumns:'220px 1fr', minHeight:'100vh' }}>
-              <DashSidebar
-                page={dashPage}
-                setPage={setDashPage}
-                unreadCount={unreadCount}
-                onGoHome={() => navigate('landing')}
-              />
-              <main className="dash-main" style={{ overflowY:'auto', padding:'40px 48px', minHeight:'100vh', background:'var(--bg-base)' }}>
+            <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column', background:'var(--bg-base)' }}>
+              <TopBar page={dashPage} setPage={setDashPage} unreadCount={unreadCount} onGoHome={() => navigate('landing')} />
+              {/* DashSidebar is mobile-only now — CSS turns it into the bottom tab bar */}
+              <DashSidebar page={dashPage} setPage={setDashPage} unreadCount={unreadCount} onGoHome={() => navigate('landing')} />
+              <main className="dash-main" style={{ flex:1, width:'100%', maxWidth:1280, margin:'0 auto', padding:'28px 24px 60px' }}>
                 {renderDashPage()}
               </main>
             </div>

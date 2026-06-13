@@ -1,10 +1,9 @@
-// server/index.js — TaskFinder unified backend (MVP deployment)
+// server/index.js — ReLiv unified backend (MVP deployment)
 // One Express app replacing the gateway + auth + tasks + messaging + reviews
 // microservices for launch. Code stays modular via routers; split back into
 // services post-launch if scale ever demands it.
 import 'dotenv/config'
 import express from 'express'
-import session from 'express-session'
 import passport from 'passport'
 import cors from 'cors'
 import helmet from 'helmet'
@@ -14,6 +13,7 @@ import authRouter     from './routes/auth.js'
 import tasksRouter    from './routes/tasks.js'
 import messagesRouter from './routes/messages.js'
 import reviewsRouter  from './routes/reviews.js'
+import profileRouter  from './routes/profile.js'
 import { pool } from './db.js'
 
 const app = express()
@@ -47,23 +47,10 @@ app.use(rateLimit({
   windowMs: 60 * 1000, max: 120, // general API ceiling
 }))
 
-// ── Session — OAuth handshake only ────────────────────────────────────────────
-// In production frontend (vercel.app) and API (railway.app) are different
-// origins, so the OAuth session cookie needs SameSite=None; Secure.
-app.use(session({
-  secret:            process.env.SESSION_SECRET,
-  resave:            false,
-  saveUninitialized: false,
-  cookie: {
-    secure:   IS_PROD,
-    httpOnly: true,
-    sameSite: IS_PROD ? 'none' : 'lax',
-    maxAge:   10 * 60 * 1000,
-  },
-}))
-
+// Passport is used for the Google OAuth handshake only — no sessions.
+// Auth state is carried entirely by JWTs, so we initialise passport
+// without session support (this avoids the req.session crash).
 app.use(passport.initialize())
-app.use(passport.session())
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
@@ -79,6 +66,7 @@ app.use('/auth',    authRouter)
 app.use('/tasks',   tasksRouter)
 app.use('/',        messagesRouter)   // exposes /messages/* and /notifications/*
 app.use('/reviews', reviewsRouter)
+app.use('/profile', profileRouter)
 
 // 404 + error handlers
 app.use((req, res) => res.status(404).json({ message: 'Not found.' }))
@@ -89,7 +77,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
-  console.log(`[server] TaskFinder API on port ${PORT}`)
+  console.log(`[server] ReLiv API on port ${PORT}`)
   console.log(`[server] Frontend:        ${FRONTEND_URL}`)
   console.log(`[server] Google callback: ${process.env.GOOGLE_CALLBACK_URL}`)
   console.log(`[server] Database:        ${process.env.DATABASE_URL?.split('@')[1]?.split('/')[0] || 'NOT SET'}`)

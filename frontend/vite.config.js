@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // All API routes proxy to the unified server on port 3001.
-// Run it with:  cd server && npm run dev
+// Run the backend with:  cd server && npm run dev
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -14,6 +14,7 @@ export default defineConfig({
       '/messages':      { target: 'http://localhost:3001', changeOrigin: true },
       '/notifications': { target: 'http://localhost:3001', changeOrigin: true },
       '/reviews':       { target: 'http://localhost:3001', changeOrigin: true },
+      '/profile':       { target: 'http://localhost:3001', changeOrigin: true },
       '/health':        { target: 'http://localhost:3001', changeOrigin: true },
     },
   },

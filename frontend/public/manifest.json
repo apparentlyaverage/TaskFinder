@@ -1,11 +1,11 @@
 {
-  "name": "TaskFinder",
-  "short_name": "TaskFinder",
-  "description": "Campus peer-to-peer service marketplace for Rhodes University students",
+  "name": "ReLiv",
+  "short_name": "ReLiv",
+  "description": "Campus peer-to-peer marketplace for Rhodes University students",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#080808",
-  "theme_color": "#f59e0b",
+  "background_color": "#faf9f6",
+  "theme_color": "#5b21b6",
   "orientation": "portrait-primary",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },

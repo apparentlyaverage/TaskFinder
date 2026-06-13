@@ -1,4 +1,4 @@
-# TaskFinder Unified Server
+# ReLiv Unified Server
 
 Single Express app serving auth, tasks, bids, messages, notifications, and
 reviews. Replaces the gateway + 4 microservices for MVP deployment.

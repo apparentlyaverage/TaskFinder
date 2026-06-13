@@ -1,4 +1,4 @@
-# TaskFinder Platform
+# ReLiv Platform
 
 Peer-to-peer service marketplace for Rhodes University students.
 Creators post tasks, Earners bid and fulfil them.
@@ -42,4 +42,4 @@ RabbitMQ UI: http://localhost:15672
 3. **Frontend:** Import repo to Vercel, set root directory to `frontend`, add `VITE_API_URL`
 
 ## Repository
-https://github.com/apparentlyaverage/TaskFinder
+https://github.com/apparentlyaverage/ReLiv

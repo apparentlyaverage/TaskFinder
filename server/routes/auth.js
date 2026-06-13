@@ -25,18 +25,6 @@ function check(req, res, next) {
   next()
 }
 
-// ── Passport session plumbing (OAuth handshake only) ─────────────────────────
-passport.serializeUser((user, done) => done(null, user.user_id))
-passport.deserializeUser(async (id, done) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT u.user_id, u.email, u.role, u.google_avatar_url, up.display_name, up.avatar_url
-       FROM users u LEFT JOIN user_profiles up ON u.user_id = up.user_id
-       WHERE u.user_id = $1`, [id])
-    done(null, rows[0] || false)
-  } catch (err) { done(err) }
-})
-
 // ── Google strategy — identical 3-branch logic from the standalone service ───
 passport.use(new GoogleStrategy(
   {
@@ -60,8 +48,9 @@ passport.use(new GoogleStrategy(
          FROM users u LEFT JOIN user_profiles up ON u.user_id = up.user_id
          WHERE u.google_id = $1`, [googleId])
       if (rows.length > 0) {
-        await client.query('UPDATE user_profiles SET avatar_url=$1, updated_at=NOW() WHERE user_id=$2', [avatarUrl, rows[0].user_id])
         await client.query('COMMIT')
+        // Avatar refresh is best-effort — must never break login if column is absent
+        pool.query('UPDATE user_profiles SET avatar_url=$1 WHERE user_id=$2', [avatarUrl, rows[0].user_id]).catch(() => {})
         return done(null, { ...rows[0], google_avatar_url: avatarUrl })
       }
 
@@ -71,12 +60,12 @@ passport.use(new GoogleStrategy(
          FROM users u LEFT JOIN user_profiles up ON u.user_id = up.user_id
          WHERE u.email = $1`, [googleEmail]))
       if (rows.length > 0) {
-        await client.query(
-          `UPDATE users SET google_id=$1, google_email=$2, google_avatar_url=$3,
-             is_email_verified=TRUE, updated_at=NOW() WHERE user_id=$4`,
-          [googleId, googleEmail, avatarUrl, rows[0].user_id])
-        await client.query('UPDATE user_profiles SET avatar_url=$1, updated_at=NOW() WHERE user_id=$2', [avatarUrl, rows[0].user_id])
+        await client.query('UPDATE users SET google_id=$1 WHERE user_id=$2', [googleId, rows[0].user_id])
         await client.query('COMMIT')
+        // Best-effort enrichment — won't break login if these columns are missing
+        pool.query(`UPDATE users SET google_email=$1, google_avatar_url=$2, is_email_verified=TRUE WHERE user_id=$3`,
+          [googleEmail, avatarUrl, rows[0].user_id]).catch(() => {})
+        pool.query('UPDATE user_profiles SET avatar_url=$1 WHERE user_id=$2', [avatarUrl, rows[0].user_id]).catch(() => {})
         return done(null, { ...rows[0], google_avatar_url: avatarUrl })
       }
 
@@ -89,9 +78,10 @@ passport.use(new GoogleStrategy(
         [googleEmail, googleId, googleEmail, avatarUrl]))
       const newUser = rows[0]
       await client.query(
-        'INSERT INTO user_profiles (user_id, display_name, avatar_url) VALUES ($1,$2,$3)',
-        [newUser.user_id, displayName, avatarUrl])
+        'INSERT INTO user_profiles (user_id, display_name) VALUES ($1,$2)',
+        [newUser.user_id, displayName])
       await client.query('COMMIT')
+      pool.query('UPDATE user_profiles SET avatar_url=$1 WHERE user_id=$2', [avatarUrl, newUser.user_id]).catch(() => {})
 
       pool.query(
         `INSERT INTO activity_logs (actor_id, actor_role, action, entity_type, entity_id, metadata)
@@ -113,13 +103,13 @@ passport.use(new GoogleStrategy(
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 router.get('/google',
-  passport.authenticate('google', { scope: ['profile', 'email'], prompt: 'select_account' })
+  passport.authenticate('google', { scope: ['profile', 'email'], prompt: 'select_account', session: false })
 )
 
 router.get('/google/callback',
   passport.authenticate('google', {
     failureRedirect: `${FRONTEND_URL}/?auth_error=google_failed`,
-    session: true,
+    session: false,
   }),
   async (req, res) => {
     try {
