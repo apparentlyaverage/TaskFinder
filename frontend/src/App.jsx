@@ -188,6 +188,23 @@ button:active { transform: scale(.97); }
   .topbar-post::before { content: '＋'; font-size: 1.05rem; }
 }
 
+/* ── Mobile layout fixes ──────────────────────────────────────────────────── */
+@media (max-width:768px) {
+  /* Unclassed inline grids (e.g. content + fixed sidebar) collapse to one column.
+     !important is required to beat the inline grid-template-columns. */
+  .stack-mobile { grid-template-columns: 1fr !important; }
+  /* The hero is full-height with a hidden visual column on phones — drop the
+     100vh so it doesn't leave a screen of empty space below the copy. */
+  .hero-section { min-height: auto !important; padding-top: 96px !important; padding-bottom: 48px !important; }
+  /* Messages: master-detail → one pane at a time on phones. Show the full-width
+     conversation list, and swap to the full-width thread once one is opened
+     (the in-thread ← button clears the selection to return to the list). */
+  .msg-shell .msg-list            { width: 100% !important; border-right: none !important; }
+  .msg-shell .msg-thread          { display: none !important; }
+  .msg-shell.has-active .msg-list { display: none !important; }
+  .msg-shell.has-active .msg-thread { display: flex !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
@@ -642,7 +659,7 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
   const [skills, setSkills]     = useState('')
   const [bio, setBio]           = useState('')
 
-  const CAMPUS_ZONES = ['Drostdy', 'Eden Grove', 'Botha House', 'Founders Hall', 'Kimberley Hall', 'Oriel', 'College', 'Off-campus (town)', 'Other']
+  const CAMPUS_ZONES = useLocations()
 
   // Reset to step 1 whenever the modal mode flips (login ⇄ register)
   useEffect(() => { setStep(1); setError('') }, [mode])
@@ -691,6 +708,7 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
             campusZone:  campus || null,
             skills:      skills || null,
             bio:         bio || null,
+            popiaConsent: consent,
           }
 
       const res  = await fetch(endpoint, {
@@ -952,7 +970,7 @@ function CampusStrip() {
 
 function Hero({ onOpenAuth }) {
   return (
-    <section style={{ minHeight:'100vh', display:'flex', alignItems:'center', padding:'110px 24px 72px', position:'relative', overflow:'hidden' }}>
+    <section className="hero-section" style={{ minHeight:'100vh', display:'flex', alignItems:'center', padding:'110px 24px 72px', position:'relative', overflow:'hidden' }}>
       <div style={{ position:'absolute', inset:0, zIndex:0, backgroundImage:'linear-gradient(rgba(33,28,46,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(33,28,46,.05) 1px,transparent 1px)', backgroundSize:'56px 56px' }} />
       <div style={{ position:'absolute', top:'15%', right:'8%', width:500, height:500, background:'radial-gradient(circle,rgba(91,33,182,.07) 0%,transparent 70%)', zIndex:0 }} />
       <div style={{ maxWidth:1200, margin:'0 auto', width:'100%', position:'relative', zIndex:1 }}>
@@ -1629,6 +1647,59 @@ function ReportPage({ onNav }) {
 }
 
 // ─── OAUTH CALLBACK PAGE ─────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONSENT GATE — blocks app use until POPIA consent is explicitly given.
+// Fires mainly for new Google users (OAuth can't capture consent at sign-in).
+// ═══════════════════════════════════════════════════════════════════════════════
+function ConsentGate({ onConsented, onDecline, onViewPrivacy }) {
+  const toast = useToast()
+  const [checked, setChecked] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  async function accept() {
+    if (!checked) { toast('Please tick the box to continue', 'error'); return }
+    setSaving(true)
+    try {
+      const res = await fetch('/auth/consent', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('rl_token')}` },
+      })
+      if (!res.ok) throw new Error('Could not record consent')
+      onConsented()
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(20,16,30,.72)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+      <div style={{ background:'var(--bg-surface)', borderRadius:'var(--radius-md)', maxWidth:460, width:'100%', padding:28, boxShadow:'0 20px 60px rgba(0,0,0,.3)' }}>
+        <div style={{ fontSize:'1.8rem', marginBottom:10 }}>🔒</div>
+        <h2 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.35rem', marginBottom:10 }}>One quick thing before you start</h2>
+        <p style={{ color:'var(--text-secondary)', lineHeight:1.6, fontSize:'.92rem', marginBottom:18 }}>
+          To use ReLivR we need your agreement to how we handle your personal information, in line with South Africa’s POPIA. We collect only what’s needed to run the marketplace, and never sell your data.
+        </p>
+        <label style={{ display:'flex', gap:10, alignItems:'flex-start', cursor:'pointer', marginBottom:20, padding:'12px 14px', background:'var(--bg-elevated)', borderRadius:'var(--radius-sm)', border:`1px solid ${checked?'var(--accent)':'var(--border)'}` }}>
+          <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} style={{ marginTop:3, width:16, height:16, cursor:'pointer', accentColor:'var(--accent)' }} />
+          <span style={{ fontSize:'.86rem', color:'var(--text-secondary)', lineHeight:1.5 }}>
+            I agree to ReLivR’s processing of my personal information and have read the{' '}
+            <button type="button" onClick={onViewPrivacy} style={{ background:'none', border:'none', color:'var(--accent)', cursor:'pointer', padding:0, fontSize:'.86rem', textDecoration:'underline' }}>Privacy Policy</button>.
+          </span>
+        </label>
+        <div style={{ display:'flex', gap:10 }}>
+          <Btn loading={saving} onClick={accept} style={{ flex:1 }}>Agree & continue</Btn>
+          <Btn variant="ghost" onClick={onDecline}>Cancel</Btn>
+        </div>
+        <p style={{ fontSize:'.72rem', color:'var(--text-muted)', marginTop:14, textAlign:'center' }}>
+          Declining will sign you out — we can’t create your account without this consent.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 // Google redirects back to http://localhost:3000/oauth-callback?token=xxx&...
 // Vite serves index.html, React reads the query params and completes login.
 
@@ -1735,7 +1806,7 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding }) {
         <Logo onClick={onViewLanding || onGoHome} />
 
         {/* Desktop nav links — hidden on narrow screens (bottom bar takes over there) */}
-        <nav className="topbar-nav" style={{ display:'flex', alignItems:'center', gap:2, marginLeft:6 }}>
+        <nav className="topbar-nav" style={{ alignItems:'center', gap:2, marginLeft:6 }}>
           <button onClick={onGoHome}
             style={{ padding:'7px 12px', borderRadius:9, border:'none', background:'transparent', color:'var(--text-secondary)', fontSize:'.875rem', fontWeight:600, fontFamily:'var(--font-body)', cursor:'pointer', transition:'all 120ms ease' }}
             onMouseEnter={e=>e.currentTarget.style.background='var(--bg-hover)'}
@@ -2309,7 +2380,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
         </div>
       )}
 
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 320px', gap:20 }}>
+      <div className="stack-mobile" style={{ display:'grid', gridTemplateColumns:'1fr 320px', gap:20 }}>
         <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
           <DCard hover={false}><Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:10 }}>Description</Mono><p style={{ color:'var(--text-secondary)', lineHeight:1.75 }}>{task.description}</p></DCard>
           <DCard hover={false}><Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:10 }}>Required Skills</Mono><div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>{task.skill_tags.map(t => <Tag key={t}>{t}</Tag>)}</div></DCard>
@@ -2905,10 +2976,10 @@ function Messages({ target, clearTarget }) {
     <div className="page-enter" style={{ maxWidth:900 }}>
       <PageTitle sub="Direct messages">Messages</PageTitle>
       {offline && <div style={{ background:'rgba(180,83,9,.08)', border:'1px solid rgba(180,83,9,.25)', borderRadius:8, padding:'8px 13px', marginBottom:14, fontSize:'.8rem', color:'var(--warning)' }}>Showing demo messages — start the backend to send real ones.</div>}
-      <DCard hover={false} className="msg-shell" style={{ display:'flex', height:580, padding:0, overflow:'hidden' }}>
+      <DCard hover={false} className={`msg-shell ${activeId ? 'has-active' : ''}`} style={{ display:'flex', height:580, padding:0, overflow:'hidden' }}>
 
         {/* Conversation list */}
-        <div style={{ width:220, borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', flexShrink:0 }}>
+        <div className="msg-list" style={{ width:220, borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', flexShrink:0 }}>
           <div style={{ padding:'12px 14px', borderBottom:'1px solid var(--border)' }}><Mono size="0.65rem">Conversations</Mono></div>
           <div style={{ flex:1, overflowY:'auto' }}>
             {loading && <div style={{ padding:20, textAlign:'center' }}><Spinner size={18} /></div>}
@@ -2936,7 +3007,7 @@ function Messages({ target, clearTarget }) {
         </div>
 
         {/* Active conversation */}
-        <div style={{ flex:1, display:'flex', flexDirection:'column' }}>
+        <div className="msg-thread" style={{ flex:1, display:'flex', flexDirection:'column' }}>
           {!activeId ? (
             <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center' }}>
               <EmptyState icon="◎" message="Select a conversation" />
@@ -2944,6 +3015,9 @@ function Messages({ target, clearTarget }) {
           ) : (
             <>
               <div style={{ padding:'12px 18px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:12, background:'var(--bg-elevated)' }}>
+                {/* Mobile-only: back to conversation list */}
+                <button className="show-m" onClick={() => setActiveId(null)} aria-label="Back to conversations"
+                  style={{ background:'none', border:'none', color:'var(--text-secondary)', fontSize:'1.2rem', cursor:'pointer', padding:0, marginRight:2, lineHeight:1 }}>←</button>
                 <div style={{ width:34, height:34, borderRadius:'50%', background:'var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'0.78rem', color:'var(--accent)', flexShrink:0 }}>{initials(activeThread?.display_name)}</div>
                 <div>
                   <div style={{ fontWeight:600, fontSize:'0.9rem' }}>{activeThread?.display_name || 'User'}</div>
@@ -3064,6 +3138,36 @@ const BIZ_CATEGORIES = [
   'Food & drink', 'Print & stationery', 'Books', 'Groceries', 'Health & beauty',
   'Clothing', 'Tech & repairs', 'Services', 'Entertainment', 'Other',
 ]
+
+// Campus zones — MUST stay identical to the server whitelist in auth.js / profile.js,
+// or valid signups get rejected. Single source of truth for the dropdown.
+// Fallback list — used only if GET /locations is unreachable (TD-11). The live
+// source of truth is the data-driven `locations` table, so adding a campus is a
+// DB insert, not a frontend deploy.
+const CAMPUS_ZONE_LIST = [
+  'West Campus', 'East Campus', 'Drostdy', 'Allan Webb', 'Founders',
+  'Goldfields', 'Hobson', 'Kimberley', 'Botha', 'Dingane',
+  'Adamson', 'Cory', 'Jan Smuts', 'Oriel', 'Prince Alfred',
+  'Off-campus / Town', 'Other',
+]
+
+// Fetch the campus/zone picker options from the backend, flattened to names.
+// Falls back to CAMPUS_ZONE_LIST so signup still works fully offline.
+function useLocations() {
+  const [zones, setZones] = useState(CAMPUS_ZONE_LIST)
+  useEffect(() => {
+    let alive = true
+    fetch('/locations')
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error('locations fetch failed'))))
+      .then(data => {
+        const names = (data.campuses || []).flatMap(c => (c.zones || []).map(z => z.name))
+        if (alive && names.length) setZones(names)
+      })
+      .catch(() => { /* keep the fallback list */ })
+    return () => { alive = false }
+  }, [])
+  return zones
+}
 
 // Small image gallery used on business cards/detail
 function BizGallery({ images = [], height = 160 }) {
@@ -3361,7 +3465,7 @@ function BusinessForm({ business, onDone, onCancel }) {
 // Trust/verification badge definitions — rendered on public profiles
 const BADGE_DEFS = {
   ru_student:    { icon:'🎓', label:'Rhodes student',  color:'#5b21b6', desc:'Verified @ru.ac.za email' },
-  email_verified:{ icon:'✓',  label:'Verified',        color:'#15803d', desc:'Email address confirmed' },
+  email_verified:{ icon:'✓',  label:'Verified',        color:'#15803d', desc:'Email verified via Google' },
   google_linked: { icon:'🔗', label:'Google-linked',   color:'#1d4ed8', desc:'Signed in with Google' },
   top_rated:     { icon:'⭐', label:'Top rated',        color:'#d97706', desc:'4.5+ stars across 5+ reviews' },
   established:   { icon:'🏅', label:'Established',      color:'#b45309', desc:'10+ tasks completed' },
@@ -3876,7 +3980,7 @@ function AdminDisputeDetail({ disputeId, setPage }) {
         </div>
         <div style={{ textAlign:'right' }}><div style={{ fontFamily:'var(--font-mono)', fontSize:'1.5rem', color:'var(--accent)', fontWeight:500 }}>R{(dispute.amount_cents/100).toFixed(0)}</div><Mono>{isResolved?'resolved':'held in escrow'}</Mono></div>
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 300px', gap:20 }}>
+      <div className="stack-mobile" style={{ display:'grid', gridTemplateColumns:'1fr 300px', gap:20 }}>
         <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
           <DCard hover={false}><Mono size="0.68rem" color="var(--danger)" style={{ display:'block', marginBottom:10 }}>Dispute Reason</Mono><p style={{ color:'var(--text-secondary)', lineHeight:1.75 }}>{dispute.reason}</p></DCard>
           <DCard hover={false}>
@@ -4179,6 +4283,7 @@ export default function App() {
             displayName: u.display_name || u.email?.split('@')[0] || 'User',
             avatarUrl:   u.avatar_url   || u.google_avatar_url || null,
             provider:    u.google_id ? 'google' : 'email',
+            popia_consent: u.popia_consent !== false,   // gate shows only when explicitly false
           })
           // The URL (parsed at startup) already determines the view — leave it.
           // If they deep-linked to a dashboard page, they stay there.
@@ -4252,11 +4357,13 @@ export default function App() {
       const role        = params.get('role')
       const displayName = params.get('displayName') || email?.split('@')[0] || 'User'
       const avatarUrl   = params.get('avatarUrl') || null
+      const needsConsent = params.get('needsConsent') === '1'
 
       if (!token || !userId) return false
 
       localStorage.setItem('rl_token', token)
-      saveUser({ userId, email, role, displayName, avatarUrl, provider: 'google' })
+      saveUser({ userId, email, role, displayName, avatarUrl, provider: 'google',
+                 popia_consent: !needsConsent })
       setView('dashboard')
       setDashPage('tasks-browse')
       setAuthModal(null)
@@ -4429,6 +4536,16 @@ export default function App() {
                 {renderDashPage()}
               </main>
             </div>
+          )}
+
+          {/* POPIA consent gate — blocks the app until consent is explicitly given
+              (chiefly the Google path, which can't capture consent at OAuth) */}
+          {user && user.popia_consent === false && (
+            <ConsentGate
+              onConsented={() => setUser(u => ({ ...u, popia_consent: true }))}
+              onDecline={logout}
+              onViewPrivacy={() => navigate('privacy')}
+            />
           )}
 
           {/* ── AUTH MODAL (accessible from any view) ────────── */}
