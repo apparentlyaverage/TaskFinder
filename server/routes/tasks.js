@@ -7,6 +7,7 @@
 import { Router } from 'express'
 import { body, param, validationResult } from 'express-validator'
 import { pool } from '../db.js'
+import log from '../log.js'
 import { createNotification } from '../notify.js'
 import { requireAuth } from '../middleware.js'
 
@@ -43,7 +44,7 @@ router.post('/',
       )
       return res.status(201).json({ task: rows[0] })
     } catch (err) {
-      console.error('[POST /tasks]', err.message)
+      log.error('POST /tasks', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     }
   }
@@ -72,7 +73,7 @@ router.get('/', async (req, res) => {
     const { rows } = await pool.query(query, params)
     return res.status(200).json({ tasks: rows })
   } catch (err) {
-    console.error('[GET /tasks]', err.message)
+    log.error('GET /tasks', { reqId: req.id, msg: err.message })
     return res.status(500).json({ message: 'Internal server error.' })
   }
 })
@@ -86,7 +87,7 @@ router.get('/mine', requireAuth, async (req, res) => {
     )
     return res.status(200).json({ tasks: rows })
   } catch (err) {
-    console.error('[GET /tasks/mine]', err.message)
+    log.error('GET /tasks/mine', { reqId: req.id, msg: err.message })
     return res.status(500).json({ message: 'Internal server error.' })
   }
 })
@@ -105,7 +106,7 @@ router.get('/bids/mine', requireAuth, async (req, res) => {
     )
     return res.status(200).json({ bids: rows })
   } catch (err) {
-    console.error('[GET /tasks/bids/mine]', err.message)
+    log.error('GET /tasks/bids/mine', { reqId: req.id, msg: err.message })
     return res.status(500).json({ message: 'Internal server error.' })
   }
 })
@@ -127,7 +128,7 @@ router.patch('/bids/:bidId/withdraw',
       if (rows.length === 0) return res.status(404).json({ message: 'Bid not found or not withdrawable.' })
       return res.status(200).json({ bid: rows[0] })
     } catch (err) {
-      console.error('[withdraw bid]', err.message)
+      log.error('withdraw bid', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     }
   }
@@ -148,7 +149,7 @@ router.get('/:taskId', [param('taskId').isUUID()], check, async (req, res) => {
        WHERE b.task_id = $1 ORDER BY b.amount ASC`, [taskId])
     return res.status(200).json({ task: taskResult.rows[0], bids: bidsResult.rows })
   } catch (err) {
-    console.error('[GET /tasks/:taskId]', err.message)
+    log.error('GET /tasks/:taskId', { reqId: req.id, msg: err.message })
     return res.status(500).json({ message: 'Internal server error.' })
   }
 })
@@ -186,7 +187,7 @@ router.post('/:taskId/bids',
       return res.status(201).json({ bid: rows[0] })
     } catch (err) {
       if (err.code === '23505') return res.status(409).json({ message: 'You have already bid on this task.' })
-      console.error('[POST bids]', err.message)
+      log.error('POST bids', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     }
   }
@@ -234,7 +235,7 @@ router.patch('/:taskId/bids/:bidId/accept',
       return res.status(200).json({ message: 'Bid accepted.', assignedTo: winningBid.bidder_id })
     } catch (err) {
       await client.query('ROLLBACK')
-      console.error('[accept bid]', err.message)
+      log.error('accept bid', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     } finally {
       client.release()
@@ -273,7 +274,7 @@ router.patch('/:taskId/complete',
       }
       return res.status(200).json({ task })
     } catch (err) {
-      console.error('[complete task]', err.message)
+      log.error('complete task', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     }
   }

@@ -2,6 +2,7 @@
 import { Router } from 'express'
 import { body, param, validationResult } from 'express-validator'
 import { pool } from '../db.js'
+import log from '../log.js'
 import { createNotification } from '../notify.js'
 import { requireAuth } from '../middleware.js'
 
@@ -25,7 +26,12 @@ async function recalculateRating(client, userId) {
 // POST /reviews
 router.post('/',
   requireAuth,
-  [body('task_id').isUUID(), body('rating').isInt({ min: 1, max: 5 }), body('comment').optional().trim()],
+  [
+    body('task_id').isUUID(),
+    body('rating').isInt({ min: 1, max: 5 }),
+    body('comment').optional().trim().isLength({ max: 2000 })
+      .withMessage('Comment must be 2000 characters or fewer.'),
+  ],
   check,
   async (req, res) => {
     const { task_id, rating, comment = null } = req.body
@@ -50,6 +56,11 @@ router.post('/',
         await client.query('ROLLBACK')
         return res.status(403).json({ message: 'You were not a participant in this task.' })
       }
+      // Guard against self-review (e.g. a task whose creator is also the assignee).
+      if (!revieweeId || revieweeId === req.userId) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ message: 'You cannot review yourself.' })
+      }
       const { rows } = await client.query(
         'INSERT INTO reviews (task_id, reviewer_id, reviewee_id, rating, comment, role) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
         [task_id, req.userId, revieweeId, rating, comment, role])
@@ -68,7 +79,7 @@ router.post('/',
     } catch (err) {
       await client.query('ROLLBACK')
       if (err.code === '23505') return res.status(409).json({ message: 'You already reviewed this task.' })
-      console.error('[POST /reviews]', err.message)
+      log.error('POST /reviews', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     } finally {
       client.release()
@@ -91,7 +102,7 @@ router.get('/user/:userId', [param('userId').isUUID()], check, async (req, res) 
     ])
     return res.status(200).json({ summary: summary.rows[0], reviews: reviews.rows })
   } catch (err) {
-    console.error('[GET /reviews/user]', err.message)
+    log.error('GET /reviews/user', { reqId: req.id, msg: err.message })
     return res.status(500).json({ message: 'Internal server error.' })
   }
 })

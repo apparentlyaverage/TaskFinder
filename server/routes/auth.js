@@ -6,14 +6,41 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { body, validationResult } from 'express-validator'
 import { pool } from '../db.js'
+import { requireAuth } from '../middleware.js'
+import { validateLocationName, resolveLocationId } from '../locationValidate.js'
+import log from '../log.js'
 
 const router = Router()
 const SALT_ROUNDS  = 12
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'
 
+// Current POPIA consent version — bump when the privacy policy materially changes,
+// so we can tell exactly who consented to which version.
+const POPIA_CONSENT_VERSION = '2026-06-v1'
+
+// Capture the real client IP behind the proxy (Railway/Vercel set x-forwarded-for)
+function clientIp(req) {
+  const fwd = req.headers['x-forwarded-for']
+  if (fwd) return String(fwd).split(',')[0].trim()
+  return req.ip || req.socket?.remoteAddress || null
+}
+
+// Campus/zone is validated against the data-driven `locations` table via
+// isValidLocationName — constrained (no junk) but extensible to new campuses
+// without a code change. See server/locationValidate.js.
+
+// Normalise a SA-style phone to digits (+ optional leading +). Returns null if junk.
+function normalizePhone(raw) {
+  if (raw === undefined || raw === null || String(raw).trim() === '') return null
+  const cleaned = String(raw).replace(/[^\d+]/g, '')
+  const digits = cleaned.replace(/\D/g, '')
+  if (digits.length < 9 || digits.length > 15) throw new Error('Please enter a valid phone number.')
+  return cleaned.startsWith('+') ? cleaned : digits
+}
+
 function issueToken(user) {
   return jwt.sign(
-    { userId: user.user_id, role: user.role, email: user.email },
+    { userId: user.user_id, role: user.role, email: user.email, tv: user.token_version ?? 0 },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   )
@@ -69,11 +96,14 @@ passport.use(new GoogleStrategy(
         return done(null, { ...rows[0], google_avatar_url: avatarUrl })
       }
 
-      // 3. Brand new user
+      // 3. Brand new user — Google verifies the email (is_email_verified=TRUE is
+      //    legitimate), but Google does NOT capture POPIA consent on our behalf.
+      //    So consent starts FALSE and the user is prompted for REAL consent
+      //    (interstitial) before they can use the app. Never fabricate consent.
       ;({ rows } = await client.query(
         `INSERT INTO users (email, role, google_id, google_email, google_avatar_url,
            is_email_verified, popia_consent, popia_consent_at)
-         VALUES ($1, 'member', $2, $3, $4, TRUE, TRUE, NOW())
+         VALUES ($1, 'member', $2, $3, $4, TRUE, FALSE, NULL)
          RETURNING user_id, email, role`,
         [googleEmail, googleId, googleEmail, avatarUrl]))
       const newUser = rows[0]
@@ -92,7 +122,7 @@ passport.use(new GoogleStrategy(
       return done(null, { ...newUser, display_name: displayName, avatar_url: avatarUrl, google_avatar_url: avatarUrl })
     } catch (err) {
       await client.query('ROLLBACK')
-      console.error('[google strategy]', err.message)
+      log.error('auth.google_strategy_failed', { msg: err.message })
       return done(err)
     } finally {
       client.release()
@@ -114,11 +144,19 @@ router.get('/google/callback',
   async (req, res) => {
     try {
       const user  = req.user
+      // Pull the current token_version so a Google sign-in after a prior logout
+      // (which bumps it) isn't issued an already-revoked token. New users → 0.
+      const tvRow = await pool.query('SELECT token_version FROM users WHERE user_id = $1', [user.user_id])
+      user.token_version = tvRow.rows[0]?.token_version ?? 0
       const token = issueToken(user)
       const { rows } = await pool.query(
         'SELECT display_name, avatar_url FROM user_profiles WHERE user_id = $1', [user.user_id])
       const displayName = rows[0]?.display_name || user.display_name || user.email?.split('@')[0] || 'User'
       const avatarUrl   = rows[0]?.avatar_url   || user.google_avatar_url || ''
+
+      // Does this user still need to give POPIA consent? (new Google users do)
+      const consentRow = await pool.query('SELECT popia_consent FROM users WHERE user_id = $1', [user.user_id])
+      const needsConsent = consentRow.rows[0]?.popia_consent === false
 
       pool.query(
         `INSERT INTO activity_logs (actor_id, actor_role, action, entity_type, entity_id, metadata)
@@ -128,10 +166,11 @@ router.get('/google/callback',
 
       const params = new URLSearchParams({
         token, userId: user.user_id, email: user.email, role: user.role, displayName, avatarUrl,
+        needsConsent: needsConsent ? '1' : '0',
       })
       res.redirect(`${FRONTEND_URL}/oauth-callback?${params.toString()}`)
     } catch (err) {
-      console.error('[google callback]', err.message)
+      log.error('auth.google_callback_failed', { reqId: req.id, msg: err.message })
       res.redirect(`${FRONTEND_URL}/?auth_error=callback_failed`)
     }
   }
@@ -142,14 +181,21 @@ router.post('/register',
     body('email').isEmail().normalizeEmail(),
     body('password').isLength({ min: 8 }),
     body('role').optional().isIn(['member']),
-    body('displayName').optional().trim(),
-    body('phoneNumber').optional({ nullable: true }).trim().isLength({ max: 20 }),
-    body('campusZone').optional({ nullable: true }).trim().isLength({ max: 100 }),
+    body('displayName').optional().trim().isLength({ max: 100 }),
+    body('phoneNumber').optional({ nullable: true }).trim().isLength({ max: 25 }),
+    body('campusZone').optional({ nullable: true }).trim().custom(validateLocationName),
     body('bio').optional({ nullable: true }).trim().isLength({ max: 1000 }),
+    body('popiaConsent').custom(v => v === true || v === 'true')
+      .withMessage('You must accept the privacy policy to register.'),
   ],
   check,
   async (req, res) => {
-    const { email, password, role = 'member', displayName, phoneNumber, campusZone, bio } = req.body
+    const { email, password, role = 'member', displayName, campusZone, bio } = req.body
+
+    // Validate + normalise the phone (throws → caught below as 422)
+    let phoneNumber
+    try { phoneNumber = normalizePhone(req.body.phoneNumber) }
+    catch (e) { return res.status(422).json({ message: e.message }) }
 
     // Skills may arrive as array or comma-string — normalise to a Postgres array
     let skills = null
@@ -169,15 +215,17 @@ router.post('/register',
       }
       const hash = await bcrypt.hash(password, SALT_ROUNDS)
       const { rows } = await client.query(
-        `INSERT INTO users (email, password_hash, role, phone_number, popia_consent, popia_consent_at, popia_consent_ip)
-         VALUES ($1, $2, $3, $4, TRUE, NOW(), $5)
+        `INSERT INTO users (email, password_hash, role, phone_number,
+           popia_consent, popia_consent_at, popia_consent_ip, popia_consent_version)
+         VALUES ($1, $2, $3, $4, TRUE, NOW(), $5, $6)
          RETURNING user_id, email, role`,
-        [email, hash, role, phoneNumber || null, req.ip])
+        [email, hash, role, phoneNumber || null, clientIp(req), POPIA_CONSENT_VERSION])
       const newUser = rows[0]
+      const locationId = await resolveLocationId(campusZone)   // best-effort FK (TD-12)
       await client.query(
-        `INSERT INTO user_profiles (user_id, display_name, campus_zone, skills, bio)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [newUser.user_id, displayName || email.split('@')[0], campusZone || null, skills, bio || null])
+        `INSERT INTO user_profiles (user_id, display_name, campus_zone, location_id, skills, bio)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [newUser.user_id, displayName || email.split('@')[0], campusZone || null, locationId, skills, bio || null])
       await client.query('COMMIT')
 
       pool.query(
@@ -193,7 +241,7 @@ router.post('/register',
       })
     } catch (err) {
       await client.query('ROLLBACK')
-      console.error('[register]', err.message)
+      log.error('auth.register_failed', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     } finally {
       client.release()
@@ -208,7 +256,7 @@ router.post('/login',
     const { email, password } = req.body
     try {
       const { rows } = await pool.query(
-        `SELECT u.user_id, u.email, u.role, u.password_hash, up.display_name, up.avatar_url
+        `SELECT u.user_id, u.email, u.role, u.password_hash, u.token_version, up.display_name, up.avatar_url
          FROM users u LEFT JOIN user_profiles up ON u.user_id = up.user_id
          WHERE u.email = $1`, [email])
       if (rows.length === 0) return res.status(401).json({ message: 'Invalid credentials.' })
@@ -232,7 +280,7 @@ router.post('/login',
                 avatarUrl: user.avatar_url || null },
       })
     } catch (err) {
-      console.error('[login]', err.message)
+      log.error('auth.login_failed', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     }
   }
@@ -247,19 +295,72 @@ router.get('/me', async (req, res) => {
     const payload = jwt.verify(token, process.env.JWT_SECRET)
     const { rows } = await pool.query(
       `SELECT u.user_id, u.email, u.role, u.google_id, u.google_avatar_url,
+              u.popia_consent, u.token_version,
               up.display_name, up.avg_rating, up.avatar_url, up.skills, up.bio
        FROM users u LEFT JOIN user_profiles up ON u.user_id = up.user_id
        WHERE u.user_id = $1`, [payload.userId])
     if (rows.length === 0) return res.status(404).json({ message: 'User not found.' })
-    return res.status(200).json({ user: rows[0] })
+    if (rows[0].token_version !== (payload.tv ?? 0)) {
+      return res.status(401).json({ message: 'Session expired. Please sign in again.' })
+    }
+    const { token_version, ...safeUser } = rows[0]
+    return res.status(200).json({ user: safeUser })
   } catch {
     return res.status(401).json({ message: 'Invalid or expired token.' })
   }
 })
 
-router.post('/logout', (req, res) => {
-  req.logout?.(() => {})
-  req.session?.destroy?.(() => {})
+// POST /auth/consent — record a REAL, explicit POPIA consent action.
+// Used by the consent interstitial (chiefly the Google path, which can't
+// capture consent at the OAuth step). Writes timestamp, IP, and version,
+// and drops an append-only audit event into activity_logs.
+router.post('/consent', requireAuth, async (req, res) => {
+  try {
+    const ip = clientIp(req)
+    const { rows } = await pool.query(
+      `UPDATE users
+          SET popia_consent = TRUE,
+              popia_consent_at = NOW(),
+              popia_consent_ip = $2,
+              popia_consent_version = $3
+        WHERE user_id = $1
+        RETURNING user_id`,
+      [req.userId, ip, POPIA_CONSENT_VERSION])
+    if (rows.length === 0) return res.status(404).json({ message: 'User not found.' })
+
+    // Append-only audit trail — never overwrites the original consent row
+    pool.query(
+      `INSERT INTO activity_logs (actor_id, actor_role, action, entity_type, entity_id, metadata)
+       VALUES ($1, $2, 'popia.consent.granted', 'user', $1, $3)`,
+      [req.userId, req.userRole, JSON.stringify({ version: POPIA_CONSENT_VERSION, ip })]
+    ).catch(() => {})
+
+    return res.status(200).json({ message: 'Consent recorded.', version: POPIA_CONSENT_VERSION })
+  } catch (err) {
+    log.error('auth.consent_failed', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
+
+// Logout actually REVOKES the session now (TD-5): bumping token_version
+// invalidates every JWT previously issued to this user. Best-effort + always
+// 200 — the client clears its token regardless, and a missing/invalid token
+// just means there's nothing to revoke.
+router.post('/logout', async (req, res) => {
+  const header = req.headers.authorization || ''
+  const token  = header.startsWith('Bearer ') ? header.slice(7) : null
+  if (token) {
+    try {
+      const payload = jwt.verify(token, process.env.JWT_SECRET)
+      await pool.query('UPDATE users SET token_version = token_version + 1 WHERE user_id = $1', [payload.userId])
+      pool.query(
+        `INSERT INTO activity_logs (actor_id, actor_role, action, entity_type, entity_id, metadata)
+         VALUES ($1, $2, 'user.logout', 'user', $1, '{}'::jsonb)`,
+        [payload.userId, payload.role]).catch(() => {})
+    } catch (err) {
+      log.warn('auth.logout_revoke_skipped', { reqId: req.id, msg: err.message })
+    }
+  }
   res.status(200).json({ message: 'Logged out.' })
 })
 

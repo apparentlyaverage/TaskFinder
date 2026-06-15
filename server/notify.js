@@ -3,6 +3,7 @@
 // action that triggers a notification. Failures are non-fatal — a missed
 // notification must never break the main transaction.
 import { pool } from './db.js'
+import log from './log.js'
 
 export async function createNotification({ userId, type, title, body, referenceId = null }) {
   try {
@@ -11,6 +12,6 @@ export async function createNotification({ userId, type, title, body, referenceI
       [userId, type, title, body, referenceId]
     )
   } catch (err) {
-    console.error('[notify]', err.message)
+    log.error('notify.create_failed', { msg: err.message })
   }
 }

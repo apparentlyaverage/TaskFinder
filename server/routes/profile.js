@@ -6,6 +6,8 @@ import bcrypt from 'bcryptjs'
 import { body, param, validationResult } from 'express-validator'
 import { pool } from '../db.js'
 import { requireAuth } from '../middleware.js'
+import { validateLocationName, resolveLocationId } from '../locationValidate.js'
+import log from '../log.js'
 
 const router = Router()
 const SALT_ROUNDS = 12
@@ -14,6 +16,14 @@ function check(req, res, next) {
   const errors = validationResult(req)
   if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() })
   next()
+}
+
+function normalizePhone(raw) {
+  if (raw === undefined || raw === null || String(raw).trim() === '') return null
+  const cleaned = String(raw).replace(/[^\d+]/g, '')
+  const digits = cleaned.replace(/\D/g, '')
+  if (digits.length < 9 || digits.length > 15) throw new Error('Please enter a valid phone number.')
+  return cleaned.startsWith('+') ? cleaned : digits
 }
 
 // GET /profile — full profile of the logged-in user
@@ -40,7 +50,7 @@ router.get('/', requireAuth, async (req, res) => {
     }
     return res.status(200).json({ profile: rows[0] })
   } catch (err) {
-    console.error('[GET /profile]', err.message)
+    log.error('profile.get_failed', { reqId: req.id, msg: err.message })
     return res.status(500).json({ message: 'Internal server error.' })
   }
 })
@@ -51,11 +61,29 @@ router.get('/', requireAuth, async (req, res) => {
 router.patch('/',
   requireAuth,
   [
-    body('displayName').optional({ nullable: true }).trim().isLength({ max: 100 }),
+    body('displayName').optional({ nullable: true }).trim().isLength({ min: 1, max: 100 })
+      .withMessage('Display name can’t be empty.'),
     body('bio').optional({ nullable: true }).trim().isLength({ max: 1000 }),
-    body('portfolioUrl').optional({ nullable: true }).trim().isLength({ max: 500 }),
-    body('campusZone').optional({ nullable: true }).trim().isLength({ max: 100 }),
-    body('phoneNumber').optional({ nullable: true }).trim().isLength({ max: 20 }),
+    body('portfolioUrl').optional({ nullable: true }).trim()
+      .custom((value) => {
+        // Empty is allowed (clears the field)
+        if (value === '' || value === null || value === undefined) return true
+        if (value.length > 500) throw new Error('Portfolio URL is too long.')
+        // Block dangerous schemes outright (stored-XSS: javascript:, data:, etc.)
+        if (/^\s*(javascript|data|vbscript|file):/i.test(value)) {
+          throw new Error('That link type isn’t allowed.')
+        }
+        // Accept with or without scheme; prepend https:// to test the rest
+        const candidate = /^https?:\/\//i.test(value) ? value : `https://${value}`
+        let parsed
+        try { parsed = new URL(candidate) } catch { throw new Error('That doesn’t look like a valid link.') }
+        if (!parsed.hostname || !parsed.hostname.includes('.')) {
+          throw new Error('Please enter a complete website address (e.g. behance.net/you).')
+        }
+        return true
+      }),
+    body('campusZone').optional({ nullable: true }).trim().custom(validateLocationName),
+    body('phoneNumber').optional({ nullable: true }).trim().isLength({ max: 25 }),
     body('headline').optional({ nullable: true }).trim().isLength({ max: 120 }),
     body('servicesOffered').optional({ nullable: true }).trim().isLength({ max: 1500 }),
     body('pinnedTaskIds').optional({ nullable: true }).isArray({ max: 6 }),
@@ -65,6 +93,14 @@ router.patch('/',
   async (req, res) => {
     const { displayName, bio, portfolioUrl, campusZone, phoneNumber,
             headline, servicesOffered, pinnedTaskIds, featuredReviewId } = req.body
+
+    // Normalise the portfolio URL: ensure a scheme so it's a working link when rendered
+    let normalizedPortfolio = portfolioUrl
+    if (typeof portfolioUrl === 'string' && portfolioUrl.trim() !== '') {
+      normalizedPortfolio = /^https?:\/\//i.test(portfolioUrl.trim())
+        ? portfolioUrl.trim()
+        : `https://${portfolioUrl.trim()}`
+    }
 
     // Skills can arrive as an array or a comma-separated string — normalise to array
     let skills
@@ -85,8 +121,12 @@ router.patch('/',
       if (displayName     !== undefined) { sets.push(`display_name = $${i++}`);    vals.push(displayName) }
       if (bio             !== undefined) { sets.push(`bio = $${i++}`);             vals.push(bio) }
       if (skills          !== undefined) { sets.push(`skills = $${i++}`);          vals.push(skills) }
-      if (portfolioUrl    !== undefined) { sets.push(`portfolio_url = $${i++}`);   vals.push(portfolioUrl) }
-      if (campusZone      !== undefined) { sets.push(`campus_zone = $${i++}`);     vals.push(campusZone) }
+      if (portfolioUrl    !== undefined) { sets.push(`portfolio_url = $${i++}`);   vals.push(normalizedPortfolio) }
+      if (campusZone      !== undefined) {
+        sets.push(`campus_zone = $${i++}`); vals.push(campusZone)
+        // Keep the optional location_id FK in sync with the chosen name (TD-12)
+        sets.push(`location_id = $${i++}`); vals.push(await resolveLocationId(campusZone))
+      }
       if (headline        !== undefined) { sets.push(`headline = $${i++}`);        vals.push(headline) }
       if (servicesOffered !== undefined) { sets.push(`services_offered = $${i++}`); vals.push(servicesOffered) }
       if (pinnedTaskIds   !== undefined) { sets.push(`pinned_task_ids = $${i++}`); vals.push(pinnedTaskIds) }
@@ -101,9 +141,12 @@ router.patch('/',
         )
       }
 
-      // phone_number lives on the users table (best-effort — column may be absent)
+      // phone_number lives on the users table — normalise/validate before storing
       if (phoneNumber !== undefined) {
-        await client.query('UPDATE users SET phone_number = $1 WHERE user_id = $2', [phoneNumber, req.userId])
+        let normPhone
+        try { normPhone = normalizePhone(phoneNumber) }
+        catch (e) { await client.query('ROLLBACK'); return res.status(422).json({ message: e.message }) }
+        await client.query('UPDATE users SET phone_number = $1 WHERE user_id = $2', [normPhone, req.userId])
           .catch(() => {})
       }
 
@@ -122,7 +165,7 @@ router.patch('/',
       return res.status(200).json({ profile: rows[0], message: 'Profile updated.' })
     } catch (err) {
       await client.query('ROLLBACK')
-      console.error('[PATCH /profile]', err.message)
+      log.error('profile.update_failed', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     } finally {
       client.release()
@@ -159,13 +202,16 @@ router.patch('/password',
       if (!ok) return res.status(401).json({ message: 'Current password is incorrect.' })
 
       const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS)
+      // Bump token_version so every existing session is invalidated after a
+      // password change (TD-5) — the user re-authenticates with the new password.
       await pool.query(
-        'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE user_id = $2',
+        'UPDATE users SET password_hash = $1, token_version = token_version + 1, updated_at = NOW() WHERE user_id = $2',
         [newHash, req.userId]
       )
-      return res.status(200).json({ message: 'Password changed successfully.' })
+      log.info('auth.password_changed', { reqId: req.id, userId: req.userId })
+      return res.status(200).json({ message: 'Password changed successfully. Please sign in again.' })
     } catch (err) {
-      console.error('[PATCH /profile/password]', err.message)
+      log.error('profile.password_change_failed', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     }
   }
@@ -241,11 +287,15 @@ router.get('/public/:userId',
         ? Math.round((s.replied_senders / s.inbound_senders) * 100) : null
 
       const prof = profile.rows[0]
-      // Verification badges the UI can render
+      // Verification badges the UI can render.
+      // NOTE: a generic "email confirmed" badge is only honest when the address was
+      // actually proven. Today that's true for Google accounts (Google verifies the
+      // email) and RU students (domain-trusted). Email/password addresses are NOT
+      // round-trip verified yet, so they don't earn a generic "Verified" badge —
+      // we don't show trust signals we haven't earned.
       const badges = []
-      if (prof.is_email_verified) badges.push('email_verified')
       if (prof.is_ru_student)     badges.push('ru_student')
-      if (prof.google_id)         badges.push('google_linked')
+      if (prof.google_id)         badges.push('email_verified', 'google_linked')
       if (s.tasks_completed >= 10) badges.push('established')           // 10+ completed
       if (prof.rating_count >= 5 && Number(prof.avg_rating) >= 4.5) badges.push('top_rated')
 
@@ -268,7 +318,7 @@ router.get('/public/:userId',
         reviews:   reviews.rows,
       })
     } catch (err) {
-      console.error('[GET /profile/public]', err.message)
+      log.error('profile.public_get_failed', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     }
   }
