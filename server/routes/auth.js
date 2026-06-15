@@ -73,7 +73,7 @@ passport.use(new GoogleStrategy(
       ;({ rows } = await client.query(
         `INSERT INTO users (email, role, google_id, google_email, google_avatar_url,
            is_email_verified, popia_consent, popia_consent_at)
-         VALUES ($1, 'earner', $2, $3, $4, TRUE, TRUE, NOW())
+         VALUES ($1, 'member', $2, $3, $4, TRUE, TRUE, NOW())
          RETURNING user_id, email, role`,
         [googleEmail, googleId, googleEmail, avatarUrl]))
       const newUser = rows[0]
@@ -85,7 +85,7 @@ passport.use(new GoogleStrategy(
 
       pool.query(
         `INSERT INTO activity_logs (actor_id, actor_role, action, entity_type, entity_id, metadata)
-         VALUES ($1, 'earner', 'user.registered', 'user', $1, $2)`,
+         VALUES ($1, 'member', 'user.registered', 'user', $1, $2)`,
         [newUser.user_id, JSON.stringify({ provider: 'google', email: googleEmail })]
       ).catch(() => {})
 
@@ -141,12 +141,24 @@ router.post('/register',
   [
     body('email').isEmail().normalizeEmail(),
     body('password').isLength({ min: 8 }),
-    body('role').optional().isIn(['creator', 'earner']),
+    body('role').optional().isIn(['member']),
     body('displayName').optional().trim(),
+    body('phoneNumber').optional({ nullable: true }).trim().isLength({ max: 20 }),
+    body('campusZone').optional({ nullable: true }).trim().isLength({ max: 100 }),
+    body('bio').optional({ nullable: true }).trim().isLength({ max: 1000 }),
   ],
   check,
   async (req, res) => {
-    const { email, password, role = 'earner', displayName } = req.body
+    const { email, password, role = 'member', displayName, phoneNumber, campusZone, bio } = req.body
+
+    // Skills may arrive as array or comma-string — normalise to a Postgres array
+    let skills = null
+    if (req.body.skills !== undefined && req.body.skills !== null) {
+      skills = Array.isArray(req.body.skills)
+        ? req.body.skills
+        : String(req.body.skills).split(',').map(s => s.trim()).filter(Boolean)
+    }
+
     const client = await pool.connect()
     try {
       await client.query('BEGIN')
@@ -157,14 +169,15 @@ router.post('/register',
       }
       const hash = await bcrypt.hash(password, SALT_ROUNDS)
       const { rows } = await client.query(
-        `INSERT INTO users (email, password_hash, role, popia_consent, popia_consent_at, popia_consent_ip)
-         VALUES ($1, $2, $3, TRUE, NOW(), $4)
+        `INSERT INTO users (email, password_hash, role, phone_number, popia_consent, popia_consent_at, popia_consent_ip)
+         VALUES ($1, $2, $3, $4, TRUE, NOW(), $5)
          RETURNING user_id, email, role`,
-        [email, hash, role, req.ip])
+        [email, hash, role, phoneNumber || null, req.ip])
       const newUser = rows[0]
       await client.query(
-        'INSERT INTO user_profiles (user_id, display_name) VALUES ($1, $2)',
-        [newUser.user_id, displayName || email.split('@')[0]])
+        `INSERT INTO user_profiles (user_id, display_name, campus_zone, skills, bio)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [newUser.user_id, displayName || email.split('@')[0], campusZone || null, skills, bio || null])
       await client.query('COMMIT')
 
       pool.query(

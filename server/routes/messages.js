@@ -75,10 +75,11 @@ router.get('/messages/:userId',
          ORDER BY created_at DESC LIMIT $3`,
         [req.userId, them, limit]
       )
-      await pool.query(
+      // Mark their messages read — best-effort, must not break the load
+      pool.query(
         'UPDATE messages SET is_read=TRUE, read_at=NOW() WHERE receiver_id=$1 AND sender_id=$2 AND is_read=FALSE',
         [req.userId, them]
-      )
+      ).catch(() => {})
       return res.status(200).json({ messages: rows.reverse() })
     } catch (err) {
       console.error('[GET /messages/:userId]', err.message)

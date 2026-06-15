@@ -15,6 +15,7 @@ export default defineConfig({
       '/notifications': { target: 'http://localhost:3001', changeOrigin: true },
       '/reviews':       { target: 'http://localhost:3001', changeOrigin: true },
       '/profile':       { target: 'http://localhost:3001', changeOrigin: true },
+      '/businesses':    { target: 'http://localhost:3001', changeOrigin: true },
       '/health':        { target: 'http://localhost:3001', changeOrigin: true },
     },
   },

@@ -55,13 +55,15 @@ router.get('/', async (req, res) => {
   try {
     let query, params
     if (skill) {
-      query = `SELECT t.*, up.display_name AS creator_name
+      query = `SELECT t.*, up.display_name AS creator_name,
+                      (SELECT COUNT(*) FROM bids b WHERE b.task_id = t.task_id AND b.status != 'withdrawn')::int AS bid_count
                FROM tasks t LEFT JOIN user_profiles up ON t.creator_id = up.user_id
                WHERE t.status = $1 AND t.skill_tags @> ARRAY[$2]::TEXT[]
                ORDER BY t.created_at DESC LIMIT $3 OFFSET $4`
       params = [status, skill, limit, offset]
     } else {
-      query = `SELECT t.*, up.display_name AS creator_name
+      query = `SELECT t.*, up.display_name AS creator_name,
+                      (SELECT COUNT(*) FROM bids b WHERE b.task_id = t.task_id AND b.status != 'withdrawn')::int AS bid_count
                FROM tasks t LEFT JOIN user_profiles up ON t.creator_id = up.user_id
                WHERE t.status = $1
                ORDER BY t.created_at DESC LIMIT $2 OFFSET $3`
@@ -88,6 +90,48 @@ router.get('/mine', requireAuth, async (req, res) => {
     return res.status(500).json({ message: 'Internal server error.' })
   }
 })
+
+// GET /tasks/bids/mine — all bids the logged-in earner has placed, with task info
+router.get('/bids/mine', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT b.*, t.title AS task_title, t.budget AS task_budget,
+              t.status AS task_status, t.deadline AS task_deadline
+       FROM bids b
+       JOIN tasks t ON b.task_id = t.task_id
+       WHERE b.bidder_id = $1
+       ORDER BY b.created_at DESC`,
+      [req.userId]
+    )
+    return res.status(200).json({ bids: rows })
+  } catch (err) {
+    console.error('[GET /tasks/bids/mine]', err.message)
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
+
+// PATCH /tasks/bids/:bidId/withdraw — earner withdraws their own pending bid
+router.patch('/bids/:bidId/withdraw',
+  requireAuth,
+  [param('bidId').isUUID()],
+  check,
+  async (req, res) => {
+    const { bidId } = req.params
+    try {
+      const { rows } = await pool.query(
+        `UPDATE bids SET status = 'withdrawn', updated_at = NOW()
+         WHERE bid_id = $1 AND bidder_id = $2 AND status = 'pending'
+         RETURNING *`,
+        [bidId, req.userId]
+      )
+      if (rows.length === 0) return res.status(404).json({ message: 'Bid not found or not withdrawable.' })
+      return res.status(200).json({ bid: rows[0] })
+    } catch (err) {
+      console.error('[withdraw bid]', err.message)
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
 
 // GET /tasks/:taskId — task detail with bids
 router.get('/:taskId', [param('taskId').isUUID()], check, async (req, res) => {

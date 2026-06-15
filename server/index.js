@@ -14,6 +14,7 @@ import tasksRouter    from './routes/tasks.js'
 import messagesRouter from './routes/messages.js'
 import reviewsRouter  from './routes/reviews.js'
 import profileRouter  from './routes/profile.js'
+import businessesRouter from './routes/businesses.js'
 import { pool } from './db.js'
 
 const app = express()
@@ -67,6 +68,7 @@ app.use('/tasks',   tasksRouter)
 app.use('/',        messagesRouter)   // exposes /messages/* and /notifications/*
 app.use('/reviews', reviewsRouter)
 app.use('/profile', profileRouter)
+app.use('/businesses', businessesRouter)
 
 // 404 + error handlers
 app.use((req, res) => res.status(404).json({ message: 'Not found.' }))

@@ -176,6 +176,18 @@ button:active { transform: scale(.97); }
   .dash-sidebar { display:none !important; }
 }
 
+/* Top-bar nav: links + search are desktop-only; bottom bar handles mobile nav */
+.topbar-nav, .topbar-search { display: none; }
+@media (min-width:769px) {
+  .topbar-nav    { display: flex !important; }
+  .topbar-search { display: block !important; }
+}
+/* The Post button stays visible on all sizes, but compresses to just '＋' on phones */
+@media (max-width:520px) {
+  .topbar-post { font-size: 0 !important; padding: 9px 12px !important; }
+  .topbar-post::before { content: '＋'; font-size: 1.05rem; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
@@ -316,13 +328,14 @@ function Input({ label, error, hint, style={}, ...p }) {
   )
 }
 
-function Textarea({ label, error, style={}, ...p }) {
+function Textarea({ label, error, hint, style={}, ...p }) {
   const [focused, setFocused] = useState(false)
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
       {label && <label style={{ fontSize:'0.7rem', fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:'var(--text-secondary)' }}>{label}</label>}
       <textarea style={{ background:'var(--bg-surface)', border:`1px solid ${error?'var(--danger)':focused?'var(--accent)':'var(--border)'}`, borderRadius:'var(--radius-sm)', color:'var(--text-primary)', padding:'9px 13px', outline:'none', width:'100%', resize:'vertical', minHeight:100, fontSize:'0.9rem', fontFamily:'var(--font-body)', boxShadow:focused?'0 0 0 3px var(--accent-glow)':'none', transition:'all 150ms ease', ...style }}
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} {...p} />
+      {hint && !error && <span style={{ fontSize:'0.74rem', color:'var(--text-muted)' }}>{hint}</span>}
       {error && <span style={{ fontSize:'0.78rem', color:'var(--danger)' }}>{error}</span>}
     </div>
   )
@@ -473,7 +486,7 @@ function StepBar({ steps, current }) {
 // LANDING PAGE — NAVBAR
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function LandingNavbar({ onOpenAuth, onNav }) {
+function LandingNavbar({ onOpenAuth, onNav, user, onEnterApp }) {
   const [scrolled, setScrolled] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   useEffect(() => {
@@ -505,8 +518,14 @@ function LandingNavbar({ onOpenAuth, onNav }) {
             {navItems.map(item => <a key={item.label} href={item.href} className="nav-link">{item.label}</a>)}
           </div>
           <div className="hide-m" style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <button className="btn-g" onClick={() => onOpenAuth('login')}>Sign In</button>
-            <button className="btn-p" onClick={() => onOpenAuth('register')}>Get Started →</button>
+            {user ? (
+              <button className="btn-p" onClick={onEnterApp}>Open App →</button>
+            ) : (
+              <>
+                <button className="btn-g" onClick={() => onOpenAuth('login')}>Sign In</button>
+                <button className="btn-p" onClick={() => onOpenAuth('register')}>Get Started →</button>
+              </>
+            )}
           </div>
           <button className="show-m" onClick={() => setDrawerOpen(true)}
             style={{ background:'none', border:'none', color:'var(--text-primary)', cursor:'pointer', fontSize:'1.4rem', padding:8 }}>☰</button>
@@ -530,8 +549,14 @@ function LandingNavbar({ onOpenAuth, onNav }) {
           ))}
         </div>
         <div style={{ marginTop:28, display:'flex', flexDirection:'column', gap:10 }}>
-          <button className="btn-s" onClick={() => { onOpenAuth('login'); setDrawerOpen(false) }}>Sign In</button>
-          <button className="btn-p" style={{ justifyContent:'center' }} onClick={() => { onOpenAuth('register'); setDrawerOpen(false) }}>Get Started →</button>
+          {user ? (
+            <button className="btn-p" style={{ justifyContent:'center' }} onClick={() => { onEnterApp(); setDrawerOpen(false) }}>Open App →</button>
+          ) : (
+            <>
+              <button className="btn-s" onClick={() => { onOpenAuth('login'); setDrawerOpen(false) }}>Sign In</button>
+              <button className="btn-p" style={{ justifyContent:'center' }} onClick={() => { onOpenAuth('register'); setDrawerOpen(false) }}>Get Started →</button>
+            </>
+          )}
         </div>
       </div>
     </>
@@ -605,10 +630,22 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [name, setName]         = useState('')
-  const [role, setRole]         = useState('creator')
+  const [role, setRole]         = useState('member')
   const [loading, setLoading]   = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError]       = useState('')
+  // Two-step registration: step 1 = account essentials, step 2 = marketplace profile
+  const [step, setStep]         = useState(1)
+  const [consent, setConsent]   = useState(false)
+  const [phone, setPhone]       = useState('')
+  const [campus, setCampus]     = useState('')
+  const [skills, setSkills]     = useState('')
+  const [bio, setBio]           = useState('')
+
+  const CAMPUS_ZONES = ['Drostdy', 'Eden Grove', 'Botha House', 'Founders Hall', 'Kimberley Hall', 'Oriel', 'College', 'Off-campus (town)', 'Other']
+
+  // Reset to step 1 whenever the modal mode flips (login ⇄ register)
+  useEffect(() => { setStep(1); setError('') }, [mode])
 
   const presets = [
     { label:'Creator', role:'creator', email:'creator@demo.com' },
@@ -616,24 +653,45 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
     { label:'Admin',   role:'admin',   email:'admin@demo.com' },
   ]
 
-  function validate() {
+  function validateStep1() {
+    if (mode==='register' && !name.trim()) return 'Please enter your name'
     if (!email.includes('@')) return 'Enter a valid email address'
     if (password.length < 8)  return 'Password must be at least 8 characters'
-    if (mode==='register' && !name.trim()) return 'Display name is required'
+    if (mode==='register' && !consent) return 'Please accept the Terms and Privacy Policy to continue'
     return null
   }
 
   async function submit(e) {
     e.preventDefault()
-    const err = validate()
-    if (err) { setError(err); return }
+
+    // Registration step 1 → validate essentials, then advance to step 2 (no API call yet)
+    if (mode === 'register' && step === 1) {
+      const err = validateStep1()
+      if (err) { setError(err); return }
+      setError(''); setStep(2)
+      return
+    }
+
+    // Login validates the same essentials inline
+    if (mode === 'login') {
+      if (!email.includes('@')) { setError('Enter a valid email address'); return }
+      if (!password)            { setError('Enter your password'); return }
+    }
+
     setError(''); setLoading(true)
 
     try {
       const endpoint = mode === 'login' ? '/auth/login' : '/auth/register'
       const body     = mode === 'login'
         ? { email, password }
-        : { email, password, role, displayName: name || email.split('@')[0] }
+        : {
+            email, password, role,
+            displayName: name || email.split('@')[0],
+            phoneNumber: phone || null,
+            campusZone:  campus || null,
+            skills:      skills || null,
+            bio:         bio || null,
+          }
 
       const res  = await fetch(endpoint, {
         method:  'POST',
@@ -670,6 +728,7 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
         avatarUrl:   null,
       })
       onClose()
+      return
     } finally {
       setLoading(false)
     }
@@ -685,15 +744,16 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
         {/* Header */}
         <div style={{ padding:'18px 22px 14px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div>
-            <div style={{ fontFamily:'var(--fd)', fontSize:'1.25rem', fontWeight:800 }}>{mode==='login'?'Welcome back':'Create account'}</div>
-            <div style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em', marginTop:2 }}>ReLiv · Rhodes Campus</div>
+            <div style={{ fontFamily:'var(--fd)', fontSize:'1.25rem', fontWeight:800 }}>{mode==='login'?'Welcome back':(step===1?'Create your account':'Set up your profile')}</div>
+            <div style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em', marginTop:2 }}>{mode==='register' ? `ReLiv · Step ${step} of 2` : 'ReLiv · Rhodes Campus'}</div>
           </div>
           <button onClick={onClose} style={{ background:'none', border:'none', color:'var(--text-muted)', cursor:'pointer', fontSize:'1.1rem', padding:'4px 8px' }}>✕</button>
         </div>
 
         <div style={{ padding:22, display:'flex', flexDirection:'column', gap:13 }}>
 
-          {/* ── Google Sign-In button ── sits at the top, above the form ── */}
+          {/* Step 2 has no Google button — account creation is already underway */}
+          {!(mode==='register' && step===2) && (
           <button
             type="button"
             onClick={loginWithGoogle}
@@ -715,47 +775,100 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
             )}
           </button>
 
+          )}
+
           {/* ── Divider between Google and email form ── */}
+          {!(mode==='register' && step===2) && (
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
             <div style={{ flex:1, height:1, background:'var(--border)' }} />
-            <span style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em' }}>or continue with email</span>
+            <span style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em' }}>{mode==='login' ? 'or continue with email' : 'or sign up with email'}</span>
             <div style={{ flex:1, height:1, background:'var(--border)' }} />
           </div>
+          )}
 
           {/* ── Email / password form ── */}
           <form onSubmit={submit} style={{ display:'flex', flexDirection:'column', gap:13 }}>
-            {mode==='register' && <div><label>Display Name</label><input value={name} onChange={e => setName(e.target.value)} placeholder="Your full name" /></div>}
-            <div><label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@ru.ac.za" required /></div>
-            <div><label>Password {mode==='register'&&<span style={{ color:'#9a94a4' }}>(min 8 chars)</span>}</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
-            {mode==='register' && (
-              <div><label>I want to</label>
-                <select value={role} onChange={e => setRole(e.target.value)}>
-                  <option value="creator">Post tasks and hire — Creator</option>
-                  <option value="earner">Bid on tasks and earn — Earner</option>
-                </select>
-              </div>
-            )}
+
+            {/* ===== LOGIN ===== */}
             {mode==='login' && (
-              <div>
-                <Mono style={{ display:'block', marginBottom:8 }}>Quick demo login</Mono>
-                <div style={{ display:'flex', gap:6 }}>
-                  {presets.map(p => (
-                    <button key={p.role} type="button" onClick={() => { setRole(p.role); setEmail(p.email) }}
-                      style={{ flex:1, padding:'6px 8px', background:role===p.role?'var(--accent-glow)':'var(--bg-elevated)', border:`1px solid ${role===p.role?'var(--accent)':'var(--border)'}`, color:role===p.role?'var(--accent)':'var(--text-muted)', borderRadius:'var(--radius-sm)', fontSize:'0.72rem', fontFamily:'var(--font-mono)', textTransform:'uppercase', letterSpacing:'0.06em', cursor:'pointer', transition:'all 150ms ease' }}>{p.label}</button>
-                  ))}
+              <>
+                <div><label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@ru.ac.za" required /></div>
+                <div><label>Password</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
+                <div>
+                  <Mono style={{ display:'block', marginBottom:8 }}>Quick demo login</Mono>
+                  <div style={{ display:'flex', gap:6 }}>
+                    {presets.map(p => (
+                      <button key={p.role} type="button" onClick={() => { setRole(p.role); setEmail(p.email) }}
+                        style={{ flex:1, padding:'6px 8px', background:role===p.role?'var(--accent-glow)':'var(--bg-elevated)', border:`1px solid ${role===p.role?'var(--accent)':'var(--border)'}`, color:role===p.role?'var(--accent)':'var(--text-muted)', borderRadius:'var(--radius-sm)', fontSize:'0.72rem', fontFamily:'var(--font-mono)', cursor:'pointer', transition:'all 150ms ease' }}>{p.label}</button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              </>
             )}
-            {mode==='register' && (
-              <div style={{ display:'flex', gap:8, alignItems:'flex-start' }}>
-                <input type="checkbox" required style={{ width:'auto', marginTop:3, flexShrink:0, accentColor:'var(--amber)' }} />
-                <span style={{ fontSize:'.76rem', color:'#6d6678', lineHeight:1.5 }}>I agree to the <span style={{ color:'var(--amber)', cursor:'pointer' }}>Terms of Service</span> and <span style={{ color:'var(--amber)', cursor:'pointer' }}>Privacy Policy</span></span>
-              </div>
+
+            {/* ===== REGISTER · STEP 1 — essentials ===== */}
+            {mode==='register' && step===1 && (
+              <>
+                <div><label>Full name</label><input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Thabo Mkhize" required /></div>
+                <div><label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@ru.ac.za" required /></div>
+                <div><label>Password <span style={{ color:'var(--text-muted)' }}>(min 8 chars)</span></label><input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
+                <div style={{ background:'var(--accent-glow)', border:'1px solid var(--accent-dim)', borderRadius:12, padding:'12px 14px', display:'flex', gap:10, alignItems:'flex-start' }}>
+                  <span style={{ fontSize:'1.1rem' }}>✨</span>
+                  <div style={{ fontSize:'.8rem', color:'var(--text-secondary)', lineHeight:1.5 }}>
+                    With one ReLiv account you can <strong style={{ color:'var(--text-primary)' }}>post tasks</strong> when you need help and <strong style={{ color:'var(--text-primary)' }}>bid on tasks</strong> to earn — switch anytime.
+                  </div>
+                </div>
+                <label style={{ display:'flex', gap:8, alignItems:'flex-start', cursor:'pointer' }}>
+                  <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} style={{ width:'auto', marginTop:3, flexShrink:0, accentColor:'var(--accent)' }} />
+                  <span style={{ fontSize:'.76rem', color:'var(--text-secondary)', lineHeight:1.5 }}>I agree to the <span style={{ color:'var(--accent)', fontWeight:600 }}>Terms of Service</span> and <span style={{ color:'var(--accent)', fontWeight:600 }}>Privacy Policy</span>, and consent to ReLiv processing my data under POPIA.</span>
+                </label>
+              </>
             )}
-            {error && <div style={{ background:'rgba(239,68,68,.1)', border:'1px solid rgba(239,68,68,.3)', borderRadius:8, padding:'9px 13px', fontSize:'.82rem', color:'var(--red)' }}>{error}</div>}
-            <button type="submit" className="btn-p" style={{ width:'100%', justifyContent:'center', marginTop:4 }} disabled={loading || googleLoading}>
-              {loading ? <Spinner /> : mode==='login'?'Sign In →':'Create Account →'}
-            </button>
+
+            {/* ===== REGISTER · STEP 2 — marketplace profile ===== */}
+            {mode==='register' && step===2 && (
+              <>
+                <p style={{ fontSize:'.82rem', color:'var(--text-secondary)', lineHeight:1.5, margin:'0 0 4px' }}>
+                  A complete profile gets you more tasks and better bids. You can skip and finish this later in your profile.
+                </p>
+                <div><label>Phone number <span style={{ color:'var(--text-muted)' }}>(optional)</span></label><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+27 ..." /></div>
+                <div>
+                  <label>Campus residence / area</label>
+                  <select value={campus} onChange={e => setCampus(e.target.value)}>
+                    <option value="">Select your area…</option>
+                    {CAMPUS_ZONES.map(z => <option key={z} value={z}>{z}</option>)}
+                  </select>
+                </div>
+                <div><label>Your skills <span style={{ color:'var(--text-muted)' }}>(comma separated)</span></label><input value={skills} onChange={e => setSkills(e.target.value)} placeholder="e.g. python, tutoring, design" /></div>
+                <div><label>Short bio <span style={{ color:'var(--text-muted)' }}>(optional)</span></label>
+                  <textarea value={bio} onChange={e => setBio(e.target.value)} rows={3} placeholder="Tell others what you’re good at…" style={{ resize:'vertical' }} />
+                </div>
+              </>
+            )}
+
+            {error && <div style={{ background:'rgba(185,28,28,.08)', border:'1px solid rgba(185,28,28,.25)', borderRadius:8, padding:'9px 13px', fontSize:'.82rem', color:'var(--red)' }}>{error}</div>}
+
+            {/* Action buttons */}
+            {mode==='register' && step===2 ? (
+              <div style={{ display:'flex', gap:8 }}>
+                <button type="button" onClick={() => { setError(''); setStep(1) }} className="btn-s" style={{ flex:'0 0 auto', justifyContent:'center' }}>← Back</button>
+                <button type="submit" className="btn-p" style={{ flex:1, justifyContent:'center' }} disabled={loading || googleLoading}>
+                  {loading ? <Spinner /> : 'Create account →'}
+                </button>
+              </div>
+            ) : (
+              <button type="submit" className="btn-p" style={{ width:'100%', justifyContent:'center', marginTop:4 }} disabled={loading || googleLoading}>
+                {loading ? <Spinner /> : mode==='login' ? 'Sign in →' : 'Continue →'}
+              </button>
+            )}
+
+            {/* Skip link on step 2 — lets them finish profile later (low friction) */}
+            {mode==='register' && step===2 && (
+              <button type="button" onClick={submit} disabled={loading}
+                style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'.8rem', cursor:'pointer', textDecoration:'underline' }}>
+                Skip for now
+              </button>
+            )}
             <div style={{ textAlign:'center', fontSize:'.85rem', color:'#6d6678' }}>
               {mode==='login'?'No account? ':'Have an account? '}
               <button type="button" onClick={onSwitch} style={{ background:'none', border:'none', color:'var(--amber)', cursor:'pointer', fontSize:'inherit' }}>
@@ -1577,55 +1690,77 @@ function OAuthCallback() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const NAV = {
-  // First 5 = native bottom-tab bar on mobile; the rest stay desktop-only
-  creator: [
+  // First 5 = native bottom-tab bar on mobile; the rest stay desktop-only.
+  // Roles merged: every member can both post tasks and bid on them.
+  member: [
     { id:'tasks-browse',  label:'Home',      icon:'⌂' },
     { id:'tasks-new',     label:'Post',      icon:'＋' },
     { id:'tasks-mine',    label:'My Tasks',  icon:'▤' },
     { id:'messages',      label:'Messages',  icon:'◎' },
     { id:'profile',       label:'Profile',   icon:'◷' },
+    { id:'local-browse',  label:'Local',     icon:'◇' },
+    { id:'my-bids',       label:'My Bids',   icon:'◈' },
     { id:'dashboard',     label:'Stats',     icon:'⊞' },
     { id:'notifications', label:'Alerts',    icon:'◉' },
   ],
-  earner: [
-    { id:'tasks-browse',  label:'Home',      icon:'⌂' },
-    { id:'suggestions',   label:'For You',   icon:'◈' },
-    { id:'my-bids',       label:'My Bids',   icon:'▤' },
-    { id:'messages',      label:'Messages',  icon:'◎' },
-    { id:'profile',       label:'Profile',   icon:'◷' },
-    { id:'dashboard',     label:'Stats',     icon:'⊞' },
-    { id:'notifications', label:'Alerts',    icon:'◐' },
-  ],
   admin: [
-    { id:'dashboard',       label:'Dashboard', icon:'⊞' },
-    { id:'admin-disputes',  label:'Disputes',  icon:'⚖' },
-    { id:'admin-users',     label:'Users',     icon:'◈' },
-    { id:'tasks-browse',    label:'All Tasks', icon:'▤' },
-    { id:'notifications',   label:'Alerts',    icon:'◐' },
+    { id:'dashboard',       label:'Dashboard',  icon:'⊞' },
+    { id:'admin-disputes',  label:'Disputes',   icon:'⚖' },
+    { id:'admin-users',     label:'Users',      icon:'◈' },
+    { id:'admin-businesses',label:'Businesses', icon:'◇' },
+    { id:'tasks-browse',    label:'All Tasks',  icon:'▤' },
+    { id:'notifications',   label:'Alerts',     icon:'◐' },
   ],
 }
 
-function TopBar({ page, setPage, unreadCount, onGoHome }) {
+function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding }) {
   const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const isCreator = user.role === 'creator'
+  // Desktop nav links — role-aware. These render in the top bar on every screen
+  // wide enough to fit them, so navigation never depends on the mobile bottom bar.
+  const isAdmin = user.role === 'admin'
+  const navLinks = isAdmin
+    ? [ { id:'admin-disputes', label:'Disputes' }, { id:'admin-users', label:'Users' }, { id:'admin-businesses', label:'Businesses' } ]
+    : [
+        { id:'tasks-browse', label:'Browse' },
+        { id:'local-browse', label:'Local' },
+        { id:'tasks-mine',   label:'My Tasks' },
+        { id:'my-bids',      label:'My Bids' },
+      ]
+
   return (
     <header style={{ position:'sticky', top:0, zIndex:90, background:'var(--bg-surface)', borderBottom:'1px solid var(--border)' }}>
       <div style={{ maxWidth:1280, margin:'0 auto', display:'flex', alignItems:'center', gap:14, height:60, padding:'0 20px' }}>
-        <Logo onClick={onGoHome} />
+        <Logo onClick={onViewLanding || onGoHome} />
+
+        {/* Desktop nav links — hidden on narrow screens (bottom bar takes over there) */}
+        <nav className="topbar-nav" style={{ display:'flex', alignItems:'center', gap:2, marginLeft:6 }}>
+          <button onClick={onGoHome}
+            style={{ padding:'7px 12px', borderRadius:9, border:'none', background:'transparent', color:'var(--text-secondary)', fontSize:'.875rem', fontWeight:600, fontFamily:'var(--font-body)', cursor:'pointer', transition:'all 120ms ease' }}
+            onMouseEnter={e=>e.currentTarget.style.background='var(--bg-hover)'}
+            onMouseLeave={e=>e.currentTarget.style.background='transparent'}>Home</button>
+          {navLinks.map(l => {
+            const active = page === l.id
+            return (
+              <button key={l.id} onClick={() => setPage(l.id)}
+                style={{ padding:'7px 12px', borderRadius:9, border:'none', background:active?'var(--accent-glow)':'transparent', color:active?'var(--accent)':'var(--text-secondary)', fontSize:'.875rem', fontWeight:600, fontFamily:'var(--font-body)', cursor:'pointer', transition:'all 120ms ease' }}
+                onMouseEnter={e=>{ if(!active) e.currentTarget.style.background='var(--bg-hover)' }}
+                onMouseLeave={e=>{ if(!active) e.currentTarget.style.background='transparent' }}>{l.label}</button>
+            )
+          })}
+        </nav>
 
         {/* Search — desktop only; tapping it lands on the feed where real search lives */}
-        <div className="hide-m" style={{ flex:1, maxWidth:480, margin:'0 12px' }}>
-          <button onClick={() => setPage('tasks-browse')}
+        <div className="topbar-search" style={{ flex:1, maxWidth:360, margin:'0 12px' }}>
+          <button onClick={() => { setPage('tasks-browse'); setTimeout(() => document.getElementById('feed-search')?.focus(), 100) }}
             style={{ width:'100%', textAlign:'left', padding:'9px 16px', borderRadius:100, border:'1px solid var(--border)', background:'var(--bg-elevated)', color:'var(--text-muted)', fontSize:'.875rem', cursor:'pointer' }}>
             ⌕ Search tasks…
           </button>
         </div>
 
         <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6 }}>
-          {isCreator && (
-            <button className="hide-m btn-p" style={{ padding:'9px 18px', fontSize:'.85rem' }} onClick={() => setPage('tasks-new')}>＋ Post a Task</button>
-          )}
+          <button className="btn-p topbar-post" style={{ padding:'9px 18px', fontSize:'.85rem' }} onClick={() => setPage('tasks-new')}>＋ Post a Task</button>
           <button onClick={() => setPage('messages')} title="Messages"
             style={{ width:38, height:38, borderRadius:'50%', border:'none', background:page==='messages'?'var(--accent-glow)':'transparent', color:page==='messages'?'var(--accent)':'var(--text-secondary)', fontSize:'1.05rem', cursor:'pointer' }}>◎</button>
           <button onClick={() => setPage('notifications')} title="Alerts"
@@ -1650,7 +1785,8 @@ function TopBar({ page, setPage, unreadCount, onGoHome }) {
                   </div>
                   {[
                     { label:'My Profile', go:'profile' },
-                    { label:isCreator?'My Tasks':'My Bids', go:isCreator?'tasks-mine':'my-bids' },
+                    { label:'My Tasks', go:'tasks-mine' },
+                    { label:'My Bids',  go:'my-bids' },
                     { label:'Stats & Activity', go:'dashboard' },
                   ].map(item => (
                     <button key={item.go} onClick={() => { setPage(item.go); setMenuOpen(false) }}
@@ -1658,6 +1794,12 @@ function TopBar({ page, setPage, unreadCount, onGoHome }) {
                       onMouseEnter={e => e.currentTarget.style.background='var(--bg-hover)'}
                       onMouseLeave={e => e.currentTarget.style.background='none'}>{item.label}</button>
                   ))}
+                  {onViewLanding && (
+                    <button onClick={() => { onViewLanding(); setMenuOpen(false) }}
+                      style={{ display:'block', width:'100%', textAlign:'left', padding:'11px 16px', background:'none', border:'none', borderTop:'1px solid var(--border)', fontSize:'.875rem', color:'var(--text-secondary)', cursor:'pointer' }}
+                      onMouseEnter={e => e.currentTarget.style.background='var(--bg-hover)'}
+                      onMouseLeave={e => e.currentTarget.style.background='none'}>View public site</button>
+                  )}
                   <button onClick={logout}
                     style={{ display:'block', width:'100%', textAlign:'left', padding:'11px 16px', background:'none', border:'none', borderTop:'1px solid var(--border)', fontSize:'.875rem', color:'var(--danger)', cursor:'pointer' }}>Sign Out</button>
                 </div>
@@ -1673,7 +1815,7 @@ function TopBar({ page, setPage, unreadCount, onGoHome }) {
 function DashSidebar({ page, setPage, unreadCount, onGoHome }) {
   const { user, logout } = useAuth()
   const [signHov, setSignHov] = useState(false)
-  const items = NAV[user.role] || []
+  const items = NAV[user.role === 'admin' ? 'admin' : 'member'] || []
 
   return (
     <aside className="dash-sidebar" style={{ background:'var(--bg-surface)', borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', padding:'20px 14px', position:'sticky', top:0, height:'100vh', overflowY:'auto', width:220, flexShrink:0 }}>
@@ -1756,17 +1898,11 @@ function Dashboard({ setPage, setSelectedTask }) {
     <div className="page-enter">
       <PageTitle sub={`Welcome back — ${new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}`}>Dashboard</PageTitle>
       <div style={{ display:'flex', gap:14, marginBottom:32, flexWrap:'wrap' }}>
-        {user.role==='creator' && <>
+        {user.role!=='admin' && <>
           <StatCard label="Tasks Posted" value={myTasks.length} />
-          <StatCard label="Open Bids"    value={state.bids.filter(b=>state.tasks.find(t=>t.creator_id==='u1'&&t.task_id===b.task_id)&&b.status==='pending').length} accent />
-          <StatCard label="Completed"    value={doneCount} />
-          <StatCard label="Total Spent"  value={`R${myTasks.filter(t=>t.status==='completed').reduce((s,t)=>s+parseFloat(t.budget||0),0).toLocaleString()}`} />
-        </>}
-        {user.role==='earner' && <>
-          <StatCard label="Open Tasks"   value={openCount} />
           <StatCard label="Active Bids"  value={myBids.filter(b=>b.status==='pending'||b.status==='accepted').length} accent />
-          <StatCard label="Jobs Done"    value={myBids.filter(b=>b.status==='accepted').length} />
-          <StatCard label="Suggestions"  value={MOCK_SUGGESTIONS.length} />
+          <StatCard label="Completed"    value={doneCount} />
+          <StatCard label="Open Tasks"   value={openCount} />
         </>}
         {user.role==='admin' && <>
           <StatCard label="Open Disputes" value={state.disputes.filter(d=>d.status==='open').length} accent />
@@ -1776,15 +1912,11 @@ function Dashboard({ setPage, setSelectedTask }) {
         </>}
       </div>
       <div style={{ display:'flex', gap:10, marginBottom:28, flexWrap:'wrap' }}>
-        {user.role==='creator' && <>
+        {user.role!=='admin' && <>
           <Btn onClick={() => setPage('tasks-new')}>+ Post New Task</Btn>
-          <Btn variant="secondary" onClick={() => setPage('tasks-mine')}>View My Tasks</Btn>
-          <Btn variant="secondary" onClick={() => setPage('messages')}>Messages</Btn>
-        </>}
-        {user.role==='earner' && <>
-          <Btn onClick={() => setPage('tasks-browse')}>Browse Open Tasks</Btn>
-          <Btn variant="secondary" onClick={() => setPage('suggestions')}>View Suggestions</Btn>
+          <Btn variant="secondary" onClick={() => setPage('tasks-browse')}>Browse Tasks</Btn>
           <Btn variant="secondary" onClick={() => setPage('my-bids')}>My Bids</Btn>
+          <Btn variant="secondary" onClick={() => setPage('messages')}>Messages</Btn>
         </>}
         {user.role==='admin' && <>
           <Btn onClick={() => setPage('admin-disputes')}>Review Disputes</Btn>
@@ -1854,9 +1986,45 @@ function TaskBrowse({ setPage, setSelectedTask }) {
   const [cat, setCat]       = useState(null)
   const [status, setStatus] = useState('all')
   const [sort, setSort]     = useState('newest')
+  const [tasks, setTasks]   = useState([])
+  const [loading, setLoading] = useState(true)
+  const [offline, setOffline] = useState(false)
+  const token = () => localStorage.getItem('rl_token')
 
-  const filtered = state.tasks
-    .filter(t => (status==='all'||t.status===status) && (!cat || categoryFor(t).name===cat) && (!skill||t.skill_tags.some(s=>s.toLowerCase().includes(skill.toLowerCase()))||t.title.toLowerCase().includes(skill.toLowerCase())))
+  // Load open tasks from the database (shared across all accounts)
+  async function loadTasks() {
+    try {
+      // Pull a broad set; filtering/sorting happens client-side below
+      const res = await fetch('/tasks?status=open&limit=100', { headers: { Authorization: `Bearer ${token()}` } })
+      if (!res.ok) throw new Error('failed')
+      const data = await res.json()
+      // Normalise: ensure skill_tags is always an array
+      setTasks((data.tasks || []).map(t => ({ ...t, skill_tags: t.skill_tags || [] })))
+      setOffline(false)
+    } catch {
+      setTasks(state.tasks)   // offline fallback to mock
+      setOffline(true)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { loadTasks() }, []) // eslint-disable-line
+  useEffect(() => {
+    if (offline) return
+    const id = setInterval(loadTasks, 8000)  // new tasks appear within ~8s
+    return () => clearInterval(id)
+  }, [offline]) // eslint-disable-line
+
+  const bidCount = (taskId) => {
+    // Backend includes bid_count when available; fall back to mock store
+    const t = tasks.find(x => x.task_id === taskId)
+    if (t && typeof t.bid_count === 'number') return t.bid_count
+    return state.bids.filter(b=>b.task_id===taskId && b.status!=='withdrawn').length
+  }
+
+  const filtered = tasks
+    .filter(t => (status==='all'||t.status===status) && (!cat || categoryFor(t).name===cat) && (!skill||(t.skill_tags||[]).some(s=>s.toLowerCase().includes(skill.toLowerCase()))||t.title.toLowerCase().includes(skill.toLowerCase())))
     .sort((a,b) => {
       if (sort==='newest')    return new Date(b.created_at)-new Date(a.created_at)
       if (sort==='budget-hi') return parseFloat(b.budget)-parseFloat(a.budget)
@@ -1874,7 +2042,7 @@ function TaskBrowse({ setPage, setSelectedTask }) {
         <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'clamp(1.5rem,3vw,2.1rem)', letterSpacing:'-0.01em', marginBottom:14 }}>What do you need done?</h1>
         <div style={{ position:'relative', maxWidth:560 }}>
           <span style={{ position:'absolute', left:16, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', fontSize:'1.05rem' }}>⌕</span>
-          <input placeholder="Search — laundry, python, tutoring…" value={skill} onChange={e => setSkill(e.target.value)}
+          <input id="feed-search" placeholder="Search — laundry, python, tutoring…" value={skill} onChange={e => setSkill(e.target.value)}
             style={{ padding:'14px 16px 14px 44px', borderRadius:14, fontSize:'1rem', background:'var(--bg-surface)', boxShadow:'0 1px 4px rgba(33,28,46,.07)' }} />
         </div>
       </div>
@@ -1911,8 +2079,9 @@ function TaskBrowse({ setPage, setSelectedTask }) {
           {filtersActive && <Btn variant="ghost" size="sm" onClick={() => { setSkill(''); setCat(null); setStatus('all'); setSort('newest') }}>✕ Clear</Btn>}
         </div>
       </div>
+      {loading && <div style={{ padding:40, textAlign:'center' }}><Spinner /></div>}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(310px,1fr))', gap:14 }}>
-        {filtered.map(task => (
+        {!loading && filtered.map(task => (
           <DCard key={task.task_id} onClick={() => { setSelectedTask(task.task_id); setPage('task-detail') }} style={{ padding:0, overflow:'hidden' }}>
             <CardCover task={task} />
             <div style={{ padding:'14px 16px 16px' }}>
@@ -1922,7 +2091,7 @@ function TaskBrowse({ setPage, setSelectedTask }) {
               <Divider style={{ marginBottom:10 }} />
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                 <Mono>Due {new Date(task.deadline).toLocaleDateString()}</Mono>
-                <Mono>{state.bids.filter(b=>b.task_id===task.task_id&&b.status!=='withdrawn').length} bid{state.bids.filter(b=>b.task_id===task.task_id&&b.status!=='withdrawn').length!==1?'s':''}</Mono>
+                <Mono>{bidCount(task.task_id)} bid{bidCount(task.task_id)!==1?'s':''}</Mono>
               </div>
             </div>
           </DCard>
@@ -1933,13 +2102,42 @@ function TaskBrowse({ setPage, setSelectedTask }) {
   )
 }
 
-function TaskDetail({ taskId, setPage }) {
+function TaskDetail({ taskId, setPage, openChat }) {
   const { user } = useAuth()
   const { state, dispatch } = useStore()
   const toast = useToast()
-  const task  = state.tasks.find(t => t.task_id===taskId)
-  const bids  = state.bids.filter(b => b.task_id===taskId&&b.status!=='withdrawn')
+  const token = () => localStorage.getItem('rl_token')
+
+  // Live task + bids from the database (shared across accounts)
+  const [task, setTask]   = useState(state.tasks.find(t => t.task_id===taskId) || null)
+  const [bids, setBids]   = useState(state.bids.filter(b => b.task_id===taskId&&b.status!=='withdrawn'))
+  const [loadingTask, setLoadingTask] = useState(true)
   const escrow = state.escrows[taskId]
+
+  async function loadTask({ silent = false } = {}) {
+    try {
+      const res = await fetch(`/tasks/${taskId}`, { headers: { Authorization: `Bearer ${token()}` } })
+      if (!res.ok) throw new Error('failed')
+      const data = await res.json()
+      setTask({ ...data.task, skill_tags: data.task.skill_tags || [] })
+      setBids((data.bids || []).filter(b => b.status !== 'withdrawn'))
+    } catch {
+      // offline fallback to mock store
+      if (!silent) {
+        setTask(state.tasks.find(t => t.task_id===taskId) || null)
+        setBids(state.bids.filter(b => b.task_id===taskId&&b.status!=='withdrawn'))
+      }
+    } finally {
+      setLoadingTask(false)
+    }
+  }
+
+  useEffect(() => { loadTask() }, [taskId]) // eslint-disable-line
+  // Poll so a new bid (or acceptance) from the other account appears within ~5s
+  useEffect(() => {
+    const id = setInterval(() => loadTask({ silent:true }), 5000)
+    return () => clearInterval(id)
+  }, [taskId]) // eslint-disable-line
 
   const [bidAmount, setBidAmount]   = useState('')
   const [bidPitch, setBidPitch]     = useState('')
@@ -1960,40 +2158,58 @@ function TaskDetail({ taskId, setPage }) {
   const [reviewLoading, setReviewLoading] = useState(false)
   const [reviewDone, setReviewDone]       = useState(!!state.reviews.find(r=>r.task_id===taskId))
 
-  const myBid     = state.bids.find(b=>b.task_id===taskId&&b.bidder_id==='u3')
-  const alreadyBid = !!myBid&&myBid.status!=='withdrawn'
-  const isCreator = user.role==='creator'
-  const isEarner  = user.role==='earner'
+  const myBid      = bids.find(b=>b.bidder_id===user.userId)
+  const alreadyBid = !!myBid && myBid.status!=='withdrawn'
+  const isOwner    = task && task.creator_id === user.userId
+  const isCreator  = isOwner                       // can manage this task
+  const isEarner   = task && !isOwner              // can bid on it
   const acceptedBid = bids.find(b=>b.status==='accepted')
-  const currentTask = state.tasks.find(t=>t.task_id===taskId)
-  const currentStatus = currentTask?.status || task?.status
+  const currentStatus = task?.status
 
+  if (loadingTask && !task) return <div style={{ padding:40, textAlign:'center' }}><Spinner /></div>
   if (!task) return <EmptyState message="Task not found" action={<Btn onClick={() => setPage('tasks-browse')}>← Back</Btn>} />
 
-  function submitBid() {
+  async function submitBid() {
     const errs = {}
     if (!bidAmount||isNaN(bidAmount)||parseFloat(bidAmount)<=0) errs.amount='Enter a valid amount'
     if (!bidPitch.trim()||bidPitch.trim().length<20) errs.pitch='Pitch must be at least 20 characters'
     if (Object.keys(errs).length) { setBidErrors(errs); return }
     setBidErrors({}); setBidLoading(true)
-    setTimeout(() => {
-      const newBid = { bid_id:`b${Date.now()}`, task_id:taskId, bidder_id:'u3', amount:bidAmount, pitch:bidPitch.trim(), status:'pending', display_name:user.displayName||'You', avg_rating:4.2, created_at:new Date().toISOString() }
-      dispatch({ type:'ADD_BID', bid:newBid })
+    try {
+      const res = await fetch(`/tasks/${taskId}/bids`, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
+        body: JSON.stringify({ amount: parseFloat(bidAmount), pitch: bidPitch.trim() }),
+      })
+      const data = await res.json().catch(()=>({}))
+      if (!res.ok) throw new Error(data.message || 'Could not submit bid')
       toast(`Bid of R${bidAmount} submitted!`, 'success')
-      setBidLoading(false); setBidAmount(''); setBidPitch('')
-    }, 900)
+      setBidAmount(''); setBidPitch('')
+      await loadTask({ silent:true })   // refresh so the new bid shows immediately
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setBidLoading(false)
+    }
   }
 
-  function confirmAccept() {
+  async function confirmAccept() {
     setAcceptLoading(true)
-    setTimeout(() => {
-      dispatch({ type:'UPDATE_BID', bid_id:acceptModal.bid_id, changes:{status:'accepted'} })
-      dispatch({ type:'REJECT_OTHER_BIDS', task_id:taskId, accepted_bid_id:acceptModal.bid_id })
-      dispatch({ type:'UPDATE_TASK', task_id:taskId, changes:{status:'in_progress',assigned_to:acceptModal.bidder_id} })
-      dispatch({ type:'SET_ESCROW', task_id:taskId, status:'pending_payment' })
-      toast('Bid accepted! Fund escrow to begin work.', 'success')
-      setAcceptLoading(false); setAcceptModal(null)
-    }, 1000)
+    try {
+      const res = await fetch(`/tasks/${taskId}/bids/${acceptModal.bid_id}/accept`, {
+        method:'PATCH',
+        headers:{ Authorization:`Bearer ${token()}` },
+      })
+      const data = await res.json().catch(()=>({}))
+      if (!res.ok) throw new Error(data.message || 'Could not accept bid')
+      toast('Bid accepted! The earner has been notified.', 'success')
+      setAcceptModal(null)
+      await loadTask({ silent:true })   // task flips to in_progress for both accounts
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setAcceptLoading(false)
+    }
   }
 
   function confirmFund() {
@@ -2005,15 +2221,24 @@ function TaskDetail({ taskId, setPage }) {
     }, 1200)
   }
 
-  function confirmRelease() {
+  async function confirmComplete() {
     setReleaseLoading(true)
-    setTimeout(() => {
-      dispatch({ type:'UPDATE_TASK', task_id:taskId, changes:{status:'completed'} })
-      dispatch({ type:'SET_ESCROW', task_id:taskId, status:'released' })
-      toast(`R${task.budget} released to earner!`, 'success')
-      setReleaseLoading(false); setReleaseModal(false)
-      setTimeout(() => setReviewModal(true), 600)
-    }, 1100)
+    try {
+      const res = await fetch(`/tasks/${taskId}/complete`, {
+        method:'PATCH',
+        headers:{ Authorization:`Bearer ${token()}` },
+      })
+      const data = await res.json().catch(()=>({}))
+      if (!res.ok) throw new Error(data.message || 'Could not mark complete')
+      toast('Task marked complete! You can now leave a review.', 'success')
+      setReleaseModal(false)
+      await loadTask({ silent:true })
+      setTimeout(() => setReviewModal(true), 500)
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setReleaseLoading(false)
+    }
   }
 
   function confirmDispute() {
@@ -2028,19 +2253,29 @@ function TaskDetail({ taskId, setPage }) {
     }, 1000)
   }
 
-  function submitReview() {
+  async function submitReview() {
     if (!reviewRating) { toast('Please select a star rating', 'error'); return }
     setReviewLoading(true)
-    setTimeout(() => {
-      dispatch({ type:'ADD_REVIEW', review:{ review_id:`r${Date.now()}`, task_id:taskId, reviewer_id:'u1', reviewee_id:acceptedBid?.bidder_id||'u3', rating:reviewRating, comment:reviewComment.trim(), role:'creator', created_at:new Date().toISOString() } })
+    try {
+      const res = await fetch('/reviews', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
+        body: JSON.stringify({ task_id: taskId, rating: reviewRating, comment: reviewComment.trim() }),
+      })
+      const data = await res.json().catch(()=>({}))
+      if (!res.ok) throw new Error(data.message || 'Could not submit review')
       toast('Review submitted — thank you!', 'success')
-      setReviewLoading(false); setReviewModal(false); setReviewDone(true)
-    }, 800)
+      setReviewModal(false); setReviewDone(true)
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setReviewLoading(false)
+    }
   }
 
   return (
     <div className="page-enter" style={{ maxWidth:920 }}>
-      <button onClick={() => setPage('tasks-browse')} style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'0.78rem', fontFamily:'var(--font-mono)', textTransform:'uppercase', letterSpacing:'0.08em', cursor:'pointer', marginBottom:20 }}>← Back to Tasks</button>
+      <button onClick={() => { if (window.history.length > 1) window.history.back(); else setPage('tasks-browse') }} style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'0.78rem', fontFamily:'var(--font-mono)', textTransform:'uppercase', letterSpacing:'0.08em', cursor:'pointer', marginBottom:20 }}>← Back</button>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:24, flexWrap:'wrap', gap:12 }}>
         <div>
           <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:8 }}>
@@ -2048,6 +2283,12 @@ function TaskDetail({ taskId, setPage }) {
             <Mono>Task #{task.task_id}</Mono>
           </div>
           <h1 style={{ fontFamily:'var(--font-display)', fontSize:'1.9rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.03em', lineHeight:1.1, maxWidth:580 }}>{task.title}</h1>
+          {task.creator_name && (
+            <div style={{ marginTop:8 }}>
+              <Mono>Posted by </Mono>
+              <span onClick={() => openProfile(task.creator_id)} style={{ fontFamily:'var(--font-mono)', fontSize:'0.7rem', color:'var(--accent)', cursor:'pointer', textTransform:'uppercase', letterSpacing:'0.08em' }}>{isOwner ? 'you' : task.creator_name}</span>
+            </div>
+          )}
         </div>
         <div style={{ textAlign:'right' }}>
           <div style={{ fontFamily:'var(--font-mono)', fontSize:'1.6rem', color:'var(--accent)', fontWeight:500 }}>R{task.budget}</div>
@@ -2081,8 +2322,8 @@ function TaskDetail({ taskId, setPage }) {
                   <div key={bid.bid_id} style={{ background:'var(--bg-elevated)', borderRadius:'var(--radius-md)', padding:'14px 16px', border:`1px solid ${bid.status==='accepted'?'var(--accent)':'var(--border)'}`, opacity:bid.status==='rejected'?0.55:1 }}>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8 }}>
                       <div>
-                        <span style={{ fontWeight:600, fontSize:'0.9rem' }}>{bid.display_name}</span>
-                        {bid.bidder_id==='u3'&&<span style={{ marginLeft:8, fontSize:'0.72rem', color:'var(--accent)', fontFamily:'var(--font-mono)' }}>(You)</span>}
+                        <span onClick={() => openProfile(bid.bidder_id)} style={{ fontWeight:600, fontSize:'0.9rem', cursor:'pointer', textDecoration:'underline', textDecorationColor:'var(--border-strong)', textUnderlineOffset:3 }}>{bid.display_name}</span>
+                        {bid.bidder_id===user.userId&&<span style={{ marginLeft:8, fontSize:'0.72rem', color:'var(--accent)', fontFamily:'var(--font-mono)' }}>(You)</span>}
                         <div style={{ marginTop:3 }}><Stars rating={bid.avg_rating} /></div>
                       </div>
                       <div style={{ textAlign:'right', display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4 }}>
@@ -2091,23 +2332,31 @@ function TaskDetail({ taskId, setPage }) {
                       </div>
                     </div>
                     <p style={{ fontSize:'0.85rem', color:'var(--text-secondary)', lineHeight:1.5, marginBottom:isCreator&&bid.status==='pending'?12:0 }}>{bid.pitch}</p>
-                    {isCreator&&bid.status==='pending'&&currentStatus==='open'&&<Btn variant="primary" size="sm" onClick={() => setAcceptModal(bid)}>Accept This Bid</Btn>}
+                    {isCreator&&(
+                      <div style={{ display:'flex', gap:8 }}>
+                        {bid.status==='pending'&&currentStatus==='open'&&<Btn variant="primary" size="sm" onClick={() => setAcceptModal(bid)}>Accept This Bid</Btn>}
+                        <Btn variant="secondary" size="sm" onClick={() => openChat(bid.bidder_id, bid.display_name)}>💬 Message</Btn>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             )}
           </DCard>
 
-          {isCreator&&currentStatus==='in_progress'&&escrow?.status==='funded'&&(
-            <div style={{ display:'flex', gap:10 }}>
-              <Btn variant="success" onClick={() => setReleaseModal(true)}>✓ Release Payment</Btn>
-              <Btn variant="danger" onClick={() => setDisputeModal(true)}>⚠ Raise Dispute</Btn>
-            </div>
-          )}
-          {currentStatus==='completed'&&isCreator&&!reviewDone&&(
+          {/* Owner marks the task complete once work is done (escrow deferred) */}
+          {isOwner&&currentStatus==='in_progress'&&(
             <DCard hover={false} style={{ border:'1px solid var(--accent)', background:'var(--accent-glow)' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                <div><div style={{ fontWeight:600, marginBottom:4 }}>Task complete — leave a review</div><p style={{ fontSize:'0.85rem', color:'var(--text-secondary)' }}>Help other creators find great earners.</p></div>
+              <div style={{ fontWeight:600, marginBottom:4 }}>Work finished?</div>
+              <p style={{ fontSize:'0.84rem', color:'var(--text-secondary)', marginBottom:14, lineHeight:1.5 }}>Mark this task complete once {acceptedBid?.display_name || 'the earner'} has delivered. You'll both be able to leave a review.</p>
+              <Btn variant="success" fullWidth onClick={() => setReleaseModal(true)}>✓ Mark Task Complete</Btn>
+            </DCard>
+          )}
+          {/* After completion, either participant can leave one review */}
+          {currentStatus==='completed'&&!reviewDone&&(isOwner||(alreadyBid&&myBid.status==='accepted'))&&(
+            <DCard hover={false} style={{ border:'1px solid var(--accent)', background:'var(--accent-glow)' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+                <div><div style={{ fontWeight:600, marginBottom:4 }}>Task complete — leave a review</div><p style={{ fontSize:'0.85rem', color:'var(--text-secondary)' }}>Help build trust on ReLiv.</p></div>
                 <Btn onClick={() => setReviewModal(true)}>Leave Review</Btn>
               </div>
             </DCard>
@@ -2143,7 +2392,7 @@ function TaskDetail({ taskId, setPage }) {
             <DCard hover={false} style={{ border:'1px solid var(--success)', textAlign:'center', padding:24 }}>
               <div style={{ fontSize:'1.8rem', marginBottom:8 }}>🎉</div>
               <Mono color="var(--success)" size="0.8rem">Your bid was accepted!</Mono>
-              <p style={{ fontSize:'0.82rem', color:'var(--text-muted)', marginTop:6 }}>{escrow?.status==='funded'?'Escrow is funded — work can begin!':'Waiting for creator to fund escrow.'}</p>
+              <p style={{ fontSize:'0.82rem', color:'var(--text-muted)', marginTop:6 }}>You can start work now. Message the poster to coordinate.</p>
             </DCard>
           )}
           <DCard hover={false}>
@@ -2154,7 +2403,14 @@ function TaskDetail({ taskId, setPage }) {
               </div>
             ))}
           </DCard>
-          <Btn variant="secondary" fullWidth onClick={() => setPage('messages')}>💬 Send a Message</Btn>
+          {(() => {
+            // Determine who the "other party" is for this task
+            let chatUserId = null, chatName = null
+            if (isOwner && acceptedBid) { chatUserId = acceptedBid.bidder_id; chatName = acceptedBid.display_name }
+            else if (!isOwner)          { chatUserId = task.creator_id; chatName = task.creator_name || 'Task creator' }
+            if (!chatUserId) return null
+            return <Btn variant="secondary" fullWidth onClick={() => openChat(chatUserId, chatName)}>💬 Message {chatName?.split(' ')[0] || 'them'}</Btn>
+          })()}
         </div>
       </div>
 
@@ -2174,7 +2430,7 @@ function TaskDetail({ taskId, setPage }) {
           <Btn variant="primary" onClick={confirmFund} loading={fundLoading}>Confirm & Fund Escrow</Btn>
         </div>
       </Modal>
-      <ConfirmModal open={releaseModal} onClose={() => setReleaseModal(false)} onConfirm={confirmRelease} loading={releaseLoading} title="Release Payment" confirmLabel="Release Funds" confirmVariant="success" message={`Release R${task.budget} to the earner? This confirms the work is complete. This action cannot be undone.`} />
+      <ConfirmModal open={releaseModal} onClose={() => setReleaseModal(false)} onConfirm={confirmComplete} loading={releaseLoading} title="Mark Task Complete" confirmLabel="Yes, mark complete" confirmVariant="success" message={`Confirm that this task has been completed${acceptedBid?` by ${acceptedBid.display_name}`:''}? You'll both be able to leave a review afterwards.`} />
       <Modal open={disputeModal} onClose={() => setDisputeModal(false)} title="Raise a Dispute" maxWidth={500}>
         <p style={{ color:'var(--text-secondary)', fontSize:'0.875rem', marginBottom:16, lineHeight:1.6 }}>Raising a dispute freezes the escrow and notifies our admin team. Be specific about what was agreed vs what was delivered.</p>
         <Textarea label="Reason for dispute (min 20 characters)" value={disputeText} onChange={e => setDisputeText(e.target.value)} placeholder="Describe the issue clearly…" style={{ minHeight:140 }} />
@@ -2202,7 +2458,9 @@ function TaskDetail({ taskId, setPage }) {
 
 function TaskNew({ setPage, setSelectedTask }) {
   const { dispatch } = useStore()
+  const { user } = useAuth()
   const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
   const [step, setStep] = useState(0)
   const [title, setTitle]   = useState('')
   const [desc, setDesc]     = useState('')
@@ -2225,14 +2483,43 @@ function TaskNew({ setPage, setSelectedTask }) {
   function next() { const e=validateStep(); if (Object.keys(e).length){setErrors(e);return}; setErrors({}); setStep(s=>s+1) }
   function back() { setErrors({}); setStep(s=>s-1) }
 
-  function submit() {
+  async function submit() {
     setLoading(true)
-    setTimeout(() => {
-      const id = `task_${Date.now()}`
-      dispatch({ type:'ADD_TASK', task:{ task_id:id, creator_id:'u1', assigned_to:null, status:'open', title:title.trim(), description:desc.trim(), budget, deadline:new Date(deadline).toISOString(), skill_tags:tags.split(',').map(s=>s.trim()).filter(Boolean), created_at:new Date().toISOString() } })
+    const skillTags = tags.split(',').map(s=>s.trim()).filter(Boolean)
+    try {
+      const res = await fetch('/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: desc.trim(),
+          budget: parseFloat(budget),
+          deadline: new Date(deadline).toISOString(),
+          skill_tags: skillTags,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.message || 'Could not post task')
+      }
+      const data = await res.json()
+      const id = data.task.task_id
       toast(`Task "${title}" posted successfully!`, 'success')
-      setCreatedId(id); setLoading(false)
-    }, 1000)
+      setCreatedId(id)
+    } catch (err) {
+      if (err.message === 'Failed to fetch') {
+        // Genuinely offline (no server) — keep working locally so dev isn't blocked
+        const id = `task_${Date.now()}`
+        dispatch({ type:'ADD_TASK', task:{ task_id:id, creator_id:user.userId, assigned_to:null, status:'open', title:title.trim(), description:desc.trim(), budget, deadline:new Date(deadline).toISOString(), skill_tags:skillTags, created_at:new Date().toISOString() } })
+        toast('Backend offline — task saved locally only', 'warning')
+        setCreatedId(id)
+      } else {
+        // Server rejected it (validation / DB error) — show the real reason, do NOT fake success
+        toast(err.message, 'error')
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (createdId) return (
@@ -2243,7 +2530,7 @@ function TaskNew({ setPage, setSelectedTask }) {
         <p style={{ color:'var(--text-muted)', marginBottom:24, lineHeight:1.6 }}>Your task is live. Earners with matching skills have been notified.</p>
         <div style={{ display:'flex', gap:10, justifyContent:'center', flexWrap:'wrap' }}>
           <Btn onClick={() => { setSelectedTask(createdId); setPage('task-detail') }}>View Task</Btn>
-          <Btn variant="secondary" onClick={() => setPage('tasks-mine')}>All My Tasks</Btn>
+          <Btn variant="secondary" onClick={() => { setSelectedTask(null); setPage('tasks-mine') }}>All My Tasks</Btn>
           <Btn variant="ghost" onClick={() => { setTitle(''); setDesc(''); setBudget(''); setDead(''); setTags(''); setCreatedId(null); setStep(0) }}>Post Another</Btn>
         </div>
       </DCard>
@@ -2290,8 +2577,25 @@ function TaskNew({ setPage, setSelectedTask }) {
 
 function MyTasks({ setPage, setSelectedTask }) {
   const { state } = useStore()
+  const { user } = useAuth()
   const [filter, setFilter] = useState('all')
-  const myTasks = state.tasks.filter(t => t.creator_id==='u1')
+  const [myTasks, setMyTasks] = useState([])
+  const token = () => localStorage.getItem('rl_token')
+
+  async function load() {
+    try {
+      const res = await fetch('/tasks/mine', { headers: { Authorization: `Bearer ${token()}` } })
+      if (!res.ok) throw new Error('failed')
+      const data = await res.json()
+      // Only tasks I created (mine returns created + assigned)
+      setMyTasks((data.tasks || []).filter(t => t.creator_id === user.userId).map(t => ({ ...t, skill_tags: t.skill_tags || [] })))
+    } catch {
+      setMyTasks(state.tasks.filter(t => t.creator_id===user.userId))
+    }
+  }
+  useEffect(() => { load() }, []) // eslint-disable-line
+  useEffect(() => { const id = setInterval(load, 15000); return () => clearInterval(id) }, []) // eslint-disable-line
+
   const filtered = myTasks.filter(t => filter==='all'||t.status===filter)
   return (
     <div className="page-enter">
@@ -2309,8 +2613,9 @@ function MyTasks({ setPage, setSelectedTask }) {
       </div>
       <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
         {filtered.map(task => {
-          const taskBids = state.bids.filter(b=>b.task_id===task.task_id&&b.status!=='withdrawn')
-          const pendingBids = taskBids.filter(b=>b.status==='pending').length
+          const pendingBids = typeof task.bid_count === 'number'
+            ? task.bid_count
+            : state.bids.filter(b=>b.task_id===task.task_id&&b.status==='pending').length
           return (
             <DCard key={task.task_id} onClick={() => { setSelectedTask(task.task_id); setPage('task-detail') }} style={{ display:'flex', alignItems:'center', gap:20, padding:'16px 20px' }}>
               <div style={{ flex:1 }}>
@@ -2338,9 +2643,40 @@ function MyTasks({ setPage, setSelectedTask }) {
 
 function MyBids({ setPage, setSelectedTask }) {
   const { state, dispatch } = useStore()
+  const { user } = useAuth()
   const toast = useToast()
-  const myBids = state.bids.filter(b => b.bidder_id==='u3')
+  const [myBids, setMyBids] = useState([])
   const [filter, setFilter] = useState('all')
+  const token = () => localStorage.getItem('rl_token')
+
+  async function load() {
+    try {
+      const res = await fetch('/tasks/bids/mine', { headers: { Authorization: `Bearer ${token()}` } })
+      if (!res.ok) throw new Error('failed')
+      const data = await res.json()
+      // Map backend shape → what the card expects (task info is flattened on each bid)
+      setMyBids((data.bids || []).map(b => ({
+        ...b,
+        _task: { task_id: b.task_id, title: b.task_title, budget: b.task_budget, status: b.task_status, deadline: b.task_deadline },
+      })))
+    } catch {
+      setMyBids(state.bids.filter(b => b.bidder_id===user.userId).map(b => ({ ...b, _task: state.tasks.find(t=>t.task_id===b.task_id) })))
+    }
+  }
+  useEffect(() => { load() }, []) // eslint-disable-line
+  useEffect(() => { const id = setInterval(load, 15000); return () => clearInterval(id) }, []) // eslint-disable-line
+
+  async function withdraw(bidId) {
+    try {
+      const res = await fetch(`/tasks/bids/${bidId}/withdraw`, { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
+      if (!res.ok) throw new Error('failed')
+      toast('Bid withdrawn','info')
+      load()
+    } catch {
+      dispatch({type:'WITHDRAW_BID',bid_id:bidId}); toast('Bid withdrawn','info')
+    }
+  }
+
   const filtered = myBids.filter(b => filter==='all'||b.status===filter)
   return (
     <div className="page-enter">
@@ -2355,7 +2691,7 @@ function MyBids({ setPage, setSelectedTask }) {
       </div>
       <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
         {filtered.map(bid => {
-          const task = state.tasks.find(t=>t.task_id===bid.task_id)
+          const task = bid._task
           return (
             <DCard key={bid.bid_id} hover={bid.status!=='withdrawn'} style={{ opacity:bid.status==='withdrawn'?0.55:1 }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
@@ -2374,7 +2710,7 @@ function MyBids({ setPage, setSelectedTask }) {
               </div>
               <div style={{ display:'flex', gap:10 }}>
                 {task&&<Btn variant="secondary" size="sm" onClick={() => { setSelectedTask(task.task_id); setPage('task-detail') }}>View Task</Btn>}
-                {bid.status==='pending'&&<Btn variant="danger" size="sm" onClick={() => { dispatch({type:'WITHDRAW_BID',bid_id:bid.bid_id}); toast('Bid withdrawn','info') }}>Withdraw</Btn>}
+                {bid.status==='pending'&&<Btn variant="danger" size="sm" onClick={() => withdraw(bid.bid_id)}>Withdraw</Btn>}
               </div>
             </DCard>
           )
@@ -2438,80 +2774,209 @@ const CONTACTS = [
   { id:'u2', name:'James Lee',    avatar:'JL', role:'Creator', task:'Mobile App Task #2' },
 ]
 
-function Messages() {
-  const { state, dispatch } = useStore()
-  const [activeContact, setActiveContact] = useState('u3')
-  const [msg, setMsg]   = useState('')
-  const [typing, setTyping] = useState(false)
+function Messages({ target, clearTarget }) {
+  const { user } = useAuth()
+  const { state } = useStore()
+  const toast = useToast()
+  const myId = user.userId
+
+  const [threads, setThreads]   = useState([])      // conversation list from backend
+  const [activeId, setActiveId] = useState(target?.userId || null)    // user_id of the open conversation
+  const [pendingName, setPendingName] = useState(target?.name || null) // name for a not-yet-started chat
+  const [messages, setMessages] = useState([])      // messages in the open thread
+  const [msg, setMsg]           = useState('')
+  const [sending, setSending]   = useState(false)
+  const [offline, setOffline]   = useState(false)   // backend unreachable → mock mode
+  const [loading, setLoading]   = useState(true)
   const bottomRef = useRef(null)
-  const contact = CONTACTS.find(c => c.id===activeContact)
-  const thread = state.messages.filter(m => (m.sender_id==='u1'&&m.receiver_id===activeContact)||(m.sender_id===activeContact&&m.receiver_id==='u1'))
-  useEffect(() => { bottomRef.current?.scrollIntoView({behavior:'smooth'}) }, [thread, typing])
-  const REPLIES = ['Got it, I\'ll get started right away.','Understood. I\'ll have an update by end of day.','Sure, let me check and get back to you.','Perfect, noted.','Thanks for the context — much clearer.','Can we jump on a quick call?']
-  function send() {
-    if (!msg.trim()) return
-    dispatch({ type:'ADD_MESSAGE', message:{ message_id:`m${Date.now()}`, sender_id:'u1', receiver_id:activeContact, content:msg.trim(), created_at:new Date().toISOString(), sender_name:'You' } })
-    setMsg(''); setTyping(true)
-    setTimeout(() => { setTyping(false); dispatch({ type:'ADD_MESSAGE', message:{ message_id:`r${Date.now()}`, sender_id:activeContact, receiver_id:'u1', content:REPLIES[Math.floor(Math.random()*REPLIES.length)], created_at:new Date().toISOString(), sender_name:contact.name } }) }, 1400+Math.random()*600)
+  const token = () => localStorage.getItem('rl_token')
+
+  // ── Load conversation list ──────────────────────────────────────────────────
+  async function loadThreads() {
+    try {
+      const res = await fetch('/messages/threads', { headers: { Authorization: `Bearer ${token()}` } })
+      if (!res.ok) throw new Error('threads failed')
+      const data = await res.json()
+      let list = data.threads || []
+      // If we arrived with a target (e.g. from a task) not yet in the list, add it
+      if (target?.userId && !list.some(t => t.other_id === target.userId)) {
+        list = [{ other_id: target.userId, display_name: target.name || 'New conversation', last_message: null, avatar_url: null, _pending: true }, ...list]
+      }
+      setThreads(list)
+      setOffline(false)
+      // Open the target if given, else the first conversation
+      if (target?.userId) setActiveId(target.userId)
+      else if (!activeId && list.length) setActiveId(list[0].other_id)
+      return list
+    } catch {
+      // Backend offline → fall back to mock contacts so the screen still works
+      setOffline(true)
+      let list = CONTACTS.map(c => ({ other_id:c.id, display_name:c.name, last_message:c.task, avatar_url:null }))
+      if (target?.userId && !list.some(t => t.other_id === target.userId)) {
+        list = [{ other_id: target.userId, display_name: target.name || 'New conversation', last_message:null, avatar_url:null, _pending:true }, ...list]
+      }
+      setThreads(list)
+      if (target?.userId) setActiveId(target.userId)
+      else if (!activeId) setActiveId(list[0]?.other_id)
+      return []
+    } finally {
+      setLoading(false)
+    }
   }
+
+  // ── Load messages for the open conversation ─────────────────────────────────
+  async function loadThread(otherId, { silent = false } = {}) {
+    if (!otherId) return
+    try {
+      const res = await fetch(`/messages/${otherId}`, { headers: { Authorization: `Bearer ${token()}` } })
+      if (!res.ok) throw new Error('thread failed')
+      const data = await res.json()
+      setMessages(data.messages || [])
+      setOffline(false)
+    } catch {
+      // Offline mock: pull from the in-memory store
+      if (!silent) {
+        setMessages(state.messages.filter(m =>
+          (m.sender_id===myId && m.receiver_id===otherId) ||
+          (m.sender_id===otherId && m.receiver_id===myId)))
+      }
+    }
+  }
+
+  // Initial load
+  useEffect(() => {
+    loadThreads().then(() => { if (target) clearTarget?.() })
+  }, []) // eslint-disable-line
+
+  // Load thread when active conversation changes
+  useEffect(() => { if (activeId) { setMessages([]); loadThread(activeId) } }, [activeId]) // eslint-disable-line
+
+  // ── Polling: refresh the open thread every 3s, the list every 12s ───────────
+  useEffect(() => {
+    if (offline) return // don't poll a backend that isn't there
+    const fast = setInterval(() => { if (activeId) loadThread(activeId, { silent:true }) }, 3000)
+    const slow = setInterval(() => { loadThreads() }, 12000)
+    return () => { clearInterval(fast); clearInterval(slow) }
+  }, [activeId, offline]) // eslint-disable-line
+
+  // Auto-scroll to newest
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior:'smooth' }) }, [messages])
+
+  const activeThread = threads.find(t => t.other_id === activeId) || (activeId && pendingName ? { other_id: activeId, display_name: pendingName } : null)
+
+  // ── Send (optimistic) ───────────────────────────────────────────────────────
+  async function send() {
+    const text = msg.trim()
+    if (!text || !activeId) return
+    setMsg('')
+
+    // Optimistic: show the message instantly with a temp id
+    const optimistic = {
+      message_id: 'tmp-' + Date.now(),
+      sender_id: myId, receiver_id: activeId,
+      content: text, created_at: new Date().toISOString(),
+      _pending: true,
+    }
+    setMessages(prev => [...prev, optimistic])
+    setSending(true)
+
+    try {
+      const res = await fetch('/messages', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
+        body: JSON.stringify({ receiver_id: activeId, content: text }),
+      })
+      if (!res.ok) throw new Error('send failed')
+      // Re-sync from server so the temp message is replaced by the real one
+      await loadThread(activeId, { silent:true })
+      loadThreads()
+    } catch {
+      // Mark the optimistic bubble as failed
+      setMessages(prev => prev.map(m => m.message_id===optimistic.message_id ? { ...m, _failed:true, _pending:false } : m))
+      if (!offline) toast('Message failed to send', 'error')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const initials = (name) => (name || '?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()
+
   return (
     <div className="page-enter" style={{ maxWidth:900 }}>
       <PageTitle sub="Direct messages">Messages</PageTitle>
+      {offline && <div style={{ background:'rgba(180,83,9,.08)', border:'1px solid rgba(180,83,9,.25)', borderRadius:8, padding:'8px 13px', marginBottom:14, fontSize:'.8rem', color:'var(--warning)' }}>Showing demo messages — start the backend to send real ones.</div>}
       <DCard hover={false} className="msg-shell" style={{ display:'flex', height:580, padding:0, overflow:'hidden' }}>
+
+        {/* Conversation list */}
         <div style={{ width:220, borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', flexShrink:0 }}>
           <div style={{ padding:'12px 14px', borderBottom:'1px solid var(--border)' }}><Mono size="0.65rem">Conversations</Mono></div>
-          {CONTACTS.map(c => {
-            const lastMsg = state.messages.filter(m=>(m.sender_id==='u1'&&m.receiver_id===c.id)||(m.sender_id===c.id&&m.receiver_id==='u1')).slice(-1)[0]
-            const isActive = activeContact===c.id
-            return (
-              <div key={c.id} onClick={() => setActiveContact(c.id)}
-                style={{ padding:'12px 14px', cursor:'pointer', background:isActive?'var(--accent-glow)':'transparent', borderLeft:isActive?'2px solid var(--accent)':'2px solid transparent', transition:'all 150ms ease' }}
-                onMouseEnter={e => { if(!isActive) e.currentTarget.style.background='var(--bg-hover)' }}
-                onMouseLeave={e => { if(!isActive) e.currentTarget.style.background='transparent' }}>
-                <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
-                  <div style={{ width:34, height:34, borderRadius:'50%', background:'var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'0.78rem', color:'var(--accent)', flexShrink:0 }}>{c.avatar}</div>
-                  <div style={{ flex:1, overflow:'hidden' }}>
-                    <div style={{ fontWeight:600, fontSize:'0.85rem', marginBottom:2 }}>{c.name}</div>
-                    {lastMsg&&<div style={{ fontSize:'0.75rem', color:'var(--text-muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lastMsg.content.slice(0,30)}…</div>}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-        <div style={{ flex:1, display:'flex', flexDirection:'column' }}>
-          <div style={{ padding:'12px 18px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:12, background:'var(--bg-elevated)' }}>
-            <div style={{ width:34, height:34, borderRadius:'50%', background:'var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'0.78rem', color:'var(--accent)', flexShrink:0 }}>{contact.avatar}</div>
-            <div>
-              <div style={{ fontWeight:600, fontSize:'0.9rem' }}>{contact.name}</div>
-              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--success)', display:'inline-block', animation:'pulse 2s infinite' }} />
-                <Mono color="var(--success)" size="0.62rem">Online · {contact.task}</Mono>
-              </div>
-            </div>
-          </div>
-          <div style={{ flex:1, overflowY:'auto', padding:'16px 18px', display:'flex', flexDirection:'column', gap:12 }}>
-            {thread.length===0&&<EmptyState icon="◎" message="Start the conversation" />}
-            {thread.map(m => {
-              const mine = m.sender_id==='u1'
+          <div style={{ flex:1, overflowY:'auto' }}>
+            {loading && <div style={{ padding:20, textAlign:'center' }}><Spinner size={18} /></div>}
+            {!loading && threads.length===0 && <div style={{ padding:'20px 14px' }}><Mono>No conversations yet</Mono></div>}
+            {threads.map(t => {
+              const isActive = activeId === t.other_id
               return (
-                <div key={m.message_id} style={{ display:'flex', justifyContent:mine?'flex-end':'flex-start' }}>
-                  <div style={{ maxWidth:'72%', background:mine?'var(--accent-glow)':'var(--bg-elevated)', border:`1px solid ${mine?'var(--accent-dim)':'var(--border)'}`, borderRadius:'var(--radius-md)', ...(mine?{borderBottomRightRadius:4}:{borderBottomLeftRadius:4}), padding:'10px 14px' }}>
-                    {!mine&&<Mono size="0.62rem" color="var(--accent)" style={{ display:'block', marginBottom:4 }}>{m.sender_name}</Mono>}
-                    <p style={{ fontSize:'0.88rem', lineHeight:1.55 }}>{m.content}</p>
-                    <Mono size="0.6rem" style={{ display:'block', textAlign:mine?'right':'left', marginTop:5 }}>{new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}{mine ? '  ✓✓' : ''}</Mono>
+                <div key={t.other_id} onClick={() => setActiveId(t.other_id)}
+                  style={{ padding:'12px 14px', cursor:'pointer', background:isActive?'var(--accent-glow)':'transparent', borderLeft:isActive?'2px solid var(--accent)':'2px solid transparent', transition:'all 150ms ease' }}
+                  onMouseEnter={e => { if(!isActive) e.currentTarget.style.background='var(--bg-hover)' }}
+                  onMouseLeave={e => { if(!isActive) e.currentTarget.style.background='transparent' }}>
+                  <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
+                    {t.avatar_url
+                      ? <img src={t.avatar_url} alt="" style={{ width:34, height:34, borderRadius:'50%', objectFit:'cover', flexShrink:0 }} />
+                      : <div style={{ width:34, height:34, borderRadius:'50%', background:'var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'0.78rem', color:'var(--accent)', flexShrink:0 }}>{initials(t.display_name)}</div>}
+                    <div style={{ flex:1, overflow:'hidden' }}>
+                      <div style={{ fontWeight:600, fontSize:'0.85rem', marginBottom:2 }}>{t.display_name || 'User'}</div>
+                      {t.last_message && <div style={{ fontSize:'0.75rem', color:'var(--text-muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.last_message.slice(0,30)}</div>}
+                    </div>
                   </div>
                 </div>
               )
             })}
-            {typing&&<div style={{ display:'flex', justifyContent:'flex-start' }}><div style={{ background:'var(--bg-elevated)', border:'1px solid var(--border)', borderRadius:'var(--radius-md)', padding:'12px 16px', display:'flex', gap:4, alignItems:'center' }}>{[0,1,2].map(i=><span key={i} style={{ width:6, height:6, borderRadius:'50%', background:'var(--text-muted)', display:'inline-block', animation:`pulse 1s infinite ${i*0.2}s` }} />)}</div></div>}
-            <div ref={bottomRef} />
           </div>
-          <div style={{ padding:'12px 16px', borderTop:'1px solid var(--border)', display:'flex', gap:10 }}>
-            <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}} placeholder={`Message ${contact.name}… (Enter to send)`}
-              style={{ flex:1, background:'var(--bg-elevated)', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', color:'var(--text-primary)', padding:'9px 13px', fontSize:'0.9rem', outline:'none' }} />
-            <Btn onClick={send} disabled={!msg.trim()}>Send</Btn>
-          </div>
+        </div>
+
+        {/* Active conversation */}
+        <div style={{ flex:1, display:'flex', flexDirection:'column' }}>
+          {!activeId ? (
+            <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <EmptyState icon="◎" message="Select a conversation" />
+            </div>
+          ) : (
+            <>
+              <div style={{ padding:'12px 18px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:12, background:'var(--bg-elevated)' }}>
+                <div style={{ width:34, height:34, borderRadius:'50%', background:'var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'0.78rem', color:'var(--accent)', flexShrink:0 }}>{initials(activeThread?.display_name)}</div>
+                <div>
+                  <div style={{ fontWeight:600, fontSize:'0.9rem' }}>{activeThread?.display_name || 'User'}</div>
+                  <Mono size="0.62rem">Direct message</Mono>
+                </div>
+              </div>
+
+              <div style={{ flex:1, overflowY:'auto', padding:'16px 18px', display:'flex', flexDirection:'column', gap:12 }}>
+                {messages.length===0 && <EmptyState icon="◎" message="Start the conversation" />}
+                {messages.map(m => {
+                  const mine = m.sender_id === myId
+                  return (
+                    <div key={m.message_id} style={{ display:'flex', justifyContent:mine?'flex-end':'flex-start' }}>
+                      <div style={{ maxWidth:'72%', background:mine?'var(--accent-glow)':'var(--bg-elevated)', border:`1px solid ${m._failed?'var(--danger)':(mine?'var(--accent-dim)':'var(--border)')}`, borderRadius:'var(--radius-md)', ...(mine?{borderBottomRightRadius:4}:{borderBottomLeftRadius:4}), padding:'10px 14px', opacity:m._pending?0.6:1 }}>
+                        <p style={{ fontSize:'0.88rem', lineHeight:1.55 }}>{m.content}</p>
+                        <Mono size="0.6rem" style={{ display:'block', textAlign:mine?'right':'left', marginTop:5 }}>
+                          {new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}
+                          {mine && (m._failed ? '  ✕ failed' : m._pending ? '  …' : (m.is_read ? '  ✓✓' : '  ✓'))}
+                        </Mono>
+                      </div>
+                    </div>
+                  )
+                })}
+                <div ref={bottomRef} />
+              </div>
+
+              <div style={{ padding:'12px 16px', borderTop:'1px solid var(--border)', display:'flex', gap:10 }}>
+                <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}} placeholder={`Message ${activeThread?.display_name || ''}… (Enter to send)`}
+                  style={{ flex:1, background:'var(--bg-elevated)', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', color:'var(--text-primary)', padding:'9px 13px', fontSize:'0.9rem', outline:'none' }} />
+                <Btn onClick={send} disabled={!msg.trim() || sending}>Send</Btn>
+              </div>
+            </>
+          )}
         </div>
       </DCard>
     </div>
@@ -2521,12 +2986,45 @@ function Messages() {
 function Notifications({ setPage, setSelectedTask }) {
   const { state, dispatch } = useStore()
   const toast = useToast()
-  const notifs = state.notifications
-  const icons = { 'bid.submitted':'⚡','task.matched':'🎯','payment.released':'💰','escrow.funded':'🔒','dispute.resolved':'⚖️','bid.accepted':'🎉','task.created':'✓' }
-  function markAll() { dispatch({type:'MARK_ALL_READ'}); toast('All notifications marked as read','info') }
+  const [notifs, setNotifs] = useState(state.notifications)
+  const [offline, setOffline] = useState(false)
+  const token = () => localStorage.getItem('rl_token')
+  const icons = { 'bid.submitted':'⚡','bid.accepted':'🎉','task.matched':'🎯','task.completed':'✅','payment.released':'💰','escrow.funded':'🔒','dispute.resolved':'⚖️','review.received':'⭐','task.created':'✓' }
+
+  // Load notifications from backend, fall back to store if offline
+  async function load() {
+    try {
+      const res = await fetch('/notifications', { headers: { Authorization: `Bearer ${token()}` } })
+      if (!res.ok) throw new Error('failed')
+      const data = await res.json()
+      setNotifs(data.notifications || [])
+      setOffline(false)
+    } catch {
+      setNotifs(state.notifications)
+      setOffline(true)
+    }
+  }
+
+  useEffect(() => { load() }, []) // eslint-disable-line
+  // Poll every 15s for new notifications
+  useEffect(() => {
+    if (offline) return
+    const id = setInterval(load, 15000)
+    return () => clearInterval(id)
+  }, [offline]) // eslint-disable-line
+
+  async function markAll() {
+    setNotifs(prev => prev.map(n => ({ ...n, is_read:true })))  // optimistic
+    toast('All notifications marked as read','info')
+    if (offline) { dispatch({type:'MARK_ALL_READ'}); return }
+    try {
+      await fetch('/notifications/read', { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
+    } catch { /* already updated optimistically */ }
+  }
+
   function handleClick(n) {
-    dispatch({type:'MARK_NOTIFICATION_READ',id:n.notification_id})
-    if (n.reference_id&&state.tasks.find(t=>t.task_id===n.reference_id)) { setSelectedTask(n.reference_id); setPage('task-detail') }
+    setNotifs(prev => prev.map(x => x.notification_id===n.notification_id ? { ...x, is_read:true } : x))
+    if (n.reference_id && state.tasks.find(t=>t.task_id===n.reference_id)) { setSelectedTask(n.reference_id); setPage('task-detail') }
   }
   return (
     <div className="page-enter" style={{ maxWidth:680 }}>
@@ -2558,7 +3056,527 @@ function Notifications({ setPage, setSelectedTask }) {
   )
 }
 
-function Profile() {
+// ═══════════════════════════════════════════════════════════════════════════════
+//  LOCAL BUSINESS LISTINGS — student-facing browse + admin management
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const BIZ_CATEGORIES = [
+  'Food & drink', 'Print & stationery', 'Books', 'Groceries', 'Health & beauty',
+  'Clothing', 'Tech & repairs', 'Services', 'Entertainment', 'Other',
+]
+
+// Small image gallery used on business cards/detail
+function BizGallery({ images = [], height = 160 }) {
+  const [idx, setIdx] = useState(0)
+  if (!images || images.length === 0) {
+    return <div style={{ height, background:'var(--bg-elevated)', borderRadius:'var(--radius-sm)', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--text-muted)', fontSize:'1.6rem' }}>◇</div>
+  }
+  return (
+    <div style={{ position:'relative', height, borderRadius:'var(--radius-sm)', overflow:'hidden', background:'var(--bg-elevated)' }}>
+      <img src={images[idx]} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+      {images.length > 1 && (
+        <>
+          <button onClick={() => setIdx(i => (i-1+images.length)%images.length)}
+            style={{ position:'absolute', left:6, top:'50%', transform:'translateY(-50%)', border:'none', background:'rgba(0,0,0,.45)', color:'#fff', borderRadius:'50%', width:28, height:28, cursor:'pointer' }}>‹</button>
+          <button onClick={() => setIdx(i => (i+1)%images.length)}
+            style={{ position:'absolute', right:6, top:'50%', transform:'translateY(-50%)', border:'none', background:'rgba(0,0,0,.45)', color:'#fff', borderRadius:'50%', width:28, height:28, cursor:'pointer' }}>›</button>
+          <div style={{ position:'absolute', bottom:6, left:0, right:0, display:'flex', justifyContent:'center', gap:4 }}>
+            {images.map((_,i) => <span key={i} style={{ width:6, height:6, borderRadius:'50%', background:i===idx?'#fff':'rgba(255,255,255,.5)' }} />)}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function LocalBrowse({ setPage }) {
+  const [businesses, setBusinesses] = useState([])
+  const [loading, setLoading]       = useState(true)
+  const [cat, setCat]               = useState('all')
+  const [selected, setSelected]     = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    const q = cat === 'all' ? '' : `?category=${encodeURIComponent(cat)}`
+    fetch(`/businesses${q}`)
+      .then(r => r.json())
+      .then(d => { if (!cancelled) { setBusinesses(d.businesses || []); setLoading(false) } })
+      .catch(() => { if (!cancelled) { setBusinesses([]); setLoading(false) } })
+    return () => { cancelled = true }
+  }, [cat])
+
+  // Detail view
+  if (selected) {
+    const b = selected
+    return (
+      <div className="page-enter" style={{ maxWidth:760 }}>
+        <button onClick={() => setSelected(null)} style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'0.78rem', fontFamily:'var(--font-mono)', letterSpacing:'0.06em', cursor:'pointer', marginBottom:16 }}>← Back to Local</button>
+        <DCard hover={false} style={{ padding:0, overflow:'hidden' }}>
+          <BizGallery images={b.image_urls} height={240} />
+          <div style={{ padding:22 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8, flexWrap:'wrap' }}>
+              {b.logo_url && <img src={b.logo_url} alt="" style={{ width:44, height:44, borderRadius:10, objectFit:'cover' }} />}
+              <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.5rem', margin:0 }}>{b.name}</h1>
+              <Tag>{b.category}</Tag>
+            </div>
+            {b.description && <p style={{ color:'var(--text-secondary)', lineHeight:1.7 }}>{b.description}</p>}
+            <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:16 }}>
+              {b.address && <Mono>📍 {b.address}</Mono>}
+              {b.hours   && <Mono>🕒 {b.hours}</Mono>}
+            </div>
+            <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginTop:18 }}>
+              {b.phone    && <a href={`tel:${b.phone}`} style={{ textDecoration:'none' }}><Btn variant="secondary" size="sm">📞 Call</Btn></a>}
+              {b.whatsapp && <a href={`https://wa.me/${b.whatsapp.replace(/[^0-9]/g,'')}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}><Btn variant="secondary" size="sm">💬 WhatsApp</Btn></a>}
+              {b.link_url && <a href={b.link_url} target="_blank" rel="noopener noreferrer nofollow" style={{ textDecoration:'none' }}><Btn variant="ghost" size="sm">🔗 Website</Btn></a>}
+            </div>
+          </div>
+        </DCard>
+      </div>
+    )
+  }
+
+  return (
+    <div className="page-enter">
+      <div style={{ marginBottom:18 }}>
+        <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.6rem', marginBottom:4 }}>Local in Makhanda</h1>
+        <p style={{ color:'var(--text-secondary)', fontSize:'.92rem' }}>Discover businesses around Grahamstown — supported by ReLivR.</p>
+      </div>
+
+      {/* Category filter */}
+      <div className="feed-scroll" style={{ display:'flex', gap:8, marginBottom:20, overflowX:'auto', paddingBottom:4 }}>
+        {['all', ...BIZ_CATEGORIES].map(c => (
+          <button key={c} onClick={() => setCat(c)}
+            style={{ padding:'7px 14px', borderRadius:100, fontSize:'.82rem', fontWeight:600, whiteSpace:'nowrap', cursor:'pointer', border:`1px solid ${cat===c?'var(--accent)':'var(--border)'}`, background:cat===c?'var(--accent)':'var(--bg-surface)', color:cat===c?'#fff':'var(--text-secondary)' }}>
+            {c === 'all' ? 'All' : c}
+          </button>
+        ))}
+      </div>
+
+      {loading ? <div style={{ padding:50, textAlign:'center' }}><Spinner /></div>
+       : businesses.length === 0 ? (
+        <EmptyState icon="◇" message={cat==='all' ? 'No local businesses listed yet — check back soon!' : `No businesses in ${cat} yet`} />
+      ) : (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))', gap:16 }}>
+          {businesses.map(b => (
+            <DCard key={b.business_id} onClick={() => setSelected(b)} style={{ padding:0, overflow:'hidden', cursor:'pointer' }}>
+              <BizGallery images={b.image_urls} height={150} />
+              <div style={{ padding:'14px 16px' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8 }}>
+                  <span style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:'1.02rem' }}>{b.name}</span>
+                </div>
+                <Tag>{b.category}</Tag>
+                {b.description && <p style={{ fontSize:'.84rem', color:'var(--text-secondary)', lineHeight:1.5, marginTop:8, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{b.description}</p>}
+                {b.hours && <Mono style={{ display:'block', marginTop:8 }}>🕒 {b.hours}</Mono>}
+              </div>
+            </DCard>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AdminBusinesses() {
+  const toast = useToast()
+  const [businesses, setBusinesses] = useState([])
+  const [loading, setLoading]       = useState(true)
+  const [editing, setEditing]       = useState(null)   // business object or 'new' or null
+  const token = () => localStorage.getItem('rl_token')
+
+  function load() {
+    setLoading(true)
+    fetch('/businesses/admin/all', { headers:{ Authorization:`Bearer ${token()}` } })
+      .then(r => r.json())
+      .then(d => { setBusinesses(d.businesses || []); setLoading(false) })
+      .catch(() => { setBusinesses([]); setLoading(false) })
+  }
+  useEffect(() => { load() }, [])
+
+  if (editing) return <BusinessForm business={editing==='new'?null:editing} onDone={() => { setEditing(null); load() }} onCancel={() => setEditing(null)} />
+
+  const statusColor = { active:'var(--success)', pending:'var(--warning)', expired:'var(--text-muted)' }
+
+  return (
+    <div className="page-enter">
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18, flexWrap:'wrap', gap:10 }}>
+        <div>
+          <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.5rem', marginBottom:4 }}>Business Listings</h1>
+          <p style={{ color:'var(--text-secondary)', fontSize:'.88rem' }}>Manage local partner listings. Set status to <strong>active</strong> to show them in Local.</p>
+        </div>
+        <Btn onClick={() => setEditing('new')}>＋ Add Business</Btn>
+      </div>
+
+      {loading ? <div style={{ padding:50, textAlign:'center' }}><Spinner /></div>
+       : businesses.length === 0 ? (
+        <EmptyState icon="◇" message="No businesses yet — add your first local partner." action={<Btn onClick={() => setEditing('new')}>＋ Add Business</Btn>} />
+      ) : (
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          {businesses.map(b => (
+            <DCard key={b.business_id} hover={false} style={{ display:'flex', alignItems:'center', gap:14, padding:'12px 16px' }}>
+              <div style={{ width:48, height:48, borderRadius:10, overflow:'hidden', flexShrink:0, background:'var(--bg-elevated)' }}>
+                {(b.image_urls?.[0] || b.logo_url) ? <img src={b.logo_url || b.image_urls[0]} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'var(--text-muted)' }}>◇</div>}
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontWeight:700 }}>{b.name}</div>
+                <Mono>{b.category}{b.signed_by_rep?` · ${b.signed_by_rep}`:''}</Mono>
+              </div>
+              <span style={{ fontFamily:'var(--font-mono)', fontSize:'.72rem', fontWeight:700, textTransform:'uppercase', color:statusColor[b.status]||'var(--text-muted)' }}>{b.status}</span>
+              <Btn variant="secondary" size="sm" onClick={() => setEditing(b)}>Edit</Btn>
+            </DCard>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BusinessForm({ business, onDone, onCancel }) {
+  const toast = useToast()
+  const isNew = !business
+  const [f, setF] = useState({
+    name: business?.name || '', category: business?.category || BIZ_CATEGORIES[0],
+    description: business?.description || '', address: business?.address || '',
+    hours: business?.hours || '', phone: business?.phone || '', whatsapp: business?.whatsapp || '',
+    email: business?.email || '', linkUrl: business?.link_url || '', logoUrl: business?.logo_url || '',
+    status: business?.status || 'pending', feePaid: business?.fee_paid || '',
+    signedByRep: business?.signed_by_rep || '', notes: business?.notes || '',
+  })
+  const [images, setImages] = useState(business?.image_urls || [])
+  const [imgInput, setImgInput] = useState('')
+  const [saving, setSaving] = useState(false)
+  const token = () => localStorage.getItem('rl_token')
+  const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
+
+  function addImage() {
+    const v = imgInput.trim()
+    if (!v) return
+    if (images.length >= 8) { toast('Up to 8 images', 'error'); return }
+    setImages(arr => [...arr, v]); setImgInput('')
+  }
+
+  async function save() {
+    if (!f.name.trim() || !f.category.trim()) { toast('Name and category are required', 'error'); return }
+    setSaving(true)
+    try {
+      const payload = { ...f, feePaid: f.feePaid===''?null:parseFloat(f.feePaid), imageUrls: images }
+      const url = isNew ? '/businesses' : `/businesses/${business.business_id}`
+      const res = await fetch(url, {
+        method: isNew ? 'POST' : 'PATCH',
+        headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json().catch(()=>({}))
+      if (!res.ok) throw new Error(data.message || data.errors?.[0]?.msg || 'Save failed')
+      toast(isNew ? 'Business added' : 'Business updated', 'success')
+      onDone()
+    } catch (err) { toast(err.message, 'error') }
+    finally { setSaving(false) }
+  }
+
+  async function remove() {
+    if (!confirm('Delete this business listing permanently?')) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/businesses/${business.business_id}`, { method:'DELETE', headers:{ Authorization:`Bearer ${token()}` } })
+      if (!res.ok) throw new Error('Delete failed')
+      toast('Business deleted', 'success'); onDone()
+    } catch (err) { toast(err.message, 'error') }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="page-enter" style={{ maxWidth:680 }}>
+      <button onClick={onCancel} style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'0.78rem', fontFamily:'var(--font-mono)', letterSpacing:'0.06em', cursor:'pointer', marginBottom:16 }}>← Back to listings</button>
+      <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.5rem', marginBottom:18 }}>{isNew ? 'Add a business' : 'Edit business'}</h1>
+
+      <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+        <DCard hover={false}>
+          <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:14 }}>Public details</Mono>
+          <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            <Input label="Business name" value={f.name} onChange={set('name')} />
+            <SelectField label="Category" value={f.category} onChange={set('category')}>
+              {BIZ_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </SelectField>
+            <Textarea label="Description" value={f.description} onChange={set('description')} hint="1–2 sentences students will see." />
+            <Input label="Address" value={f.address} onChange={set('address')} placeholder="e.g. 12 High Street, Makhanda" />
+            <Input label="Hours" value={f.hours} onChange={set('hours')} placeholder="Mon–Fri 8–17, Sat 9–13" />
+            <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
+              <div style={{ flex:1, minWidth:140 }}><Input label="Phone" value={f.phone} onChange={set('phone')} /></div>
+              <div style={{ flex:1, minWidth:140 }}><Input label="WhatsApp" value={f.whatsapp} onChange={set('whatsapp')} /></div>
+            </div>
+            <Input label="Email" value={f.email} onChange={set('email')} type="email" />
+            <Input label="Website / social link" value={f.linkUrl} onChange={set('linkUrl')} placeholder="instagram.com/their-handle" hint="Any valid link — checked on save." />
+            <Input label="Logo URL (optional)" value={f.logoUrl} onChange={set('logoUrl')} />
+          </div>
+        </DCard>
+
+        <DCard hover={false}>
+          <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:6 }}>Photos (storefront, goods, menus)</Mono>
+          <p style={{ fontSize:'.78rem', color:'var(--text-muted)', marginBottom:12, lineHeight:1.5 }}>Paste image links (up to 8). Menus and price lists go here as pictures. When a Cloudinary account is connected, uploads will populate this list automatically.</p>
+          <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+            <input value={imgInput} onChange={e=>setImgInput(e.target.value)} placeholder="https://…/photo.jpg" onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addImage()}}}
+              style={{ flex:1, padding:'9px 13px', borderRadius:'var(--radius-sm)', border:'1px solid var(--border)', fontSize:'.9rem' }} />
+            <Btn variant="secondary" size="sm" onClick={addImage}>Add</Btn>
+          </div>
+          {images.length > 0 && (
+            <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+              {images.map((url,i) => (
+                <div key={i} style={{ position:'relative', width:72, height:72, borderRadius:8, overflow:'hidden', background:'var(--bg-elevated)' }}>
+                  <img src={url} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                  <button onClick={() => setImages(arr => arr.filter((_,j)=>j!==i))}
+                    style={{ position:'absolute', top:2, right:2, width:18, height:18, borderRadius:'50%', border:'none', background:'rgba(0,0,0,.6)', color:'#fff', fontSize:'.7rem', cursor:'pointer', lineHeight:1 }}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </DCard>
+
+        <DCard hover={false}>
+          <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:14 }}>Internal (not shown to students)</Mono>
+          <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            <SelectField label="Status" value={f.status} onChange={set('status')}>
+              <option value="pending">Pending (hidden)</option>
+              <option value="active">Active (visible in Local)</option>
+              <option value="expired">Expired (hidden)</option>
+            </SelectField>
+            <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
+              <div style={{ flex:1, minWidth:140 }}><Input label="Fee paid (R)" value={f.feePaid} onChange={set('feePaid')} type="number" /></div>
+              <div style={{ flex:1, minWidth:140 }}><Input label="Signed by (rep)" value={f.signedByRep} onChange={set('signedByRep')} /></div>
+            </div>
+            <Textarea label="Internal notes" value={f.notes} onChange={set('notes')} />
+          </div>
+        </DCard>
+
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+          <Btn loading={saving} onClick={save}>{isNew ? 'Add business' : 'Save changes'}</Btn>
+          <Btn variant="secondary" onClick={onCancel}>Cancel</Btn>
+          {!isNew && <Btn variant="danger" onClick={remove} style={{ marginLeft:'auto' }}>Delete</Btn>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Trust/verification badge definitions — rendered on public profiles
+const BADGE_DEFS = {
+  ru_student:    { icon:'🎓', label:'Rhodes student',  color:'#5b21b6', desc:'Verified @ru.ac.za email' },
+  email_verified:{ icon:'✓',  label:'Verified',        color:'#15803d', desc:'Email address confirmed' },
+  google_linked: { icon:'🔗', label:'Google-linked',   color:'#1d4ed8', desc:'Signed in with Google' },
+  top_rated:     { icon:'⭐', label:'Top rated',        color:'#d97706', desc:'4.5+ stars across 5+ reviews' },
+  established:   { icon:'🏅', label:'Established',      color:'#b45309', desc:'10+ tasks completed' },
+}
+
+function Badge2({ id }) {
+  const def = BADGE_DEFS[id]
+  if (!def) return null
+  return (
+    <span title={def.desc} style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'4px 10px', borderRadius:100, background:'var(--bg-elevated)', border:`1px solid ${def.color}33`, fontSize:'.74rem', fontWeight:600, color:def.color, whiteSpace:'nowrap' }}>
+      <span>{def.icon}</span>{def.label}
+    </span>
+  )
+}
+
+function PublicProfile({ userId, setPage, openChat, openProfile }) {
+  const { user } = useAuth()
+  const toast = useToast()
+  const [data, setData]       = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState(null)
+  const [tab, setTab]         = useState('completed')
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true); setError(null)
+    fetch(`/profile/public/${userId}`)
+      .then(r => { if (!r.ok) throw new Error('Could not load profile'); return r.json() })
+      .then(d => { if (!cancelled) { setData(d); setLoading(false); setTab((d.completed?.length ? 'completed' : 'reviews')) } })
+      .catch(e => { if (!cancelled) { setError(e.message); setLoading(false) } })
+    return () => { cancelled = true }
+  }, [userId])
+
+  if (loading) return <div style={{ padding:60, textAlign:'center' }}><Spinner /></div>
+  if (error || !data) return <EmptyState icon="◷" message={error || 'Profile not found'} action={<Btn onClick={() => setPage('tasks-browse')}>← Back to Browse</Btn>} />
+
+  const { profile, counts, stats = {}, badges = [], posted, completed, reviews } = data
+  const name = profile.display_name || 'ReLivR member'
+  const avatar = profile.avatar_url || profile.google_avatar_url
+  const isMe = user && user.userId === userId
+  const joined = profile.joined_at ? new Date(profile.joined_at).toLocaleDateString('en-US',{month:'short',year:'numeric'}) : null
+  const skills = Array.isArray(profile.skills) ? profile.skills : []
+  const pinnedIds = Array.isArray(profile.pinned_task_ids) ? profile.pinned_task_ids : []
+  const pinned = completed.filter(t => pinnedIds.includes(t.task_id))
+  const featuredReview = reviews.find(r => r.review_id === profile.featured_review_id)
+
+  function share() {
+    const url = `${window.location.origin}/u/${userId}`
+    if (navigator.share) { navigator.share({ title:`${name} on ReLivR`, url }).catch(()=>{}) }
+    else { navigator.clipboard?.writeText(url); toast('Profile link copied!', 'success') }
+  }
+
+  const tabs = [
+    { id:'completed', label:`Completed (${counts?.tasks_completed ?? 0})` },
+    { id:'posted',    label:`Posted (${counts?.tasks_posted ?? 0})` },
+    { id:'reviews',   label:`Reviews (${profile.rating_count ?? 0})` },
+  ]
+  const list = tab==='completed' ? completed : tab==='posted' ? posted : reviews
+
+  return (
+    <div className="page-enter" style={{ maxWidth:840 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
+        <button onClick={() => { if (window.history.length>1) window.history.back(); else setPage('tasks-browse') }}
+          style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'0.78rem', fontFamily:'var(--font-mono)', letterSpacing:'0.06em', cursor:'pointer' }}>← Back</button>
+        <div style={{ display:'flex', gap:8 }}>
+          <Btn variant="ghost" size="sm" onClick={share}>🔗 Share</Btn>
+          {isMe && <Btn variant="secondary" size="sm" onClick={() => setPage('profile')}>Edit profile</Btn>}
+        </div>
+      </div>
+
+      {/* ── Hero ── */}
+      <DCard hover={false} style={{ marginBottom:18, overflow:'hidden', padding:0 }}>
+        <div style={{ height:88, background:'linear-gradient(120deg, var(--accent-dim), var(--bg-elevated))' }} />
+        <div style={{ padding:'0 24px 22px', marginTop:-44 }}>
+          {avatar
+            ? <img src={avatar} alt="" style={{ width:96, height:96, borderRadius:'50%', objectFit:'cover', border:'4px solid var(--bg-surface)', boxShadow:'0 2px 10px rgba(33,28,46,.12)' }} />
+            : <div style={{ width:96, height:96, borderRadius:'50%', background:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:800, fontSize:'2.3rem', color:'#fff', border:'4px solid var(--bg-surface)', boxShadow:'0 2px 10px rgba(33,28,46,.12)' }}>{name.charAt(0).toUpperCase()}</div>}
+          <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.7rem', lineHeight:1.1, marginTop:12 }}>{name}</h1>
+          {profile.headline && <p style={{ color:'var(--text-secondary)', fontSize:'1rem', marginTop:4, marginBottom:0 }}>{profile.headline}</p>}
+
+          {/* badges */}
+          {badges.length>0 && (
+            <div style={{ display:'flex', flexWrap:'wrap', gap:7, marginTop:12 }}>
+              {badges.map(bid => <Badge2 key={bid} id={bid} />)}
+            </div>
+          )}
+
+          {/* rating + meta */}
+          <div style={{ display:'flex', gap:14, alignItems:'center', flexWrap:'wrap', marginTop:12 }}>
+            {profile.rating_count > 0 ? (
+              <span style={{ display:'flex', gap:6, alignItems:'center' }}>
+                <Stars value={Math.round(profile.avg_rating)} />
+                <Mono>{Number(profile.avg_rating).toFixed(1)} · {profile.rating_count} review{profile.rating_count!==1?'s':''}</Mono>
+              </span>
+            ) : <Mono>No reviews yet</Mono>}
+            {profile.campus_zone && <Mono>📍 {profile.campus_zone}</Mono>}
+            {joined && <Mono>Joined {joined}</Mono>}
+          </div>
+
+          {profile.portfolio_url && (
+            <div style={{ marginTop:10 }}>
+              <a href={profile.portfolio_url} target="_blank" rel="noopener noreferrer nofollow"
+                style={{ display:'inline-flex', alignItems:'center', gap:6, color:'var(--accent)', fontWeight:600, fontSize:'.88rem', textDecoration:'none' }}>
+                🔗 {(() => { try { return new URL(profile.portfolio_url).hostname.replace('www.',''); } catch { return 'View portfolio'; } })()} ↗
+              </a>
+            </div>
+          )}
+
+          {!isMe && (
+            <div style={{ marginTop:16 }}>
+              <Btn onClick={() => openChat(userId, name)}>💬 Message {name.split(' ')[0]}</Btn>
+            </div>
+          )}
+        </div>
+      </DCard>
+
+      {/* ── Trust stats row ── */}
+      <div style={{ display:'flex', gap:14, marginBottom:18, flexWrap:'wrap' }}>
+        <StatCard label="Tasks Completed" value={counts?.tasks_completed ?? 0} accent />
+        {stats.completion_rate != null && <StatCard label="Completion Rate" value={`${stats.completion_rate}%`} />}
+        {stats.response_rate != null && <StatCard label="Response Rate" value={`${stats.response_rate}%`} />}
+        <StatCard label="Avg Rating" value={profile.rating_count>0 ? Number(profile.avg_rating).toFixed(1) : '—'} />
+      </div>
+
+      {/* ── Services offered (advertising) ── */}
+      {profile.services_offered && (
+        <DCard hover={false} style={{ marginBottom:18, borderLeft:'3px solid var(--accent)' }}>
+          <Mono size="0.62rem" style={{ display:'block', marginBottom:8, color:'var(--accent)' }}>SERVICES OFFERED</Mono>
+          <p style={{ color:'var(--text-secondary)', lineHeight:1.7, whiteSpace:'pre-wrap', margin:0 }}>{profile.services_offered}</p>
+        </DCard>
+      )}
+
+      {/* ── Bio + skills ── */}
+      {(profile.bio || skills.length>0) && (
+        <DCard hover={false} style={{ marginBottom:18 }}>
+          {profile.bio && <p style={{ color:'var(--text-secondary)', lineHeight:1.7, marginBottom: skills.length?14:0 }}>{profile.bio}</p>}
+          {skills.length>0 && <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>{skills.map(s => <Tag key={s}>{s}</Tag>)}</div>}
+        </DCard>
+      )}
+
+      {/* ── Featured review (advertising) ── */}
+      {featuredReview && (
+        <DCard hover={false} style={{ marginBottom:18, background:'var(--accent-glow)', border:'1px solid var(--accent-dim)' }}>
+          <Mono size="0.62rem" style={{ display:'block', marginBottom:8, color:'var(--accent)' }}>⭐ FEATURED REVIEW</Mono>
+          <p style={{ fontSize:'1.02rem', fontStyle:'italic', lineHeight:1.6, marginBottom:8 }}>"{featuredReview.comment}"</p>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <Mono>— {featuredReview.reviewer_name}, {featuredReview.task_title}</Mono>
+            <Stars value={featuredReview.rating} />
+          </div>
+        </DCard>
+      )}
+
+      {/* ── Pinned / featured work (advertising) ── */}
+      {pinned.length>0 && (
+        <div style={{ marginBottom:22 }}>
+          <Mono size="0.62rem" style={{ display:'block', marginBottom:10, color:'var(--accent)' }}>📌 FEATURED WORK</Mono>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))', gap:12 }}>
+            {pinned.map(t => (
+              <DCard key={t.task_id} hover={false} style={{ borderTop:'3px solid var(--accent)' }}>
+                <div style={{ fontFamily:'var(--font-display)', fontWeight:700, marginBottom:6 }}>{t.title}</div>
+                {Array.isArray(t.skill_tags) && t.skill_tags.length>0 && (
+                  <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginBottom:8 }}>{t.skill_tags.slice(0,3).map(s => <Tag key={s}>{s}</Tag>)}</div>
+                )}
+                <Mono>Completed · R{t.budget}</Mono>
+              </DCard>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── History tabs ── */}
+      <div className="feed-scroll" style={{ display:'flex', gap:2, marginBottom:18, background:'var(--bg-elevated)', borderRadius:12, padding:3, overflowX:'auto', maxWidth:'fit-content' }}>
+        {tabs.map(tb => (
+          <button key={tb.id} onClick={() => setTab(tb.id)}
+            style={{ padding:'7px 14px', borderRadius:9, fontSize:'0.8rem', fontFamily:'var(--font-body)', fontWeight:600, cursor:'pointer', border:'none', whiteSpace:'nowrap', background:tab===tb.id?'var(--bg-surface)':'transparent', color:tab===tb.id?'var(--accent)':'var(--text-muted)', boxShadow:tab===tb.id?'0 1px 3px rgba(33,28,46,.14)':'none' }}>{tb.label}</button>
+        ))}
+      </div>
+
+      <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+        {tab==='reviews' && list.map((r,i) => (
+          <DCard key={i} hover={false}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+              <span style={{ fontWeight:600, fontSize:'0.9rem' }}>{r.reviewer_name || 'Member'}</span>
+              <Stars value={r.rating} />
+            </div>
+            {r.comment && <p style={{ fontSize:'0.86rem', color:'var(--text-secondary)', lineHeight:1.5, marginBottom:6 }}>{r.comment}</p>}
+            <Mono>{r.task_title} · {new Date(r.created_at).toLocaleDateString()}</Mono>
+          </DCard>
+        ))}
+
+        {tab!=='reviews' && list.map(t => (
+          <DCard key={t.task_id} hover={false} style={{ display:'flex', alignItems:'center', gap:16, padding:'14px 18px' }}>
+            <div style={{ flex:1 }}>
+              <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:6, flexWrap:'wrap' }}>
+                {tab==='posted' && <Badge variant={t.status}>{t.status?.replace('_',' ')}</Badge>}
+                {tab==='completed' && <Badge variant="completed">completed</Badge>}
+                <span style={{ fontFamily:'var(--font-display)', fontWeight:600 }}>{t.title}</span>
+              </div>
+              {Array.isArray(t.skill_tags) && t.skill_tags.length>0 && (
+                <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>{t.skill_tags.slice(0,4).map(s => <Tag key={s}>{s}</Tag>)}</div>
+              )}
+            </div>
+            <div style={{ fontFamily:'var(--font-mono)', color:'var(--accent)', fontWeight:600, flexShrink:0 }}>R{t.budget}</div>
+          </DCard>
+        ))}
+
+        {list.length===0 && (
+          <EmptyState icon="◻" message={tab==='completed' ? 'No completed tasks yet' : tab==='posted' ? 'No tasks posted yet' : 'No reviews yet'} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Profile({ openProfile }) {
   const { user } = useAuth()
   const { state } = useStore()
   const toast = useToast()
@@ -2567,6 +3585,8 @@ function Profile() {
   const [bio, setBio]           = useState('')
   const [skills, setSkills]     = useState('')
   const [portfolio, setPort]    = useState('')
+  const [headline, setHeadline] = useState('')
+  const [services, setServices] = useState('')
   const [email, setEmail]       = useState(user.email || '')
   const [currentPw, setCurrentPw] = useState('')
   const [newPw, setNewPw]         = useState('')
@@ -2591,6 +3611,8 @@ function Profile() {
         setBio(profile.bio || '')
         setSkills(Array.isArray(profile.skills) ? profile.skills.join(', ') : (profile.skills || ''))
         setPort(profile.portfolio_url || '')
+        setHeadline(profile.headline || '')
+        setServices(profile.services_offered || '')
         setEmail(profile.email || user.email || '')
       } catch {
         // Backend unreachable — keep whatever we have from context (demo mode)
@@ -2614,11 +3636,15 @@ function Profile() {
           bio,
           skills,                       // server splits the comma string into an array
           portfolioUrl: portfolio,
+          headline,
+          servicesOffered: services,
         }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.message || 'Save failed')
+        // express-validator returns { errors: [{ msg, path }] } on 422
+        const fieldMsg = data.errors?.[0]?.msg
+        throw new Error(fieldMsg || data.message || 'Save failed')
       }
       toast('Profile saved', 'success')
     } catch (err) {
@@ -2700,16 +3726,24 @@ function Profile() {
             </div>
           </DCard>
           <DCard hover={false}>
+            <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:6 }}>Showcase &amp; advertising</Mono>
+            <p style={{ fontSize:'.8rem', color:'var(--text-muted)', marginBottom:16, lineHeight:1.5 }}>This is what students see on your public profile. A strong headline and services section help you win more work.</p>
+            <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+              <Input label="Headline" value={headline} onChange={e=>setHeadline(e.target.value)} hint="One line, e.g. “First-year Stats tutor & freelance designer”" />
+              <Textarea label="Services offered" value={services} onChange={e=>setServices(e.target.value)} style={{ minHeight:90 }} hint="What can people hire you for? Rates, availability, specialities." />
+            </div>
+          </DCard>
+          <DCard hover={false}>
             <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:16 }}>Professional Profile</Mono>
             <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
               <Textarea label="Bio" value={bio} onChange={e=>setBio(e.target.value)} style={{ minHeight:80 }} />
-              <Input label="Skills (comma separated)" value={skills} onChange={e=>setSkills(e.target.value)} hint="Used by the matching engine" />
-              <Input label="Portfolio URL" value={portfolio} onChange={e=>setPort(e.target.value)} type="url" />
+              <Input label="Skills (comma separated)" value={skills} onChange={e=>setSkills(e.target.value)} hint="Shown as tags on your profile" />
+              <Input label="Portfolio or website" value={portfolio} onChange={e=>setPort(e.target.value)} placeholder="behance.net/you, github.com/you, linktr.ee/you…" hint="Any link to your work — we'll check it's a valid address." />
             </div>
           </DCard>
-          <div style={{ display:'flex', gap:10 }}>
+          <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
             <Btn loading={saving} onClick={saveProfile}>Save Changes</Btn>
-            <Btn variant="secondary" onClick={() => { setName(user.displayName || user.email?.split('@')[0] || ''); setBio('') }}>Reset</Btn>
+            <Btn variant="secondary" onClick={() => openProfile(user.userId)}>View public profile →</Btn>
           </div>
         </div>
       )}
@@ -3007,20 +4041,102 @@ function AdminUsers() {
 // ROOT APP — UNIFIED ROUTER
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ─── URL ROUTING ─────────────────────────────────────────────────────────────
+// Maps clean browser paths to internal view/dashPage state so every page has
+// its own URL, refresh restores the exact page, and back/forward work.
+const DASH_ROUTES = {
+  '/dashboard':       'dashboard',
+  '/browse':          'tasks-browse',
+  '/post':            'tasks-new',
+  '/my-tasks':        'tasks-mine',
+  '/my-bids':         'my-bids',
+  '/suggestions':     'suggestions',
+  '/messages':        'messages',
+  '/notifications':   'notifications',
+  '/profile':         'profile',
+  '/local':           'local-browse',
+  '/admin/disputes':  'admin-disputes',
+  '/admin/users':     'admin-users',
+  '/admin/businesses':'admin-businesses',
+}
+const DASH_PATH = Object.fromEntries(Object.entries(DASH_ROUTES).map(([p, v]) => [v, p]))
+
+const INFO_ROUTES = {
+  '/how-it-works':'how-it-works-page', '/features':'features-page', '/pricing':'pricing-page',
+  '/trust-safety':'trust-safety', '/terms':'terms', '/privacy':'privacy', '/cookies':'cookies',
+  '/popia':'popia', '/help':'help-centre', '/contact':'contact', '/report':'report',
+  '/guidelines':'guidelines', '/about':'about-page', '/blog':'blog', '/careers':'careers',
+}
+const INFO_PATH = Object.fromEntries(Object.entries(INFO_ROUTES).map(([p, v]) => [v, p]))
+
+// Parse the current URL into { view, dashPage, taskId, disputeId }
+function parseLocation() {
+  const path = window.location.pathname
+  if (path === '/' || path === '') return { view:'landing' }
+  if (path === '/oauth-callback')  return { view:'oauth-callback' }
+  // /task/:id
+  const taskMatch = path.match(/^\/task\/([^/]+)$/)
+  if (taskMatch) return { view:'dashboard', dashPage:'task-detail', taskId: taskMatch[1] }
+  const userMatch = path.match(/^\/u\/([^/]+)$/)
+  if (userMatch) return { view:'dashboard', dashPage:'public-profile', userId: userMatch[1] }
+  const dispMatch = path.match(/^\/admin\/dispute\/([^/]+)$/)
+  if (dispMatch) return { view:'dashboard', dashPage:'admin-dispute-detail', disputeId: dispMatch[1] }
+  if (DASH_ROUTES[path]) return { view:'dashboard', dashPage: DASH_ROUTES[path] }
+  if (INFO_ROUTES[path]) return { view: INFO_ROUTES[path] }
+  return { view:'landing' }
+}
+
+// Build a URL from internal state
+function buildPath({ view, dashPage, taskId, disputeId }) {
+  if (view === 'landing') return '/'
+  if (view === 'oauth-callback') return '/oauth-callback'
+  if (INFO_PATH[view]) return INFO_PATH[view]
+  if (view === 'dashboard') {
+    if (dashPage === 'task-detail' && taskId) return `/task/${taskId}`
+    if (dashPage === 'public-profile' && window.__rlProfileId) return `/u/${window.__rlProfileId}`
+    if (dashPage === 'admin-dispute-detail' && disputeId) return `/admin/dispute/${disputeId}`
+    return DASH_PATH[dashPage] || '/dashboard'
+  }
+  return '/'
+}
+
 export default function App() {
   const [user, setUser]         = useState(null)
   const [userLoading, setUserLoading] = useState(true) // true while restoring session
-  const [view, setView] = useState(() => {
-    if (window.location.pathname === '/oauth-callback') return 'oauth-callback'
-    return 'landing'
-  })
+  const initialLoc = parseLocation()
+  const [view, setView] = useState(initialLoc.view)
   const [authModal, setAuthModal] = useState(null)
-  const [dashPage, setDashPage]   = useState('tasks-browse')
-  const [selectedTask,    setSelectedTask]    = useState(null)
-  const [selectedDispute, setSelectedDispute] = useState(null)
+  const [dashPage, setDashPage]   = useState(initialLoc.dashPage || 'tasks-browse')
+  const [selectedTask,    setSelectedTask]    = useState(initialLoc.taskId || null)
+  const [selectedDispute, setSelectedDispute] = useState(initialLoc.disputeId || null)
+  const [selectedUser,    setSelectedUser]    = useState(initialLoc.userId || null)
+  useEffect(() => { window.__rlProfileId = selectedUser }, [selectedUser])
+  // { userId, name } of a person to start/open a conversation with (set from TaskDetail)
+  const [messageTarget,   setMessageTarget]   = useState(null)
   const [state, dispatch] = useReducer(appReducer, initialState)
 
-  const unreadCount = state.notifications.filter(n => !n.is_read).length
+  // Live unread-notification count — polls the backend so the bell badge
+  // stays current across the whole app (falls back to mock store if offline)
+  const [unreadCount, setUnreadCount] = useState(state.notifications.filter(n => !n.is_read).length)
+  useEffect(() => {
+    if (!user) return
+    let stop = false
+    async function pollUnread() {
+      try {
+        const res = await fetch('/notifications?unread_only=true', {
+          headers: { Authorization: `Bearer ${localStorage.getItem('rl_token')}` },
+        })
+        if (!res.ok) throw new Error()
+        const data = await res.json()
+        if (!stop) setUnreadCount(data.unread_count ?? (data.notifications?.length || 0))
+      } catch {
+        if (!stop) setUnreadCount(state.notifications.filter(n => !n.is_read).length)
+      }
+    }
+    pollUnread()
+    const id = setInterval(pollUnread, 15000)
+    return () => { stop = true; clearInterval(id) }
+  }, [user]) // eslint-disable-line
 
   // ── Session restore on every page load ──────────────────────────────────────
   // Reads the JWT from localStorage, validates it, and fetches the user's
@@ -3029,7 +4145,13 @@ export default function App() {
   useEffect(() => {
     async function restoreSession() {
       const token = localStorage.getItem('rl_token')
-      if (!token) { setUserLoading(false); return }
+      if (!token) {
+        // No session — if they landed on a private dashboard URL, send them home to log in
+        const loc = parseLocation()
+        if (loc.view === 'dashboard') { setView('landing'); window.history.replaceState({}, '', '/') }
+        setUserLoading(false)
+        return
+      }
 
       try {
         // Decode token to get userId without a network call
@@ -3058,11 +4180,8 @@ export default function App() {
             avatarUrl:   u.avatar_url   || u.google_avatar_url || null,
             provider:    u.google_id ? 'google' : 'email',
           })
-          // Only restore dashboard view if we were on dashboard before
-          const savedView = sessionStorage.getItem('rl_view')
-          if (savedView && savedView !== 'landing' && savedView !== 'oauth-callback') {
-            setView('dashboard')
-          }
+          // The URL (parsed at startup) already determines the view — leave it.
+          // If they deep-linked to a dashboard page, they stay there.
         } else {
           // Token rejected by server — clear it
           localStorage.removeItem('rl_token')
@@ -3077,12 +4196,28 @@ export default function App() {
     restoreSession()
   }, [])
 
-  // Persist current view so refresh restores dashboard
+  // Keep the browser URL in sync with the current view (so refresh & deep-links work)
   useEffect(() => {
-    if (view !== 'oauth-callback') {
-      sessionStorage.setItem('rl_view', view)
+    if (view === 'oauth-callback') return
+    const target = buildPath({ view, dashPage, taskId: selectedTask, disputeId: selectedDispute })
+    if (window.location.pathname !== target) {
+      window.history.pushState({}, '', target)
     }
-  }, [view])
+  }, [view, dashPage, selectedTask, selectedDispute])
+
+  // Handle browser back/forward — re-derive state from the URL
+  useEffect(() => {
+    function onPop() {
+      const loc = parseLocation()
+      setView(loc.view)
+      if (loc.dashPage) setDashPage(loc.dashPage)
+      setSelectedTask(loc.taskId || null)
+      setSelectedDispute(loc.disputeId || null)
+      setSelectedUser(loc.userId || null)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
 
   // ── Persist user to localStorage so sidebar always has latest info ──────────
   function saveUser(u) {
@@ -3148,7 +4283,9 @@ export default function App() {
     setUser(null)
     setView('landing')
     setDashPage('tasks-browse')
+    setSelectedTask(null)
     setAuthModal(null)
+    window.history.pushState({}, '', '/')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -3163,7 +4300,26 @@ export default function App() {
   const storeValue = { state, dispatch }
 
   // Info/legal/product pages — all routed through setView
-  const INFO_PAGES = ['how-it-works-page','features-page','pricing-page','trust-safety','terms','privacy','cookies','popia','help-centre','contact','report','guidelines','about-page','blog','careers']
+  const INFO_PAGES = Object.values(INFO_ROUTES)
+
+  // The in-app "home" page depends on role — earners/creators land on the feed,
+  // admins on their dispute queue. Used by the logo and the bottom-nav home tab.
+  function appHome() {
+    if (!user) return 'tasks-browse'
+    if (user.role === 'admin') return 'admin-disputes'
+    return 'tasks-browse'
+  }
+  function goAppHome() {
+    setSelectedTask(null)
+    setDashPage(appHome())
+    setView('dashboard')
+    window.scrollTo({ top:0, behavior:'smooth' })
+  }
+  // Landing-page CTAs: if already logged in, enter the app; otherwise open auth modal
+  function openAuth(mode) {
+    if (user) { goAppHome(); return }
+    setAuthModal(mode)
+  }
 
   function navigate(target) {
     if (target==='home')      { setView('landing'); window.scrollTo({top:0,behavior:'smooth'}); return }
@@ -3198,17 +4354,20 @@ export default function App() {
     switch (dashPage) {
       case 'dashboard':            return <Dashboard setPage={setDashPage} setSelectedTask={setSelectedTask} />
       case 'tasks-browse':         return <TaskBrowse setPage={setDashPage} setSelectedTask={setSelectedTask} />
-      case 'task-detail':          return <TaskDetail taskId={selectedTask} setPage={setDashPage} />
+      case 'task-detail':          return <TaskDetail taskId={selectedTask} setPage={setDashPage} openChat={(userId, name) => { setMessageTarget({ userId, name }); setDashPage('messages') }} openProfile={(uid) => { setSelectedUser(uid); setDashPage('public-profile') }} />
       case 'tasks-new':            return <TaskNew setPage={setDashPage} setSelectedTask={setSelectedTask} />
       case 'tasks-mine':           return <MyTasks setPage={setDashPage} setSelectedTask={setSelectedTask} />
       case 'my-bids':              return <MyBids setPage={setDashPage} setSelectedTask={setSelectedTask} />
       case 'suggestions':          return <Suggestions setPage={setDashPage} setSelectedTask={setSelectedTask} />
-      case 'messages':             return <Messages />
+      case 'messages':             return <Messages target={messageTarget} clearTarget={() => setMessageTarget(null)} />
       case 'notifications':        return <Notifications setPage={setDashPage} setSelectedTask={setSelectedTask} />
-      case 'profile':              return <Profile />
+      case 'profile':              return <Profile openProfile={(uid) => { setSelectedUser(uid); setDashPage('public-profile') }} />
+      case 'public-profile':       return <PublicProfile userId={selectedUser} setPage={setDashPage} openChat={(uid, name) => { setMessageTarget({ userId: uid, name }); setDashPage('messages') }} />
       case 'admin-disputes':       return <AdminDisputes setPage={setDashPage} setSelectedDispute={setSelectedDispute} />
       case 'admin-dispute-detail': return <AdminDisputeDetail disputeId={selectedDispute} setPage={setDashPage} />
       case 'admin-users':          return <AdminUsers />
+      case 'local-browse':         return <LocalBrowse setPage={setDashPage} />
+      case 'admin-businesses':     return <AdminBusinesses />
       default:                     return <Dashboard setPage={setDashPage} setSelectedTask={setSelectedTask} />
     }
   }
@@ -3236,17 +4395,17 @@ export default function App() {
           {/* ── LANDING PAGE ─────────────────────────────────── */}
           {view==='landing' && (
             <div>
-              <LandingNavbar onOpenAuth={setAuthModal} onNav={navigate} />
-              <Hero         onOpenAuth={setAuthModal} />
+              <LandingNavbar onOpenAuth={openAuth} onNav={navigate} user={user} onEnterApp={goAppHome} />
+              <Hero         onOpenAuth={openAuth} />
               <StatsBar />
               <CampusStrip />
               <HowItWorks />
               <Features />
-              <LiveTasks    onOpenAuth={setAuthModal} />
-              <Pricing      onOpenAuth={setAuthModal} />
+              <LiveTasks    onOpenAuth={openAuth} />
+              <Pricing      onOpenAuth={openAuth} />
               <Testimonials />
               <LandingAbout />
-              <LandingCTA   onOpenAuth={setAuthModal} />
+              <LandingCTA   onOpenAuth={openAuth} />
               <LandingFooter onNav={navigate} />
             </div>
           )}
@@ -3254,7 +4413,7 @@ export default function App() {
           {/* ── INFO / LEGAL / PRODUCT PAGES ─────────────────── */}
           {INFO_PAGES.includes(view) && (
             <div>
-              <LandingNavbar onOpenAuth={setAuthModal} onNav={navigate} />
+              <LandingNavbar onOpenAuth={openAuth} onNav={navigate} user={user} onEnterApp={goAppHome} />
               {renderInfoPage()}
               <LandingFooter onNav={navigate} />
             </div>
@@ -3263,9 +4422,9 @@ export default function App() {
           {/* ── DASHBOARD ────────────────────────────────────── */}
           {view==='dashboard' && user && (
             <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column', background:'var(--bg-base)' }}>
-              <TopBar page={dashPage} setPage={setDashPage} unreadCount={unreadCount} onGoHome={() => navigate('landing')} />
+              <TopBar page={dashPage} setPage={setDashPage} unreadCount={unreadCount} onGoHome={goAppHome} onViewLanding={() => navigate('landing')} />
               {/* DashSidebar is mobile-only now — CSS turns it into the bottom tab bar */}
-              <DashSidebar page={dashPage} setPage={setDashPage} unreadCount={unreadCount} onGoHome={() => navigate('landing')} />
+              <DashSidebar page={dashPage} setPage={setDashPage} unreadCount={unreadCount} onGoHome={goAppHome} />
               <main className="dash-main" style={{ flex:1, width:'100%', maxWidth:1280, margin:'0 auto', padding:'28px 24px 60px' }}>
                 {renderDashPage()}
               </main>
