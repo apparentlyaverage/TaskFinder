@@ -31,7 +31,7 @@ router.get('/', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT u.user_id, u.email, u.role, u.google_id, u.google_avatar_url,
-              u.is_email_verified, u.is_ru_student,
+              u.is_email_verified, u.is_ru_student, u.email_frequency,
               up.display_name, up.bio, up.skills, up.portfolio_url, up.campus_zone,
               up.avatar_url, up.avg_rating, up.rating_count,
               up.headline, up.services_offered, up.pinned_task_ids, up.featured_review_id
@@ -88,11 +88,12 @@ router.patch('/',
     body('servicesOffered').optional({ nullable: true }).trim().isLength({ max: 1500 }),
     body('pinnedTaskIds').optional({ nullable: true }).isArray({ max: 6 }),
     body('featuredReviewId').optional({ nullable: true }),
+    body('emailFrequency').optional().isIn(['instant', 'daily', 'off']),
   ],
   check,
   async (req, res) => {
     const { displayName, bio, portfolioUrl, campusZone, phoneNumber,
-            headline, servicesOffered, pinnedTaskIds, featuredReviewId } = req.body
+            headline, servicesOffered, pinnedTaskIds, featuredReviewId, emailFrequency } = req.body
 
     // Normalise the portfolio URL: ensure a scheme so it's a working link when rendered
     let normalizedPortfolio = portfolioUrl
@@ -150,11 +151,16 @@ router.patch('/',
           .catch(() => {})
       }
 
+      // email_frequency also lives on the users table
+      if (emailFrequency !== undefined) {
+        await client.query('UPDATE users SET email_frequency = $1 WHERE user_id = $2', [emailFrequency, req.userId])
+      }
+
       await client.query('COMMIT')
 
       // Return the fresh, merged profile so the frontend can update in place
       const { rows } = await pool.query(
-        `SELECT u.user_id, u.email, u.role, u.google_avatar_url,
+        `SELECT u.user_id, u.email, u.role, u.google_avatar_url, u.email_frequency,
                 up.display_name, up.bio, up.skills, up.portfolio_url,
                 up.campus_zone, up.avatar_url, up.avg_rating, up.rating_count
          FROM users u
@@ -320,6 +326,84 @@ router.get('/public/:userId',
     } catch (err) {
       log.error('profile.public_get_failed', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// GET /profile/export — POPIA data portability: a JSON copy of the user's data.
+router.get('/export', requireAuth, async (req, res) => {
+  try {
+    const [profile, tasks, bids, reviews, messages] = await Promise.all([
+      pool.query(
+        `SELECT u.user_id, u.email, u.role, u.created_at, up.*
+         FROM users u LEFT JOIN user_profiles up ON u.user_id = up.user_id
+         WHERE u.user_id = $1`, [req.userId]),
+      pool.query('SELECT * FROM tasks WHERE creator_id = $1 OR assigned_to = $1', [req.userId]),
+      pool.query('SELECT * FROM bids WHERE bidder_id = $1', [req.userId]),
+      pool.query('SELECT * FROM reviews WHERE reviewer_id = $1 OR reviewee_id = $1', [req.userId]),
+      pool.query('SELECT * FROM messages WHERE sender_id = $1 OR receiver_id = $1', [req.userId]),
+    ])
+    res.setHeader('Content-Disposition', 'attachment; filename="relivr-data.json"')
+    return res.status(200).json({
+      exported_at: new Date().toISOString(),
+      profile: profile.rows[0],
+      tasks: tasks.rows, bids: bids.rows, reviews: reviews.rows, messages: messages.rows,
+    })
+  } catch (err) {
+    log.error('profile.export_failed', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
+
+// DELETE /profile/account — POPIA erasure. Anonymises personal data and blocks
+// future logins (deleted_at). Local accounts must confirm with their password;
+// Google accounts are already proven by the JWT. Transactional records (tasks,
+// reviews) are kept but de-identified to preserve marketplace/dispute integrity.
+router.delete('/account',
+  requireAuth,
+  [body('password').optional({ nullable: true })],
+  check,
+  async (req, res) => {
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      const { rows } = await client.query(
+        'SELECT password_hash FROM users WHERE user_id = $1 AND deleted_at IS NULL FOR UPDATE', [req.userId])
+      if (rows.length === 0) {
+        await client.query('ROLLBACK')
+        return res.status(404).json({ message: 'Account not found.' })
+      }
+      if (rows[0].password_hash) {
+        const ok = req.body.password && await bcrypt.compare(req.body.password, rows[0].password_hash)
+        if (!ok) {
+          await client.query('ROLLBACK')
+          return res.status(401).json({ message: 'Password is incorrect.' })
+        }
+      }
+      // Anonymise the account; bump token_version to kill every active session.
+      await client.query(
+        `UPDATE users
+            SET email = $1, password_hash = NULL, google_id = NULL, phone_number = NULL,
+                deleted_at = NOW(), token_version = token_version + 1, updated_at = NOW()
+          WHERE user_id = $2`,
+        [`deleted-${req.userId}@deleted.local`, req.userId])
+      await client.query(
+        `UPDATE user_profiles
+            SET display_name = 'Deleted user', bio = NULL, skills = NULL, avatar_url = NULL,
+                portfolio_url = NULL, campus_zone = NULL, location_id = NULL,
+                headline = NULL, services_offered = NULL
+          WHERE user_id = $1`, [req.userId])
+      await client.query('DELETE FROM notifications WHERE user_id = $1', [req.userId])
+      await client.query('COMMIT')
+
+      log.info('account.deleted', { reqId: req.id, userId: req.userId })
+      return res.status(200).json({ message: 'Your account has been deleted.' })
+    } catch (err) {
+      await client.query('ROLLBACK')
+      log.error('account.delete_failed', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    } finally {
+      client.release()
     }
   }
 )

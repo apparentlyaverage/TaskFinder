@@ -10,6 +10,7 @@ import { pool } from '../db.js'
 import log from '../log.js'
 import { createNotification } from '../notify.js'
 import { requireAuth } from '../middleware.js'
+import { expireDueTasks } from '../jobs.js'
 
 const router = Router()
 
@@ -74,6 +75,19 @@ router.get('/', async (req, res) => {
     return res.status(200).json({ tasks: rows })
   } catch (err) {
     log.error('GET /tasks', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
+
+// POST /tasks/admin/expire — manually run the expiry sweep (admin/cron).
+// The scheduler runs this on an interval too; this is for ops/cron triggers.
+router.post('/admin/expire', requireAuth, async (req, res) => {
+  if (req.userRole !== 'admin') return res.status(403).json({ message: 'Admin only.' })
+  try {
+    const expired = await expireDueTasks()
+    return res.status(200).json({ expired })
+  } catch (err) {
+    log.error('POST /tasks/admin/expire', { reqId: req.id, msg: err.message })
     return res.status(500).json({ message: 'Internal server error.' })
   }
 })

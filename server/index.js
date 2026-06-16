@@ -15,6 +15,7 @@ try {
 }
 
 const { default: app } = await import('./app.js')
+const { startScheduler } = await import('./jobs.js')
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'
 const PORT = process.env.PORT || 3001
@@ -25,4 +26,5 @@ app.listen(PORT, () => {
     frontend: FRONTEND_URL,
     db: process.env.DATABASE_URL?.split('@')[1]?.split('/')[0] || 'NOT SET',
   })
+  startScheduler() // expire overdue tasks periodically
 })

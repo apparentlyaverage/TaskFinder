@@ -1,9 +1,10 @@
 // server/notify.js
-// Replaces the RabbitMQ event bus. Routes call this directly after the
-// action that triggers a notification. Failures are non-fatal — a missed
-// notification must never break the main transaction.
+// Creates an in-app notification AND (best-effort) emails the recipient.
+// Replaces the RabbitMQ event bus. Failures are non-fatal — a missed
+// notification or email must never break the main transaction.
 import { pool } from './db.js'
 import log from './log.js'
+import { sendEmail } from './email.js'
 
 export async function createNotification({ userId, type, title, body, referenceId = null }) {
   try {
@@ -13,5 +14,23 @@ export async function createNotification({ userId, type, title, body, referenceI
     )
   } catch (err) {
     log.error('notify.create_failed', { msg: err.message })
+    return
   }
+  // Fire-and-forget activity email — respects the user's opt-out.
+  sendActivityEmail({ userId, title, body }).catch(() => {})
+}
+
+// Instant activity email — only for users on the 'instant' cadence. 'daily'
+// users are batched by the digest job; 'off' users get nothing. Skips deleted
+// and address-less users.
+async function sendActivityEmail({ userId, title, body }) {
+  const { rows } = await pool.query(
+    'SELECT email, email_frequency FROM users WHERE user_id = $1 AND deleted_at IS NULL', [userId])
+  const u = rows[0]
+  if (!u || !u.email || u.email_frequency !== 'instant' || u.email.endsWith('@deleted.local')) return
+  await sendEmail({
+    to: u.email,
+    subject: title,
+    text: `${body}\n\n— ReLivR\nChange how often you get these in Profile → Security.`,
+  })
 }

@@ -19,6 +19,8 @@ import reviewsRouter  from './routes/reviews.js'
 import profileRouter  from './routes/profile.js'
 import businessesRouter from './routes/businesses.js'
 import locationsRouter from './routes/locations.js'
+import disputesRouter from './routes/disputes.js'
+import searchRouter from './routes/search.js'
 import { pool } from './db.js'
 
 const app = express()
@@ -54,6 +56,10 @@ app.use('/auth/register', rateLimit({
   windowMs: 60 * 60 * 1000, max: 5,
   message: { message: 'Too many accounts created from this IP.' },
 }))
+app.use('/auth/forgot-password', rateLimit({
+  windowMs: 60 * 60 * 1000, max: 5,
+  message: { message: 'Too many reset requests. Try again later.' },
+}))
 app.use(rateLimit({
   windowMs: 60 * 1000, max: 120, // general API ceiling
 }))
@@ -80,6 +86,8 @@ app.use('/reviews', reviewsRouter)
 app.use('/profile', profileRouter)
 app.use('/businesses', businessesRouter)
 app.use('/locations', locationsRouter)
+app.use('/disputes', disputesRouter)
+app.use('/search', searchRouter)
 
 // 404 + error handlers
 app.use((req, res) => res.status(404).json({ message: 'Not found.' }))

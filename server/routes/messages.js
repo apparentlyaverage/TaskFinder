@@ -6,6 +6,7 @@ import { Router } from 'express'
 import { body, param, validationResult } from 'express-validator'
 import { pool } from '../db.js'
 import log from '../log.js'
+import { createNotification } from '../notify.js'
 import { requireAuth } from '../middleware.js'
 
 const router = Router()
@@ -29,6 +30,14 @@ router.post('/messages',
         'INSERT INTO messages (sender_id, receiver_id, task_id, content) VALUES ($1,$2,$3,$4) RETURNING *',
         [req.userId, receiver_id, task_id, content]
       )
+      // In-app + email notification for the recipient (best-effort).
+      createNotification({
+        userId: receiver_id,
+        type: 'message.received',
+        title: 'New message',
+        body: 'You have a new message on ReLivR.',
+        referenceId: req.userId,
+      })
       return res.status(201).json({ message: rows[0] })
     } catch (err) {
       log.error('POST /messages', { reqId: req.id, msg: err.message })

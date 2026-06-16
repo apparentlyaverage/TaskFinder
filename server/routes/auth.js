@@ -4,8 +4,10 @@ import passport from 'passport'
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import crypto from 'node:crypto'
 import { body, validationResult } from 'express-validator'
 import { pool } from '../db.js'
+import { sendEmail } from '../email.js'
 import { requireAuth } from '../middleware.js'
 import { validateLocationName, resolveLocationId } from '../locationValidate.js'
 import log from '../log.js'
@@ -50,6 +52,20 @@ function check(req, res, next) {
   const errors = validationResult(req)
   if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() })
   next()
+}
+
+// ── Single-use email tokens (password reset / email verify) ───────────────────
+const RESET_TTL_MS  = 60 * 60 * 1000          // 1 hour
+const VERIFY_TTL_MS = 24 * 60 * 60 * 1000     // 24 hours
+const hashToken = raw => crypto.createHash('sha256').update(raw).digest('hex')
+
+// Returns the RAW token (emailed to the user); only its hash is stored.
+async function issueAuthToken(userId, purpose, ttlMs) {
+  const raw = crypto.randomBytes(32).toString('hex')
+  await pool.query(
+    `INSERT INTO auth_tokens (user_id, token_hash, purpose, expires_at) VALUES ($1, $2, $3, $4)`,
+    [userId, hashToken(raw), purpose, new Date(Date.now() + ttlMs)])
+  return raw
 }
 
 // ── Google strategy — identical 3-branch logic from the standalone service ───
@@ -234,6 +250,15 @@ router.post('/register',
         [newUser.user_id, role, JSON.stringify({ provider: 'email', email })]
       ).catch(() => {})
 
+      // Best-effort email verification — must never block registration.
+      issueAuthToken(newUser.user_id, 'email_verify', VERIFY_TTL_MS)
+        .then(raw => sendEmail({
+          to: email,
+          subject: 'Verify your ReLivR email',
+          text: `Welcome to ReLivR! Verify your email: ${FRONTEND_URL}/verify-email?token=${raw}`,
+        }))
+        .catch(() => {})
+
       return res.status(201).json({
         token: issueToken(newUser),
         user: { userId: newUser.user_id, email: newUser.email, role: newUser.role,
@@ -256,16 +281,41 @@ router.post('/login',
     const { email, password } = req.body
     try {
       const { rows } = await pool.query(
-        `SELECT u.user_id, u.email, u.role, u.password_hash, u.token_version, up.display_name, up.avatar_url
+        `SELECT u.user_id, u.email, u.role, u.password_hash, u.token_version,
+                u.failed_login_attempts, u.locked_until, u.deleted_at,
+                up.display_name, up.avatar_url
          FROM users u LEFT JOIN user_profiles up ON u.user_id = up.user_id
          WHERE u.email = $1`, [email])
       if (rows.length === 0) return res.status(401).json({ message: 'Invalid credentials.' })
       const user = rows[0]
+      // Closed accounts can't sign in (and we don't reveal that they existed).
+      if (user.deleted_at) return res.status(401).json({ message: 'Invalid credentials.' })
+      // Per-account lockout (independent of the per-IP rate limit).
+      if (user.locked_until && new Date(user.locked_until) > new Date()) {
+        return res.status(423).json({ message: 'Account temporarily locked after repeated failed logins. Please try again later.' })
+      }
       if (!user.password_hash) {
         return res.status(401).json({ message: 'This account uses Google Sign-In. Please click the "Sign in with Google" button.' })
       }
       const ok = await bcrypt.compare(password, user.password_hash)
-      if (!ok) return res.status(401).json({ message: 'Invalid credentials.' })
+      if (!ok) {
+        const attempts = (user.failed_login_attempts || 0) + 1
+        // Progressive backoff once over the threshold: 15m, 30m, 60m, … capped 24h.
+        const lockMinutes = attempts >= 5 ? Math.min(15 * 2 ** (attempts - 5), 1440) : 0
+        const lockedUntil = lockMinutes ? new Date(Date.now() + lockMinutes * 60000) : null
+        await pool.query(
+          'UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE user_id = $3',
+          [attempts, lockedUntil, user.user_id]).catch(() => {})
+        if (lockedUntil) {
+          return res.status(423).json({ message: `Too many failed attempts — account locked for ${lockMinutes} minutes.` })
+        }
+        return res.status(401).json({ message: 'Invalid credentials.' })
+      }
+      // Success — clear any failure state.
+      if (user.failed_login_attempts > 0 || user.locked_until) {
+        pool.query('UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE user_id = $1',
+          [user.user_id]).catch(() => {})
+      }
 
       pool.query(
         `INSERT INTO activity_logs (actor_id, actor_role, action, entity_type, entity_id, metadata)
@@ -363,5 +413,110 @@ router.post('/logout', async (req, res) => {
   }
   res.status(200).json({ message: 'Logged out.' })
 })
+
+// POST /auth/logout-all — explicit "sign out of all devices": bump token_version
+// so every JWT ever issued to this user stops working immediately.
+router.post('/logout-all', requireAuth, async (req, res) => {
+  try {
+    await pool.query('UPDATE users SET token_version = token_version + 1 WHERE user_id = $1', [req.userId])
+    log.info('auth.logout_all', { reqId: req.id, userId: req.userId })
+    return res.status(200).json({ message: 'Signed out of all devices.' })
+  } catch (err) {
+    log.error('auth.logout_all_failed', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
+
+// POST /auth/forgot-password — issue a reset link. Always returns a generic
+// 200 so the endpoint can't be used to enumerate registered emails.
+router.post('/forgot-password',
+  [body('email').isEmail().normalizeEmail()],
+  check,
+  async (req, res) => {
+    const { email } = req.body
+    try {
+      const { rows } = await pool.query(
+        'SELECT user_id, password_hash FROM users WHERE email = $1', [email])
+      const user = rows[0]
+      // Only email-password accounts can reset (Google-only accounts have no password).
+      if (user && user.password_hash) {
+        const raw = await issueAuthToken(user.user_id, 'password_reset', RESET_TTL_MS)
+        await sendEmail({
+          to: email,
+          subject: 'Reset your ReLivR password',
+          text: `Reset your password using this link (valid 1 hour): ${FRONTEND_URL}/reset-password?token=${raw}`,
+        })
+      }
+      return res.status(200).json({ message: 'If that email is registered, a reset link is on its way.' })
+    } catch (err) {
+      log.error('auth.forgot_password_failed', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// POST /auth/reset-password — consume a reset token, set the new password, and
+// revoke all existing sessions (token_version bump).
+router.post('/reset-password',
+  [body('token').notEmpty(), body('newPassword').isLength({ min: 8 })],
+  check,
+  async (req, res) => {
+    const { token, newPassword } = req.body
+    try {
+      const { rows } = await pool.query(
+        `SELECT token_id, user_id FROM auth_tokens
+         WHERE token_hash = $1 AND purpose = 'password_reset'
+           AND used_at IS NULL AND expires_at > NOW()`,
+        [hashToken(token)])
+      if (rows.length === 0) {
+        return res.status(400).json({ message: 'This reset link is invalid or has expired.' })
+      }
+      const { token_id, user_id } = rows[0]
+      const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS)
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        await client.query(
+          'UPDATE users SET password_hash = $1, token_version = token_version + 1, updated_at = NOW() WHERE user_id = $2',
+          [newHash, user_id])
+        // Burn this token and any other outstanding reset tokens for the user.
+        await client.query(
+          "UPDATE auth_tokens SET used_at = NOW() WHERE user_id = $1 AND purpose = 'password_reset' AND used_at IS NULL",
+          [user_id])
+        await client.query('COMMIT')
+      } catch (e) { await client.query('ROLLBACK'); throw e } finally { client.release() }
+
+      log.info('auth.password_reset', { reqId: req.id, userId: user_id })
+      return res.status(200).json({ message: 'Password reset. Please sign in with your new password.' })
+    } catch (err) {
+      log.error('auth.reset_password_failed', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// POST /auth/verify-email — consume an email-verification token.
+router.post('/verify-email',
+  [body('token').notEmpty()],
+  check,
+  async (req, res) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT token_id, user_id FROM auth_tokens
+         WHERE token_hash = $1 AND purpose = 'email_verify'
+           AND used_at IS NULL AND expires_at > NOW()`,
+        [hashToken(req.body.token)])
+      if (rows.length === 0) {
+        return res.status(400).json({ message: 'This verification link is invalid or has expired.' })
+      }
+      await pool.query('UPDATE users SET is_email_verified = TRUE WHERE user_id = $1', [rows[0].user_id])
+      await pool.query('UPDATE auth_tokens SET used_at = NOW() WHERE token_id = $1', [rows[0].token_id])
+      return res.status(200).json({ message: 'Email verified.' })
+    } catch (err) {
+      log.error('auth.verify_email_failed', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
 
 export default router
