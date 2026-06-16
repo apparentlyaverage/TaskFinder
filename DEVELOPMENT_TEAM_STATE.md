@@ -205,10 +205,146 @@ Prioritised by the Product Manager (user value × unblocking power), vetted by A
 
 ---
 
-## 7. Session Log
+## 6.8 — Sprint: §7.1 Near-term Hardening — ✅ COMPLETE (2026-06-15)
+
+Building all four near-term P1 items, each with tests.
+
+1. **Task-expiry job 🐞** — `server/jobs.js` `expireDueTasks()` (`status='open' AND deadline<NOW()` → `expired`); in-process interval started from `index.js` (not `app.js`, so tests don't spawn timers) + an admin-only `POST /tasks/admin/expire` trigger for cron/ops.
+2. **Disputes backend** — `server/routes/disputes.js`: `POST /disputes` (participant raises, one per task), `GET /disputes` (mine, or all for admin), `GET /disputes/:id` (+events, authz), `PATCH /disputes/:id` (admin status/notes/resolution; settlement stubbed 💳). Writes `dispute_events`; notifies parties.
+3. **Password reset + email verification ✉️** — migration `09_auth_tokens.sql` (`auth_tokens`: hashed token, purpose, expiry, used_at); `server/email.js` (logs the link in dev until a provider is set); `POST /auth/forgot-password`, `POST /auth/reset-password` (bumps `token_version`), `POST /auth/verify-email`. Tokens stored **hashed**; responses don't leak whether an email exists.
+4. **Core marketplace tests** — `tasks.test.js` (create/bid/accept/withdraw/complete + authz), `messages.test.js` (send/threads/notifications), closing the biggest mandate gap.
+
+**Outcome:** all four shipped. **Backend 71 tests** (was 37) across 11 files, all green. New: `server/jobs.js` (+ scheduler in `index.js`, `POST /tasks/admin/expire`), `server/routes/disputes.js` (mounted), `server/email.js` (provider-pluggable stub), migration `09_auth_tokens.sql` (applied live), and `/auth/forgot-password` · `/reset-password` · `/verify-email`. Reset tokens stored **hashed**; forgot-password is enumeration-safe (generic 200) + rate-limited. Verified live: generic 200 on known/unknown email, 400 on bad token, authed `/disputes` → 200. **Self-correction:** resolved disputes leave the task in `disputed` (no auto-restore) — acceptable for MVP, noted. Settlement (refund/release) recorded only — executes with escrow (TD-3/MVP-3).
+
+---
+
+## 6.9 — Sprint: §7.2 Auth & Security (bounded) — ✅ COMPLETE (2026-06-15)
+
+Owner chose the bounded set (defer refresh tokens + 2FA).
+
+1. **Secret-rotation runbook** (P1) — `docs/SECURITY_RUNBOOK.md`: how to rotate JWT_SECRET (token_version absorbs the churn), DB creds, Google OAuth secret, with blast-radius notes.
+2. **Per-account login lockout** (P2) — migration 10 (`failed_login_attempts`, `locked_until`, `deleted_at` on users). Login: lock after 5 fails with progressive backoff (15m→…→24h cap), 423 while locked, reset on success. Complements the existing per-IP rate limit.
+3. **Account deletion + data export** (P2, POPIA) — `DELETE /profile/account` (password-confirmed for local; anonymises PII, sets `deleted_at`, bumps token_version) + `GET /profile/export` (JSON of profile/tasks/bids/reviews/messages). Login rejects `deleted_at`.
+4. **Log out all devices** (P3) — `POST /auth/logout-all` (bump token_version) + Security-tab button. (Regular logout already revokes globally; this is the discoverable control.)
+
+UI: wire export / sign-out-all / delete into the existing Profile → Security tab. Tests for lockout, logout-all, delete (authz + password), export.
+
+**Outcome:** all four shipped. Migration 10 applied live. New: per-account lockout (5 fails → progressive 15m→24h, 423), `POST /auth/logout-all`, `DELETE /profile/account` (anonymise + `deleted_at` + token_version bump; password-gated for local), `GET /profile/export`, and `docs/SECURITY_RUNBOOK.md`. **Backend 84 tests** (+10). Profile→Security tab wired with Download-my-data / Sign-out-all-devices / Delete-account (password-confirm). Verified live: export → 200 with real data through the proxy; delete-confirm UI correct (cancelled, account preserved). **Deferred (own efforts):** refresh tokens, 2FA — remain in §7.2 list below.
+
+---
+
+## 6.10 — Sprint: §7.4 Transactional Email (noreply) — ✅ COMPLETE (2026-06-15)
+
+Owner: set up §7.4's P1 (transactional email), all mail **from a noreply sender** for now. Real-time WebSocket + PWA push stay deferred (larger).
+
+1. **noreply sender + provider** — `server/email.js`: `EMAIL_FROM` env (default `ReLivR <noreply@relivr.app>`). Sends via **Resend** when `RESEND_API_KEY` is set, else logs the dev stub (so it's ready the moment a key is added). Existing reset/verify mail picks up the sender automatically.
+2. **Activity emails on every notification** — `createNotification()` also emails the recipient (best-effort, never blocks the insert), so bids/awards/reviews/disputes/messages all notify by email. Security mail (reset/verify) always sends; **activity mail respects an opt-out**.
+3. **Email opt-out** — migration 11 (`users.email_opt_out`), a Profile→Security toggle, surfaced in `/profile` + `/auth/me`. POPIA/anti-spam friendly.
+4. **New-message notifications** — messages now create an in-app notification (they didn't), which also emails — closing a real gap.
+5. `.env.example` documents `EMAIL_FROM` + `RESEND_API_KEY`. Tests for sender/stub, opt-out gating, profile toggle.
+
+**Outcome:** all shipped. `email.js` sends from **`ReLivR <noreply@relivr.app>`** (env-overridable) via Resend when `RESEND_API_KEY` is set, else logs the stub. `createNotification()` now also emails the recipient (opt-out aware, fire-and-forget) — so bids/awards/reviews/disputes/**messages** all notify by email; security mail (reset/verify) always sends. Migration 11 (`email_opt_out`) applied live; Profile→Security has an "Email me about activity" toggle. **Backend 90 tests** (+6). Verified live: opt-out PATCH/GET round-trips; a new message creates a `message.received` notification + email attempt. **To go live:** verify a domain with Resend and set `RESEND_API_KEY` + `EMAIL_FROM`. **Deferred:** real-time WebSocket messaging (P2), PWA push (P3), email digest (P3 — would batch the per-message emails).
+
+---
+
+## 6.11 — Sprint: Email push + digest, retire WebSocket — ✅ COMPLETE (2026-06-15)
+
+1. **🔖 Bookmark WebSocket real-time** — delete the unused `contexts/SocketContext.jsx` stub (defined, never mounted) and fix the stale "Socket.io real-time" help copy. Real-time stays in §7.4 as a future item.
+2. **Push via email + digest = a frequency preference** — migration 12 replaces the boolean `email_opt_out` with `email_frequency` ('instant' | 'daily' | 'off') + `last_digest_at`. 'instant' = per-event push email (current behaviour); 'daily' = no per-event mail, a scheduled **digest** batches new notifications; 'off' = none.
+3. **Digest job** — `jobs.js` `sendDigests()`: for 'daily' users with new notifications since their last digest (≥20h gate → daily cadence), email a summary and stamp `last_digest_at`. Added to the scheduler (hourly tick, gated).
+4. UI: Profile→Security email control becomes a 3-way selector. Tests for digest job + instant-only gating.
+
+**Outcome:** all shipped. Deleted `contexts/SocketContext.jsx` (was dead) + fixed the stale Socket.io help copy. `email_frequency` ('instant'/'daily'/'off') replaces the boolean (`email_opt_out` kept as legacy); migration 12 applied live. `createNotification` instant-emails only 'instant' users; `jobs.sendDigests()` batches the rest into a daily digest (20h-gated, in the scheduler). Profile→Security has a 3-way selector. **Backend 93 tests** (+3). Verified live: cadence PATCH/GET round-trips; digest job sent **1 email from the noreply sender** then **0 on a second run** (cadence gate working). **Note:** instant per-event + digest both still depend on a real provider key to actually deliver (Resend); without it they log. WebSocket real-time remains bookmarked in §7.4.
+
+---
+
+## 7. Backlog & Future Considerations
+
+Groomed 2026-06-15 by all four personas. This is the menu of work beyond the MVP
+sprints — nothing here is committed to a sprint yet. **Blocker legend:**
+🏢 needs a registered company · ✉️ needs an email provider (free tier is fine) ·
+💳 needs payments (MVP-3) · 🐞 regression introduced by the microservice cutover.
+**Priority:** P0 critical · P1 high · P2 medium · P3 nice-to-have.
+
+### 7.1 Near-term candidates — ✅ ALL SHIPPED 2026-06-15 (see §6.8)
+| Item | Theme | Status |
+|---|---|---|
+| Core marketplace test coverage | Quality | ✅ `tasks.test.js` + `messages.test.js` (backend now 71 tests) |
+| Task-expiry job 🐞 | Marketplace | ✅ `jobs.js` `expireDueTasks` + interval scheduler + `POST /tasks/admin/expire` |
+| Disputes backend | Trust & Safety | ✅ `routes/disputes.js` (raise/list/view/admin-resolve); settlement stubbed 💳 |
+| Password reset + email verification ✉️ | Auth | ✅ `/auth/forgot-password` · `/reset-password` · `/verify-email`; hashed tokens, dev email stub |
+| **Remaining frontend wiring** | — | ⬜ Frontend pages for reset/verify + admin disputes UI still consume mocks — see TD-11-style follow-up in §7.7 |
+
+### 7.2 Auth & Account Security  *(bounded set shipped 2026-06-15 — see §6.9)*
+- ✅ Account lockout / progressive backoff (migration 10; 423 while locked)
+- ✅ "Log out all devices" (`POST /auth/logout-all` + Security-tab button)
+- ✅ Account deletion + data export (`DELETE /profile/account`, `GET /profile/export`)
+- ✅ Secret-rotation runbook — `docs/SECURITY_RUNBOOK.md`
+- ⬜ Refresh tokens / shorter access-token TTL — **P2** (deferred: frontend auth refactor)
+- ⬜ 2FA (TOTP), at least for admin/high-trust accounts — **P3** (deferred: large)
+
+### 7.3 Trust & Safety
+- Report / flag users & tasks + a moderation queue — **P2**
+- Block / mute another user — **P3**
+- **Verified campus affiliation via email-domain** (builds on the `locations` model) — the real trust signal behind multi-campus — **P2**
+- Review-abuse guards (edit window, profanity filter; one-per-task already enforced) — **P3**
+- Admin moderation for business listings — **P2**
+
+### 7.4 Communications & Notifications ✉️  *(transactional email shipped 2026-06-15 — see §6.10)*
+- ✅ **Transactional email** from a noreply sender (Resend + stub fallback) on all notification events; opt-out aware. Needs a verified domain + `RESEND_API_KEY` to go live.
+- ✅ Email opt-out preference (migration 11 + Profile→Security toggle)
+- ✅ **Push via email + daily digest** — per-event ('instant') or batched ('daily') via `email_frequency`; digest job in the scheduler. (Replaces native PWA push for now.)
+- 🔖 **Real-time messaging via WebSocket — BOOKMARKED** (owner deferred 2026-06-15; `SocketContext` stub removed). Messaging stays poll-based + email. **P2** when revisited.
+- ⬜ Native PWA push notifications — **P3** (email push covers the need for now)
+- ⬜ Per-type muting / richer digest scheduling — **P3**
+
+### 7.5 Core Marketplace
+- Task edit / cancel; bid edit / withdraw polish — **P2**
+- Saved / favourite tasks; follow a creator — **P3**
+- Search & filter improvements (full-text, campus/distance filters) — **P2**
+- **Data-driven skills/categories taxonomy** (mirror the `locations` pattern so tags aren't hard-coded) — **P2**
+- Two-party completion handshake (both confirm done) — pairs with escrow 💳 — **P2**
+- Recurring / templated tasks — **P3**
+
+### 7.6 Payments & Escrow 💳🏢 (MVP-3 — parked until company registration)
+- Paystack (primary) + Ozow via Paystack; ZAR — **P0 when unblocked**
+- Escrow lifecycle: fund → hold → release / refund; platform fee
+- Payout onboarding; transaction history; wallet / balance
+- Webhook signature verification + idempotency + reconciliation
+- Schema re-platform: Stripe/USD → Paystack/ZAR (see TD-3)
+
+### 7.7 Quality, Observability & DevEx
+- Expand frontend component tests (harness now exists) — **P2**
+- E2E smoke (Playwright): signup → post → bid → accept — **P2**
+- Error tracking (Sentry) + **access logging** (we log errors only; add a request log with status + duration + reqId) — **P2**
+- Performance: split the 4.5k-line `App.jsx`, route-level code-splitting, image optimization — **P2**
+- **Accessibility audit** (aria, keyboard nav, contrast) — the mobile pass was visual only — **P2**
+- DB index audit; OpenAPI / API docs — **P3**
+- Pre-commit hooks (lint/test); branch protection + PR template — **P3**
+
+### 7.8 Admin & Ops
+- Admin dashboard: users, tasks, disputes, businesses, `activity_logs` viewer — **P2**
+- Basic analytics (signups, tasks posted, completion rate; GMV once payments land) — **P2**
+- Campus/zone admin UI (add a campus without writing SQL) — **P3**
+- Feature flags; Neon backup/restore runbook — **P3**
+
+### 7.9 Compliance & Legal
+- POPIA: data export/erasure endpoints; re-prompt consent when the policy version changes — **P2**
+- Cookie-consent banner; surface T&C/Privacy versioning in the UI — **P3**
+- Age / student-status verification — **P3**
+
+---
+
+## 8. Session Log
 
 - **2026-06-15 — Session 0 (induction):** Full baseline audit by all four personas. No prior state file found; created this document. Mapped monolith-vs-microservice drift (TD-1/TD-4), zero-test gap (TD-2), and Stripe-vs-Paystack payment mismatch (TD-3). Defined the 3 MVP features.
 - **2026-06-15 — Session 0b (decisions ratified):** Product Owner answered all four §6 questions: monolith adopted / `services/` retired, Paystack-primary (Ozow via Paystack later), brand = **ReLivR**, **multi-campus from day one with affiliation trust tags**. Roadmap re-sequenced: MVP-2 is now **Multi-Campus Identity & Affiliation Trust Tags** (promoted ahead of payments because it's the trust backbone and reshapes the data model); payments moved to MVP-3; reviews/disputes + auth-hardening deferred to Sprint 4.
+- **2026-06-15 — Email push + digest; WebSocket bookmarked:** Removed the dead `SocketContext` stub (real-time messaging deferred per owner). Notification delivery is now an `email_frequency` preference — 'instant' (per-event push email), 'daily' (batched digest via a scheduled `sendDigests()` job, 20h-gated), or 'off'. Migration 12 + Profile→Security 3-way selector. Backend 93 tests. Verified live: digest sent 1 then 0 (cadence gate). Still needs a Resend key to actually deliver. Branch `feat/foundation-mobile-hardening`; not committed.
+- **2026-06-15 — §7.4 Transactional email (noreply) DELIVERED:** All ReLivR mail now sends from `ReLivR <noreply@relivr.app>` (env-overridable) via Resend when `RESEND_API_KEY` is set, else logs a dev stub. `createNotification` emails recipients on all events (bids/awards/reviews/disputes/messages), opt-out aware; security mail always sends. Migration 11 (`email_opt_out`) + Profile→Security toggle + new-message notifications. Backend 90 tests (+6). To go live: verify a domain with Resend + set the key. Deferred: WebSocket real-time, PWA push, email digest. Branch `feat/foundation-mobile-hardening`; not committed.
+- **2026-06-15 — §7.2 Auth & Security (bounded) DELIVERED:** Per-account login lockout (progressive backoff), `POST /auth/logout-all`, account deletion (POPIA anonymise + `deleted_at`), `GET /profile/export` (POPIA portability), and `docs/SECURITY_RUNBOOK.md`. Migration 10 applied live. Profile→Security tab wired (download data / sign out everywhere / delete account). **Backend 84 tests** (+10). Refresh tokens + 2FA deferred as separate efforts. Branch `feat/foundation-mobile-hardening`; not committed.
+- **2026-06-15 — Universal search + public profiles:** Added `GET /search?q=` (people + businesses + open tasks, ILIKE, ≤8 each, public, +3 tests → **74 backend tests**). Frontend: top-bar search is now a real input (visible on all screen sizes) → a new `SearchResults` page (`/search`) with clickable People→public profile, Businesses→Local, Tasks→detail. **Public-profile viewing was already wired** (PublicProfile component, clickable creator/bidder names via `openProfile`, `/u/:id`) — verified working from both search results and the task/bid menu. Also fixed the **Vite dev proxy** to forward `/locations`, `/disputes`, `/search` to the backend (previously `/locations` silently fell back to the hard-coded list in dev). Minor known item: the mobile top-bar search is narrow. Caught & fixed a render crash (`initials` was component-scoped). Branch `feat/foundation-mobile-hardening`; not committed.
+- **2026-06-15 — §7.1 Near-term Hardening sprint DELIVERED:** All four near-term P1 items shipped with tests. Task-expiry job + scheduler (fixes the cutover regression), disputes backend (raise/list/view/admin-resolve), password reset + email verification (hashed single-use tokens, enumeration-safe, dev email stub), and core marketplace test coverage. Backend **71 tests** (was 37). Migration 09 applied to live DB; new endpoints verified live. Settlement stays stubbed until escrow (TD-3). Frontend pages for reset/verify + disputes admin UI are the remaining wiring. Branch `feat/foundation-mobile-hardening`; not committed.
+- **2026-06-15 — MVP-3 parked + backlog groomed:** Owner parked MVP-3 (Paystack) until a company is registered (Paystack onboarding requires a registered entity). Codebase audit surfaced four ready-now gaps — untested core marketplace, broken task-expiry (🐞 cutover regression), missing disputes backend, no password-reset flow — captured alongside a full themed backlog (auth, trust & safety, comms/email, marketplace, quality, admin, compliance) in new **§7**. Branch `feat/foundation-mobile-hardening` holds the 4 prior commits (unpushed). No code built this turn.
 - **2026-06-15 — Debt paydown sprint DELIVERED (TD-5..12):** Cleared the 1 orange + 6 yellow debt items. JWT revocation via `token_version` (logout/password-change kill sessions, verified live), fail-fast env validation, structured JSON logging + request IDs (all `console.error` converted), README rewrite, frontend Vitest/RTL smoke test in CI, `useLocations()` wiring, and a `npm run migrate` runner that applied 07+08 to the live DB + `location_id` normalization. Backend 37 tests / frontend 1, all green. Caught & fixed a Google-login lockout bug in self-review. Only TD-3 (Paystack) + TD-9 (commit) remain. **Work still unstaged — not committed.**
 - **2026-06-15 — Mobile optimization pass (roadmap paused at owner's request):** Drove the live frontend via preview at 375px & 1280px. Found & fixed: (1) top-bar nav cramped on mobile — an inline `display:flex` on `.topbar-nav` was defeating the `display:none` mobile rule; removed it. (2) Task-detail (`1fr 320px`) and dispute-detail (`1fr 300px`) were **unclassed** inline grids that didn't collapse — added `.stack-mobile`. (3) Landing hero left a full empty screen (`min-height:100vh` + hidden visual) — added `.hero-section` to drop it on mobile. (4) Messages master-detail was squished two-pane — added one-pane-at-a-time behaviour (`.msg-shell.has-active`) + a mobile ← back button. Verified Browse/Post/Profile clean; desktop unchanged. Tooling: added `.claude/launch.json`; `vite.config.js` port now honours `$PORT`. **Side effect:** created 1 test user + 2 tasks in the dev DB via API for testing (`mobiletest+886633846@demo.com`).
 - **2026-06-15 — Sprint 2 (MVP-2) DELIVERED:** Trust layer + scalable location model. Found the reviews/ratings backend already built & correct → hardened it (comment cap, self-review guard) and **tested it** (was untested). Added data-driven `locations` taxonomy (migration + `GET /locations`) and replaced the hard-coded Rhodes `CAMPUS_ZONES` with a shared fail-open DB validator — new campuses are now data, not code. **32 tests passing** (from 17). Tests caught a real express-validator async-`.custom()` bug. Surfaced TD-11 (frontend should consume `/locations`) and TD-12 (migration unrun in this env + `location_id` normalization deferred). Work unstaged — **not committed**. **Next: Sprint 3 (MVP-3 — Paystack escrow) on command.**
