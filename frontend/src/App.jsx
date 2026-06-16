@@ -177,10 +177,11 @@ button:active { transform: scale(.97); }
 }
 
 /* Top-bar nav: links + search are desktop-only; bottom bar handles mobile nav */
-.topbar-nav, .topbar-search { display: none; }
+/* Top-bar nav links are desktop-only; the search bar shows on every size
+   (on phones the hidden nav links free up the room for it). */
+.topbar-nav { display: none; }
 @media (min-width:769px) {
-  .topbar-nav    { display: flex !important; }
-  .topbar-search { display: block !important; }
+  .topbar-nav { display: flex !important; }
 }
 /* The Post button stays visible on all sizes, but compresses to just '＋' on phones */
 @media (max-width:520px) {
@@ -1342,7 +1343,7 @@ function FeaturesPage({ onNav }) {
       <div id="matching"><h2>Smart Matching Engine</h2><p>When a task is posted, our matching engine automatically identifies earners whose skill profiles overlap with the task's skill tags using Jaccard similarity scoring. Earners are ranked by skill overlap score, average rating bonus (up to +20% for 5-star earners), and account longevity.</p></div>
       <div id="trust"><h2>Trust Score System</h2><p>Every user has a trust score between 0 and 100, calculated from:</p><ul><li><strong style={{color:'#3b3548'}}>Identity (40pts)</strong> — Rhodes SSO link (30pts) + verified email (10pts)</li><li><strong style={{color:'#3b3548'}}>Track record (40pts)</strong> — completed tasks (up to 20pts) + average rating (up to 20pts)</li><li><strong style={{color:'#3b3548'}}>Longevity (20pts)</strong> — 5 points per month, capped at 20</li><li><strong style={{color:'#3b3548'}}>Dispute penalty</strong> — -10pts per dispute raised against you</li></ul><div className="highlight"><p>Levels: Unverified (0–19) · New (20–49) · Established (50–79) · Verified (80–100)</p></div></div>
       <div id="escrow"><h2>Escrow System</h2><p>Our escrow is built on Stripe's PaymentIntent API with manual capture. Funds are authorised on the creator's card when escrow is funded, but no actual charge occurs until the creator releases payment. The 10% platform fee is deducted from the earner's payout, not added to the creator's charge.</p></div>
-      <div id="messaging"><h2>Messaging</h2><p>Built-in real-time messaging via Socket.io. Features include task-scoped threads, pre-bid inquiry messages, read receipts, and message history preserved for dispute evidence.</p></div>
+      <div id="messaging"><h2>Messaging</h2><p>Built-in direct messaging with task-scoped threads, pre-bid inquiry messages, read receipts, and message history preserved for dispute evidence. New messages reach you by email (instantly or in a daily digest — your choice in Profile → Security).</p></div>
       <div id="admin"><h2>Admin Tools</h2><p>The admin dashboard provides a full dispute queue with FIFO ordering, complete message logs for any task, escrow state visibility, user management, audit timelines, and one-click refund or release from the dispute detail view.</p></div>
     </SidebarPage>
   )
@@ -1784,9 +1785,10 @@ const NAV = {
   ],
 }
 
-function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding }) {
+function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch }) {
   const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [searchText, setSearchText] = useState('')
   const isCreator = user.role === 'creator'
   // Desktop nav links — role-aware. These render in the top bar on every screen
   // wide enough to fit them, so navigation never depends on the mobile bottom bar.
@@ -1822,13 +1824,16 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding }) {
           })}
         </nav>
 
-        {/* Search — desktop only; tapping it lands on the feed where real search lives */}
-        <div className="topbar-search" style={{ flex:1, maxWidth:360, margin:'0 12px' }}>
-          <button onClick={() => { setPage('tasks-browse'); setTimeout(() => document.getElementById('feed-search')?.focus(), 100) }}
-            style={{ width:'100%', textAlign:'left', padding:'9px 16px', borderRadius:100, border:'1px solid var(--border)', background:'var(--bg-elevated)', color:'var(--text-muted)', fontSize:'.875rem', cursor:'pointer' }}>
-            ⌕ Search tasks…
-          </button>
-        </div>
+        {/* Universal search — people, businesses, and tasks. Submit → results page. */}
+        <form className="topbar-search" style={{ flex:1, maxWidth:380, margin:'0 12px' }}
+          onSubmit={e => { e.preventDefault(); const q = searchText.trim(); if (q) onSearch?.(q) }}>
+          <div style={{ position:'relative' }}>
+            <span style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', fontSize:'.95rem', pointerEvents:'none' }}>⌕</span>
+            <input value={searchText} onChange={e => setSearchText(e.target.value)}
+              placeholder="Search people, businesses, tasks…"
+              style={{ width:'100%', padding:'9px 16px 9px 34px', borderRadius:100, border:'1px solid var(--border)', background:'var(--bg-elevated)', color:'var(--text-primary)', fontSize:'.875rem' }} />
+          </div>
+        </form>
 
         <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6 }}>
           <button className="btn-p topbar-post" style={{ padding:'9px 18px', fontSize:'.85rem' }} onClick={() => setPage('tasks-new')}>＋ Post a Task</button>
@@ -3481,6 +3486,105 @@ function Badge2({ id }) {
   )
 }
 
+// Universal search results — people, businesses, and tasks for one query.
+function SearchResults({ query, setPage, setSelectedTask, openProfile }) {
+  const [data, setData]       = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState(null)
+
+  useEffect(() => {
+    if (!query) { setData({ users: [], businesses: [], tasks: [] }); setLoading(false); return }
+    let cancelled = false
+    setLoading(true); setError(null)
+    fetch(`/search?q=${encodeURIComponent(query)}`)
+      .then(r => { if (!r.ok) throw new Error('Search failed'); return r.json() })
+      .then(d => { if (!cancelled) { setData(d); setLoading(false) } })
+      .catch(e => { if (!cancelled) { setError(e.message); setLoading(false) } })
+    return () => { cancelled = true }
+  }, [query])
+
+  const { users = [], businesses = [], tasks = [] } = data || {}
+  const total = users.length + businesses.length + tasks.length
+
+  const initialsOf = name => (name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+  const avatar = (url, name) => url
+    ? <img src={url} alt="" style={{ width:40, height:40, borderRadius:'50%', objectFit:'cover', flexShrink:0 }} />
+    : <div style={{ width:40, height:40, borderRadius:'50%', background:'var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'.85rem', color:'var(--accent)', flexShrink:0 }}>{initialsOf(name)}</div>
+
+  return (
+    <>
+      <PageTitle sub={query ? `Results for “${query}”` : 'Type in the search bar above'}>Search</PageTitle>
+
+      {loading && <div style={{ padding:48, textAlign:'center' }}><Spinner /></div>}
+      {!loading && error && <EmptyState icon="◷" message={error} />}
+      {!loading && !error && total === 0 && (
+        <EmptyState icon="◻" message={query ? `No people, businesses, or tasks match “${query}”.` : 'Search for people, businesses, or tasks.'} />
+      )}
+
+      {!loading && !error && total > 0 && (
+        <div style={{ display:'flex', flexDirection:'column', gap:28 }}>
+          {users.length > 0 && (
+            <section>
+              <Mono style={{ display:'block', marginBottom:12 }}>People · {users.length}</Mono>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {users.map(u => (
+                  <DCard key={u.user_id} onClick={() => openProfile(u.user_id)}
+                    style={{ display:'flex', alignItems:'center', gap:14, padding:'12px 16px', cursor:'pointer' }}>
+                    {avatar(u.avatar_url, u.display_name)}
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontWeight:600, fontSize:'.92rem' }}>{u.display_name || 'ReLivR member'}</div>
+                      <div style={{ fontSize:'.78rem', color:'var(--text-muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                        {u.headline || u.campus_zone || 'Member'}
+                      </div>
+                    </div>
+                    {u.rating_count > 0 && <Mono>★ {Number(u.avg_rating).toFixed(1)}</Mono>}
+                  </DCard>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {businesses.length > 0 && (
+            <section>
+              <Mono style={{ display:'block', marginBottom:12 }}>Businesses · {businesses.length}</Mono>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {businesses.map(b => (
+                  <DCard key={b.business_id} onClick={() => setPage('local-browse')}
+                    style={{ padding:'12px 16px', cursor:'pointer' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', gap:10 }}>
+                      <span style={{ fontWeight:600, fontSize:'.92rem' }}>{b.name}</span>
+                      {b.category && <Tag>{b.category}</Tag>}
+                    </div>
+                    {b.description && <div style={{ fontSize:'.8rem', color:'var(--text-secondary)', marginTop:4, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{b.description}</div>}
+                  </DCard>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {tasks.length > 0 && (
+            <section>
+              <Mono style={{ display:'block', marginBottom:12 }}>Tasks · {tasks.length}</Mono>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {tasks.map(t => (
+                  <DCard key={t.task_id} onClick={() => { setSelectedTask(t.task_id); setPage('task-detail') }}
+                    style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, padding:'12px 16px', cursor:'pointer' }}>
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontWeight:600, fontSize:'.92rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.title}</div>
+                      {t.creator_name && <div style={{ fontSize:'.76rem', color:'var(--text-muted)' }}>by {t.creator_name}</div>}
+                    </div>
+                    <Mono style={{ flexShrink:0 }}>R{t.budget}</Mono>
+                  </DCard>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+    </>
+  )
+}
+
 function PublicProfile({ userId, setPage, openChat, openProfile }) {
   const { user } = useAuth()
   const toast = useToast()
@@ -3681,7 +3785,7 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
 }
 
 function Profile({ openProfile }) {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const { state } = useStore()
   const toast = useToast()
   const [tab, setTab] = useState('profile')
@@ -3696,6 +3800,11 @@ function Profile({ openProfile }) {
   const [newPw, setNewPw]         = useState('')
   const [saving, setSaving]       = useState(false)
   const [savingPw, setSavingPw]   = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [emailFrequency, setEmailFrequency] = useState('instant')
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deletePw, setDeletePw]   = useState('')
+  const [deleting, setDeleting]   = useState(false)
   const [loadingProfile, setLoadingProfile] = useState(true)
   const myReviews = state.reviews.filter(r=>r.reviewee_id==='u1'||r.reviewer_id==='u1')
   const avgRating = myReviews.length?(myReviews.reduce((s,r)=>s+r.rating,0)/myReviews.length).toFixed(1):null
@@ -3718,6 +3827,7 @@ function Profile({ openProfile }) {
         setHeadline(profile.headline || '')
         setServices(profile.services_offered || '')
         setEmail(profile.email || user.email || '')
+        setEmailFrequency(profile.email_frequency || 'instant')
       } catch {
         // Backend unreachable — keep whatever we have from context (demo mode)
       } finally {
@@ -3772,11 +3882,77 @@ function Profile({ openProfile }) {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.message || 'Could not change password')
       setCurrentPw(''); setNewPw('')
-      toast('Password changed', 'success')
+      toast('Password changed — please sign in again', 'success')
     } catch (err) {
       toast(err.message, 'error')
     } finally {
       setSavingPw(false)
+    }
+  }
+
+  // ── Download my data (POPIA) ────────────────────────────────────────────────
+  async function exportData() {
+    setExporting(true)
+    try {
+      const res = await fetch('/profile/export', { headers: { Authorization: `Bearer ${token()}` } })
+      if (!res.ok) throw new Error('Could not export your data')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = 'relivr-data.json'; a.click()
+      URL.revokeObjectURL(url)
+      toast('Your data is downloading', 'success')
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // ── Email cadence (optimistic) ──────────────────────────────────────────────
+  async function saveEmailFrequency(freq) {
+    const prev = emailFrequency
+    setEmailFrequency(freq)
+    try {
+      const res = await fetch('/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({ emailFrequency: freq }),
+      })
+      if (!res.ok) throw new Error()
+      toast('Email preference saved', 'success')
+    } catch {
+      setEmailFrequency(prev)
+      toast('Could not update email preference', 'error')
+    }
+  }
+
+  // ── Sign out of all devices ─────────────────────────────────────────────────
+  async function signOutAllDevices() {
+    try {
+      await fetch('/auth/logout-all', { method: 'POST', headers: { Authorization: `Bearer ${token()}` } })
+    } catch { /* revoked regardless; fall through to local logout */ }
+    toast('Signed out of all devices', 'success')
+    logout()
+  }
+
+  // ── Delete account (POPIA erasure) ──────────────────────────────────────────
+  async function deleteAccount() {
+    setDeleting(true)
+    try {
+      const res = await fetch('/profile/account', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({ password: deletePw }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || 'Could not delete account')
+      toast('Your account has been deleted', 'success')
+      logout()
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -3867,9 +4043,56 @@ function Profile({ openProfile }) {
             <Input label="New Password" type="password" value={newPw} onChange={e=>setNewPw(e.target.value)} hint="Minimum 8 characters" />
             <Btn loading={savingPw} onClick={changePassword} style={{ alignSelf:'flex-start' }}>Update Password</Btn>
           </div>
-          <Divider style={{ margin:'24px 0' }} />
-          <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:12 }}>Danger Zone</Mono>
-          <Btn variant="danger" size="sm" onClick={() => toast('Account deletion is disabled in demo mode','warning')}>Delete Account</Btn>
+        </DCard>
+      )}
+      {tab==='security'&&(
+        <DCard hover={false} style={{ marginTop:16 }}>
+          <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:14 }}>Your Data & Account</Mono>
+
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+            <div style={{ fontSize:'0.85rem', color:'var(--text-secondary)', maxWidth:380 }}>
+              Activity emails (new bids, messages, reviews, disputes). Security emails always send.
+            </div>
+            <select value={emailFrequency} onChange={e => saveEmailFrequency(e.target.value)} style={{ width:'auto', minWidth:150 }}>
+              <option value="instant">Email me instantly</option>
+              <option value="daily">Daily digest</option>
+              <option value="off">Don't email me</option>
+            </select>
+          </div>
+
+          <Divider style={{ margin:'18px 0' }} />
+
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+            <div style={{ fontSize:'0.85rem', color:'var(--text-secondary)' }}>Download a copy of your ReLivR data.</div>
+            <Btn variant="secondary" size="sm" loading={exporting} onClick={exportData}>Download my data</Btn>
+          </div>
+
+          <Divider style={{ margin:'18px 0' }} />
+
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+            <div style={{ fontSize:'0.85rem', color:'var(--text-secondary)' }}>Signed in elsewhere? Sign out everywhere.</div>
+            <Btn variant="secondary" size="sm" onClick={signOutAllDevices}>Sign out of all devices</Btn>
+          </div>
+
+          <Divider style={{ margin:'18px 0' }} />
+
+          <Mono size="0.68rem" color="var(--danger)" style={{ display:'block', marginBottom:8 }}>Danger Zone</Mono>
+          <p style={{ fontSize:'0.85rem', color:'var(--text-secondary)', lineHeight:1.6, marginBottom:12 }}>
+            Deleting your account removes your personal information and signs you out everywhere. This can't be undone.
+          </p>
+          {!confirmingDelete ? (
+            <Btn variant="danger" size="sm" onClick={() => setConfirmingDelete(true)}>Delete account</Btn>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:10, maxWidth:320 }}>
+              {user.provider!=='google' && (
+                <Input label="Confirm your password" type="password" value={deletePw} onChange={e=>setDeletePw(e.target.value)} />
+              )}
+              <div style={{ display:'flex', gap:8 }}>
+                <Btn variant="danger" size="sm" loading={deleting} onClick={deleteAccount}>Yes, delete my account</Btn>
+                <Btn variant="ghost" size="sm" onClick={() => { setConfirmingDelete(false); setDeletePw('') }}>Cancel</Btn>
+              </div>
+            </div>
+          )}
         </DCard>
       )}
       {tab==='reviews'&&(
@@ -4151,6 +4374,7 @@ function AdminUsers() {
 const DASH_ROUTES = {
   '/dashboard':       'dashboard',
   '/browse':          'tasks-browse',
+  '/search':          'search',
   '/post':            'tasks-new',
   '/my-tasks':        'tasks-mine',
   '/my-bids':         'my-bids',
@@ -4217,6 +4441,7 @@ export default function App() {
   useEffect(() => { window.__rlProfileId = selectedUser }, [selectedUser])
   // { userId, name } of a person to start/open a conversation with (set from TaskDetail)
   const [messageTarget,   setMessageTarget]   = useState(null)
+  const [searchQuery,     setSearchQuery]     = useState('')
   const [state, dispatch] = useReducer(appReducer, initialState)
 
   // Live unread-notification count — polls the backend so the bell badge
@@ -4461,6 +4686,8 @@ export default function App() {
     switch (dashPage) {
       case 'dashboard':            return <Dashboard setPage={setDashPage} setSelectedTask={setSelectedTask} />
       case 'tasks-browse':         return <TaskBrowse setPage={setDashPage} setSelectedTask={setSelectedTask} />
+      case 'search':               return <SearchResults query={searchQuery} setPage={setDashPage} setSelectedTask={setSelectedTask} openProfile={(uid) => { setSelectedUser(uid); setDashPage('public-profile') }} />
+
       case 'task-detail':          return <TaskDetail taskId={selectedTask} setPage={setDashPage} openChat={(userId, name) => { setMessageTarget({ userId, name }); setDashPage('messages') }} openProfile={(uid) => { setSelectedUser(uid); setDashPage('public-profile') }} />
       case 'tasks-new':            return <TaskNew setPage={setDashPage} setSelectedTask={setSelectedTask} />
       case 'tasks-mine':           return <MyTasks setPage={setDashPage} setSelectedTask={setSelectedTask} />
@@ -4529,7 +4756,7 @@ export default function App() {
           {/* ── DASHBOARD ────────────────────────────────────── */}
           {view==='dashboard' && user && (
             <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column', background:'var(--bg-base)' }}>
-              <TopBar page={dashPage} setPage={setDashPage} unreadCount={unreadCount} onGoHome={goAppHome} onViewLanding={() => navigate('landing')} />
+              <TopBar page={dashPage} setPage={setDashPage} unreadCount={unreadCount} onGoHome={goAppHome} onViewLanding={() => navigate('landing')} onSearch={(q) => { setSearchQuery(q); setDashPage('search') }} />
               {/* DashSidebar is mobile-only now — CSS turns it into the bottom tab bar */}
               <DashSidebar page={dashPage} setPage={setDashPage} unreadCount={unreadCount} onGoHome={goAppHome} />
               <main className="dash-main" style={{ flex:1, width:'100%', maxWidth:1280, margin:'0 auto', padding:'28px 24px 60px' }}>
