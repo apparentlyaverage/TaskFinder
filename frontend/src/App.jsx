@@ -6,7 +6,7 @@
 
 import React, {
   useState, useEffect, useRef, useCallback,
-  createContext, useContext, useReducer,
+  createContext, useContext, useReducer, useId,
 } from 'react'
 import {
   MOCK_TASKS, MOCK_BIDS, MOCK_NOTIFICATIONS,
@@ -71,6 +71,10 @@ body {
 ::selection { background: var(--amber); color: #fff; }
 a { color: inherit; text-decoration: none; }
 button { cursor: pointer; font-family: var(--font-body); border: none; }
+/* Visible keyboard focus for a11y (mouse clicks don't trigger :focus-visible) */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+a:focus-visible, button:focus-visible, [role="button"]:focus-visible,
+input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 input, textarea, select { font-family: var(--font-body); font-size: inherit; }
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: var(--bg-base); }
@@ -335,13 +339,16 @@ function Btn({ children, variant='primary', size='md', loading=false, fullWidth=
 
 function Input({ label, error, hint, style={}, ...p }) {
   const [focused, setFocused] = useState(false)
+  const id = useId()
+  const hintId = hint || error ? `${id}-desc` : undefined
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-      {label && <label style={{ fontSize:'0.7rem', fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:'var(--text-secondary)' }}>{label}</label>}
-      <input style={{ background:'var(--bg-surface)', border:`1px solid ${error?'var(--danger)':focused?'var(--accent)':'var(--border)'}`, borderRadius:'var(--radius-sm)', color:'var(--text-primary)', padding:'9px 13px', outline:'none', width:'100%', fontSize:'0.9rem', boxShadow:focused?'0 0 0 3px var(--accent-glow)':'none', transition:'all 150ms ease', ...style }}
+      {label && <label htmlFor={id} style={{ fontSize:'0.7rem', fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:'var(--text-secondary)' }}>{label}</label>}
+      <input id={id} aria-invalid={error ? 'true' : undefined} aria-describedby={hintId}
+        style={{ background:'var(--bg-surface)', border:`1px solid ${error?'var(--danger)':focused?'var(--accent)':'var(--border)'}`, borderRadius:'var(--radius-sm)', color:'var(--text-primary)', padding:'9px 13px', outline:'none', width:'100%', fontSize:'0.9rem', boxShadow:focused?'0 0 0 3px var(--accent-glow)':'none', transition:'all 150ms ease', ...style }}
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} {...p} />
-      {error && <span style={{ fontSize:'0.78rem', color:'var(--danger)' }}>{error}</span>}
-      {hint && !error && <span style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>{hint}</span>}
+      {error && <span id={hintId} style={{ fontSize:'0.78rem', color:'var(--danger)' }}>{error}</span>}
+      {hint && !error && <span id={hintId} style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>{hint}</span>}
     </div>
   )
 }
@@ -452,14 +459,26 @@ function StatCard({ label, value, accent=false }) {
 }
 
 function Modal({ open, onClose, title, children, maxWidth=480 }) {
+  const dialogRef = useRef(null)
+  const titleId = useId()
   useEffect(() => { if (open) document.body.style.overflow='hidden'; else document.body.style.overflow=''; return () => { document.body.style.overflow='' } }, [open])
+  // a11y: close on Escape, and move focus into the dialog when it opens.
+  useEffect(() => {
+    if (!open) return
+    const onKey = e => { if (e.key === 'Escape') onClose?.() }
+    document.addEventListener('keydown', onKey)
+    const prev = document.activeElement
+    dialogRef.current?.focus()
+    return () => { document.removeEventListener('keydown', onKey); prev?.focus?.() }
+  }, [open, onClose])
   if (!open) return null
   return (
     <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(33,28,46,.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:20, backdropFilter:'blur(4px)', animation:'fadeIn 0.2s ease' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background:'var(--bg-surface)', border:'1px solid var(--border-strong)', borderRadius:'var(--radius-lg)', width:'100%', maxWidth, animation:'slideUp 0.2s ease both', overflow:'hidden' }}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
+        onClick={e => e.stopPropagation()} style={{ background:'var(--bg-surface)', border:'1px solid var(--border-strong)', borderRadius:'var(--radius-lg)', width:'100%', maxWidth, animation:'slideUp 0.2s ease both', overflow:'hidden', outline:'none' }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'16px 20px', borderBottom:'1px solid var(--border)' }}>
-          <span style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:'1.1rem', letterSpacing:'-0.01em' }}>{title}</span>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'1.2rem', cursor:'pointer', lineHeight:1, padding:'2px 6px', borderRadius:'var(--radius-sm)' }}>✕</button>
+          <span id={titleId} style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:'1.1rem', letterSpacing:'-0.01em' }}>{title}</span>
+          <button onClick={onClose} aria-label="Close dialog" style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'1.2rem', cursor:'pointer', lineHeight:1, padding:'2px 6px', borderRadius:'var(--radius-sm)' }}>✕</button>
         </div>
         <div style={{ padding:24 }}>{children}</div>
       </div>
@@ -545,8 +564,8 @@ function LandingNavbar({ onOpenAuth, onNav, user, onEnterApp }) {
               </>
             )}
           </div>
-          <button className="show-m" onClick={() => setDrawerOpen(true)}
-            style={{ background:'none', border:'none', color:'var(--text-primary)', cursor:'pointer', fontSize:'1.4rem', padding:8 }}>☰</button>
+          <button className="show-m" onClick={() => setDrawerOpen(true)} aria-label="Open menu" aria-haspopup="menu"
+            style={{ background:'none', border:'none', color:'var(--text-primary)', cursor:'pointer', fontSize:'1.4rem', padding:8 }}><span aria-hidden="true">☰</span></button>
         </div>
       </nav>
 
@@ -645,6 +664,11 @@ function LandingFooter({ onNav }) {
 
 function AuthModal({ mode, onClose, onSwitch, onLogin }) {
   const { loginWithGoogle } = useAuth()
+  useEffect(() => {
+    const onKey = e => { if (e.key === 'Escape') onClose?.() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [name, setName]         = useState('')
@@ -758,7 +782,7 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
 
   return (
     <div className="moverlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label={mode==='login' ? 'Sign in' : 'Create your account'} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div style={{ padding:'18px 22px 14px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
@@ -766,7 +790,7 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
             <div style={{ fontFamily:'var(--fd)', fontSize:'1.25rem', fontWeight:800 }}>{mode==='login'?'Welcome back':(step===1?'Create your account':'Set up your profile')}</div>
             <div style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em', marginTop:2 }}>{mode==='register' ? `ReLiv · Step ${step} of 2` : 'ReLiv · Rhodes Campus'}</div>
           </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'var(--text-muted)', cursor:'pointer', fontSize:'1.1rem', padding:'4px 8px' }}>✕</button>
+          <button onClick={onClose} aria-label="Close dialog" style={{ background:'none', border:'none', color:'var(--text-muted)', cursor:'pointer', fontSize:'1.1rem', padding:'4px 8px' }}>✕</button>
         </div>
 
         <div style={{ padding:22, display:'flex', flexDirection:'column', gap:13 }}>
@@ -811,8 +835,8 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
             {/* ===== LOGIN ===== */}
             {mode==='login' && (
               <>
-                <div><label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@ru.ac.za" required /></div>
-                <div><label>Password</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
+                <div><label>Email</label><input type="email" aria-label="Email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@ru.ac.za" required /></div>
+                <div><label>Password</label><input type="password" aria-label="Password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
                 <div>
                   <Mono style={{ display:'block', marginBottom:8 }}>Quick demo login</Mono>
                   <div style={{ display:'flex', gap:6 }}>
@@ -829,8 +853,8 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
             {mode==='register' && step===1 && (
               <>
                 <div><label>Full name</label><input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Thabo Mkhize" required /></div>
-                <div><label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@ru.ac.za" required /></div>
-                <div><label>Password <span style={{ color:'var(--text-muted)' }}>(min 8 chars)</span></label><input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
+                <div><label>Email</label><input type="email" aria-label="Email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@ru.ac.za" required /></div>
+                <div><label>Password <span style={{ color:'var(--text-muted)' }}>(min 8 chars)</span></label><input type="password" aria-label="Password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
                 <div style={{ background:'var(--accent-glow)', border:'1px solid var(--accent-dim)', borderRadius:12, padding:'12px 14px', display:'flex', gap:10, alignItems:'flex-start' }}>
                   <span style={{ fontSize:'1.1rem' }}>✨</span>
                   <div style={{ fontSize:'.8rem', color:'var(--text-secondary)', lineHeight:1.5 }}>
@@ -1794,7 +1818,7 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch 
   // wide enough to fit them, so navigation never depends on the mobile bottom bar.
   const isAdmin = user.role === 'admin'
   const navLinks = isAdmin
-    ? [ { id:'admin-disputes', label:'Disputes' }, { id:'admin-users', label:'Users' }, { id:'admin-businesses', label:'Businesses' } ]
+    ? [ { id:'dashboard', label:'Dashboard' }, { id:'admin-disputes', label:'Disputes' }, { id:'admin-users', label:'Users' }, { id:'admin-businesses', label:'Businesses' } ]
     : [
         { id:'tasks-browse', label:'Browse' },
         { id:'local-browse', label:'Local' },
@@ -1825,11 +1849,12 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch 
         </nav>
 
         {/* Universal search — people, businesses, and tasks. Submit → results page. */}
-        <form className="topbar-search" style={{ flex:1, maxWidth:380, margin:'0 12px' }}
+        <form className="topbar-search" role="search" style={{ flex:1, maxWidth:380, margin:'0 12px' }}
           onSubmit={e => { e.preventDefault(); const q = searchText.trim(); if (q) onSearch?.(q) }}>
           <div style={{ position:'relative' }}>
-            <span style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', fontSize:'.95rem', pointerEvents:'none' }}>⌕</span>
+            <span aria-hidden="true" style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', fontSize:'.95rem', pointerEvents:'none' }}>⌕</span>
             <input value={searchText} onChange={e => setSearchText(e.target.value)}
+              aria-label="Search people, businesses, and tasks"
               placeholder="Search people, businesses, tasks…"
               style={{ width:'100%', padding:'9px 16px 9px 34px', borderRadius:100, border:'1px solid var(--border)', background:'var(--bg-elevated)', color:'var(--text-primary)', fontSize:'.875rem' }} />
           </div>
@@ -1837,19 +1862,20 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch 
 
         <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6 }}>
           <button className="btn-p topbar-post" style={{ padding:'9px 18px', fontSize:'.85rem' }} onClick={() => setPage('tasks-new')}>＋ Post a Task</button>
-          <button onClick={() => setPage('messages')} title="Messages"
-            style={{ width:38, height:38, borderRadius:'50%', border:'none', background:page==='messages'?'var(--accent-glow)':'transparent', color:page==='messages'?'var(--accent)':'var(--text-secondary)', fontSize:'1.05rem', cursor:'pointer' }}>◎</button>
+          <button onClick={() => setPage('messages')} aria-label="Messages" title="Messages"
+            style={{ width:38, height:38, borderRadius:'50%', border:'none', background:page==='messages'?'var(--accent-glow)':'transparent', color:page==='messages'?'var(--accent)':'var(--text-secondary)', fontSize:'1.05rem', cursor:'pointer' }}><span aria-hidden="true">◎</span></button>
           <button onClick={() => setPage('notifications')} title="Alerts"
+            aria-label={unreadCount > 0 ? `Alerts, ${unreadCount} unread` : 'Alerts'}
             style={{ position:'relative', width:38, height:38, borderRadius:'50%', border:'none', background:page==='notifications'?'var(--accent-glow)':'transparent', color:page==='notifications'?'var(--accent)':'var(--text-secondary)', fontSize:'1.05rem', cursor:'pointer' }}>
-            ◉{unreadCount>0 && <span style={{ position:'absolute', top:4, right:4, background:'var(--danger)', color:'#fff', fontFamily:'var(--font-mono)', fontSize:'.55rem', fontWeight:700, minWidth:15, height:15, lineHeight:'15px', borderRadius:8, textAlign:'center', padding:'0 3px' }}>{unreadCount}</span>}
+            <span aria-hidden="true">◉</span>{unreadCount>0 && <span style={{ position:'absolute', top:4, right:4, background:'var(--danger)', color:'#fff', fontFamily:'var(--font-mono)', fontSize:'.55rem', fontWeight:700, minWidth:15, height:15, lineHeight:'15px', borderRadius:8, textAlign:'center', padding:'0 3px' }}>{unreadCount}</span>}
           </button>
 
           {/* Avatar menu */}
           <div style={{ position:'relative' }}>
-            <button onClick={() => setMenuOpen(o => !o)} style={{ background:'none', border:'none', padding:2, cursor:'pointer', display:'flex' }}>
+            <button onClick={() => setMenuOpen(o => !o)} aria-label="Account menu" aria-haspopup="menu" aria-expanded={menuOpen} style={{ background:'none', border:'none', padding:2, cursor:'pointer', display:'flex' }}>
               {user.avatarUrl
                 ? <img src={user.avatarUrl} alt="" style={{ width:34, height:34, borderRadius:'50%', objectFit:'cover', border:'2px solid var(--accent-dim)' }} />
-                : <span style={{ width:34, height:34, borderRadius:'50%', background:'var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:800, fontSize:'.9rem', color:'var(--accent)' }}>{(user.displayName||user.email||'?').charAt(0).toUpperCase()}</span>}
+                : <span aria-hidden="true" style={{ width:34, height:34, borderRadius:'50%', background:'var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:800, fontSize:'.9rem', color:'var(--accent)' }}>{(user.displayName||user.email||'?').charAt(0).toUpperCase()}</span>}
             </button>
             {menuOpen && (
               <>
@@ -2043,6 +2069,21 @@ function categoryFor(task) {
   return CATEGORIES.find(c => c.kw.some(k => hay.includes(k))) || CATEGORIES[CATEGORIES.length - 1]
 }
 
+// Data-driven category list for the filter rail — fetched from GET /categories
+// (so a new category is a DB insert, not a deploy), falling back to the constant.
+function useCategories() {
+  const [cats, setCats] = useState(CATEGORIES)
+  useEffect(() => {
+    let alive = true
+    fetch('/categories')
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error('categories fetch failed'))))
+      .then(d => { if (alive && d.categories?.length) setCats(d.categories) })
+      .catch(() => { /* keep the fallback */ })
+    return () => { alive = false }
+  }, [])
+  return cats
+}
+
 function CardCover({ task, height = 108 }) {
   const c = categoryFor(task)
   return (
@@ -2060,6 +2101,7 @@ function TaskBrowse({ setPage, setSelectedTask }) {
   const { state } = useStore()
   const [skill, setSkill]   = useState('')
   const [cat, setCat]       = useState(null)
+  const cats = useCategories()
   const [status, setStatus] = useState('all')
   const [sort, setSort]     = useState('newest')
   const [tasks, setTasks]   = useState([])
@@ -2125,7 +2167,7 @@ function TaskBrowse({ setPage, setSelectedTask }) {
 
       {/* Illustrated category rail */}
       <div className="feed-scroll" style={{ display:'flex', gap:8, overflowX:'auto', marginBottom:18, paddingBottom:4 }}>
-        {CATEGORIES.map(c => {
+        {cats.map(c => {
           const active = cat === c.name
           return (
             <button key={c.name} onClick={() => setCat(active ? null : c.name)}
@@ -2189,6 +2231,53 @@ function TaskDetail({ taskId, setPage, openChat }) {
   const [bids, setBids]   = useState(state.bids.filter(b => b.task_id===taskId&&b.status!=='withdrawn'))
   const [loadingTask, setLoadingTask] = useState(true)
   const escrow = state.escrows[taskId]
+  const [editOpen, setEditOpen]   = useState(false)
+  const [editForm, setEditForm]   = useState({ title:'', description:'', budget:'', deadline:'' })
+  const [editSaving, setEditSaving] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+
+  function openEdit() {
+    setEditForm({
+      title: task.title || '',
+      description: task.description || '',
+      budget: String(task.budget || ''),
+      deadline: task.deadline ? new Date(task.deadline).toISOString().slice(0, 10) : '',
+    })
+    setEditOpen(true)
+  }
+  async function saveEdit() {
+    setEditSaving(true)
+    try {
+      const res = await fetch(`/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({
+          title: editForm.title.trim(),
+          description: editForm.description.trim(),
+          budget: parseFloat(editForm.budget),
+          deadline: new Date(editForm.deadline).toISOString(),
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || 'Could not save changes')
+      setTask({ ...data.task, skill_tags: data.task.skill_tags || [] })
+      setEditOpen(false)
+      toast('Task updated', 'success')
+    } catch (err) { toast(err.message, 'error') } finally { setEditSaving(false) }
+  }
+  async function cancelTask() {
+    if (!window.confirm('Cancel this task? Any pending bids will be declined. This cannot be undone.')) return
+    setCancelling(true)
+    try {
+      const res = await fetch(`/tasks/${taskId}/cancel`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${token()}` },
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || 'Could not cancel task')
+      toast('Task cancelled', 'success')
+      setPage('tasks-mine')
+    } catch (err) { toast(err.message, 'error') } finally { setCancelling(false) }
+  }
 
   async function loadTask({ silent = false } = {}) {
     try {
@@ -2317,6 +2406,25 @@ function TaskDetail({ taskId, setPage, openChat }) {
     }
   }
 
+  async function submitWork() {
+    try {
+      const res = await fetch(`/tasks/${taskId}/submit`, { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || 'Could not submit work')
+      toast('Work submitted — the creator will review it', 'success')
+      await loadTask({ silent:true })
+    } catch (err) { toast(err.message, 'error') }
+  }
+  async function requestChanges() {
+    try {
+      const res = await fetch(`/tasks/${taskId}/request-changes`, { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || 'Could not request changes')
+      toast('Sent back to the earner for changes', 'success')
+      await loadTask({ silent:true })
+    } catch (err) { toast(err.message, 'error') }
+  }
+
   function confirmDispute() {
     if (!disputeText.trim()||disputeText.trim().length<20) { toast('Please provide at least 20 characters', 'error'); return }
     setDisputeLoading(true)
@@ -2372,6 +2480,14 @@ function TaskDetail({ taskId, setPage, openChat }) {
         </div>
       </div>
 
+      {/* Creator controls — only while the task is still open */}
+      {task.creator_id === user?.userId && task.status === 'open' && (
+        <div style={{ display:'flex', gap:8, marginBottom:20, flexWrap:'wrap' }}>
+          <Btn variant="secondary" size="sm" onClick={openEdit}>Edit task</Btn>
+          <Btn variant="danger" size="sm" loading={cancelling} onClick={cancelTask}>Cancel task</Btn>
+        </div>
+      )}
+
       {escrow&&isCreator&&(
         <div style={{ marginBottom:20, padding:'14px 18px', borderRadius:'var(--radius-md)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap', ...(escrow.status==='funded'?{background:'rgba(16,185,129,0.1)',border:'1px solid rgba(16,185,129,0.3)'}:escrow.status==='released'?{background:'rgba(91,33,182,0.1)',border:'1px solid rgba(91,33,182,0.3)'}:escrow.status==='disputed'?{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)'}:{background:'rgba(59,130,246,0.1)',border:'1px solid rgba(59,130,246,0.3)'}) }}>
           <div style={{ display:'flex', gap:10, alignItems:'center' }}>
@@ -2420,12 +2536,39 @@ function TaskDetail({ taskId, setPage, openChat }) {
             )}
           </DCard>
 
-          {/* Owner marks the task complete once work is done (escrow deferred) */}
-          {isOwner&&currentStatus==='in_progress'&&(
+          {/* ── Completion handshake ── */}
+          {/* Earner submits finished work */}
+          {task.assigned_to===user?.userId&&currentStatus==='in_progress'&&(
             <DCard hover={false} style={{ border:'1px solid var(--accent)', background:'var(--accent-glow)' }}>
+              <div style={{ fontWeight:600, marginBottom:4 }}>Finished the work?</div>
+              <p style={{ fontSize:'0.84rem', color:'var(--text-secondary)', marginBottom:14, lineHeight:1.5 }}>Submit it for the creator to review and confirm.</p>
+              <Btn variant="success" fullWidth onClick={submitWork}>Submit work for review</Btn>
+            </DCard>
+          )}
+          {/* Creator at in_progress can still complete directly */}
+          {isOwner&&currentStatus==='in_progress'&&(
+            <DCard hover={false} style={{ border:'1px solid var(--border-strong)' }}>
               <div style={{ fontWeight:600, marginBottom:4 }}>Work finished?</div>
-              <p style={{ fontSize:'0.84rem', color:'var(--text-secondary)', marginBottom:14, lineHeight:1.5 }}>Mark this task complete once {acceptedBid?.display_name || 'the earner'} has delivered. You'll both be able to leave a review.</p>
+              <p style={{ fontSize:'0.84rem', color:'var(--text-secondary)', marginBottom:14, lineHeight:1.5 }}>Waiting for {acceptedBid?.display_name || 'the earner'} to submit — or mark it complete yourself.</p>
               <Btn variant="success" fullWidth onClick={() => setReleaseModal(true)}>✓ Mark Task Complete</Btn>
+            </DCard>
+          )}
+          {/* Creator reviews submitted work: confirm or send back */}
+          {isOwner&&currentStatus==='submitted'&&(
+            <DCard hover={false} style={{ border:'1px solid var(--accent)', background:'var(--accent-glow)' }}>
+              <div style={{ fontWeight:600, marginBottom:4 }}>Work submitted for review</div>
+              <p style={{ fontSize:'0.84rem', color:'var(--text-secondary)', marginBottom:14, lineHeight:1.5 }}>{acceptedBid?.display_name || 'The earner'} marked this done. Confirm completion, or send it back for changes.</p>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                <Btn variant="success" onClick={() => setReleaseModal(true)}>✓ Confirm completion</Btn>
+                <Btn variant="secondary" onClick={requestChanges}>Request changes</Btn>
+              </div>
+            </DCard>
+          )}
+          {/* Earner waiting on the creator */}
+          {task.assigned_to===user?.userId&&currentStatus==='submitted'&&(
+            <DCard hover={false} style={{ border:'1px solid var(--border-strong)' }}>
+              <div style={{ fontWeight:600, marginBottom:4 }}>Submitted — awaiting confirmation</div>
+              <p style={{ fontSize:'0.84rem', color:'var(--text-secondary)', lineHeight:1.5 }}>The creator is reviewing your work. You'll be notified when they confirm.</p>
             </DCard>
           )}
           {/* After completion, either participant can leave one review */}
@@ -2491,6 +2634,22 @@ function TaskDetail({ taskId, setPage, openChat }) {
       </div>
 
       <ConfirmModal open={!!acceptModal} onClose={() => setAcceptModal(null)} onConfirm={confirmAccept} loading={acceptLoading} title="Accept This Bid" confirmLabel="Accept & Move to Escrow" confirmVariant="primary" message={acceptModal?`Accept ${acceptModal.display_name}'s bid of R${acceptModal.amount}? All other bids will be rejected.`:''} />
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit task" maxWidth={480}>
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          <Input label="Title" value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title:e.target.value }))} />
+          <div>
+            <label>Description</label>
+            <textarea value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description:e.target.value }))} style={{ minHeight:120 }} />
+          </div>
+          <Input label="Budget (R)" type="number" value={editForm.budget} onChange={e => setEditForm(f => ({ ...f, budget:e.target.value }))} />
+          <Input label="Deadline" type="date" value={editForm.deadline} onChange={e => setEditForm(f => ({ ...f, deadline:e.target.value }))} />
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+            <Btn variant="ghost" onClick={() => setEditOpen(false)} disabled={editSaving}>Cancel</Btn>
+            <Btn variant="primary" loading={editSaving} onClick={saveEdit}>Save changes</Btn>
+          </div>
+        </div>
+      </Modal>
+
       <Modal open={fundModal} onClose={() => setFundModal(false)} title="Fund Escrow" maxWidth={440}>
         <p style={{ color:'var(--text-secondary)', lineHeight:1.65, marginBottom:16 }}>Fund escrow for <strong style={{ color:'var(--text-primary)' }}>{task.title}</strong>.</p>
         <div style={{ background:'var(--bg-elevated)', borderRadius:'var(--radius-md)', padding:'14px 16px', marginBottom:20 }}>
@@ -2651,6 +2810,100 @@ function TaskNew({ setPage, setSelectedTask }) {
   )
 }
 
+// Reusable + recurring task templates manager (shown on My Tasks).
+function TemplatesPanel({ setPage, setSelectedTask }) {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [templates, setTemplates] = useState([])
+  const [show, setShow]   = useState(false)
+  const [open, setOpen]   = useState(false)
+  const [saving, setSaving] = useState(false)
+  const blank = { title:'', description:'', budget:'', deadlineDays:'7', recurrence:'none' }
+  const [form, setForm]   = useState(blank)
+
+  async function load() {
+    try {
+      const res = await fetch('/templates', { headers:{ Authorization:`Bearer ${token()}` } })
+      if (res.ok) { const d = await res.json(); setTemplates(d.templates || []) }
+    } catch { /* offline */ }
+  }
+  useEffect(() => { load() }, []) // eslint-disable-line
+
+  async function create() {
+    setSaving(true)
+    try {
+      const res = await fetch('/templates', {
+        method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
+        body: JSON.stringify({ title:form.title.trim(), description:form.description.trim(), budget:parseFloat(form.budget), deadlineDays:parseInt(form.deadlineDays,10)||7, recurrence:form.recurrence }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.message || 'Could not save template')
+      setOpen(false); setForm(blank); setShow(true); toast('Template saved', 'success'); load()
+    } catch (err) { toast(err.message, 'error') } finally { setSaving(false) }
+  }
+  async function use(id) {
+    try {
+      const res = await fetch(`/templates/${id}/use`, { method:'POST', headers:{ Authorization:`Bearer ${token()}` } })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.message || 'Could not create task')
+      toast('Task created from template', 'success'); setSelectedTask(d.task.task_id); setPage('task-detail')
+    } catch (err) { toast(err.message, 'error') }
+  }
+  async function remove(id) {
+    if (!window.confirm('Delete this template?')) return
+    try { const res = await fetch(`/templates/${id}`, { method:'DELETE', headers:{ Authorization:`Bearer ${token()}` } }); if (res.ok) { toast('Template deleted', 'success'); load() } } catch { /* ignore */ }
+  }
+
+  return (
+    <DCard hover={false} style={{ marginBottom:20 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+        <Mono>Templates{templates.length > 0 ? ` · ${templates.length}` : ''}</Mono>
+        <div style={{ display:'flex', gap:8 }}>
+          <Btn variant="secondary" size="sm" onClick={() => setOpen(true)}>+ New template</Btn>
+          {templates.length > 0 && <Btn variant="ghost" size="sm" onClick={() => setShow(s => !s)}>{show ? 'Hide' : 'Show'}</Btn>}
+        </div>
+      </div>
+      {show && templates.length > 0 && (
+        <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:12 }}>
+          {templates.map(t => (
+            <div key={t.template_id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, padding:'10px 12px', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)' }}>
+              <div style={{ minWidth:0 }}>
+                <div style={{ fontWeight:600, fontSize:'0.9rem', display:'flex', gap:8, alignItems:'center' }}>{t.title}{t.recurrence !== 'none' && <Tag>{t.recurrence}</Tag>}</div>
+                <Mono>R{t.budget} · due in {t.deadline_days}d</Mono>
+              </div>
+              <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+                <Btn size="sm" onClick={() => use(t.template_id)}>Use</Btn>
+                <Btn variant="ghost" size="sm" onClick={() => remove(t.template_id)}>✕</Btn>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <Modal open={open} onClose={() => setOpen(false)} title="New task template" maxWidth={480}>
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          <Input label="Title" value={form.title} onChange={e => setForm(f => ({ ...f, title:e.target.value }))} />
+          <div><label>Description</label><textarea value={form.description} onChange={e => setForm(f => ({ ...f, description:e.target.value }))} style={{ minHeight:100 }} /></div>
+          <Input label="Budget (R)" type="number" value={form.budget} onChange={e => setForm(f => ({ ...f, budget:e.target.value }))} />
+          <Input label="Deadline (days from posting)" type="number" value={form.deadlineDays} onChange={e => setForm(f => ({ ...f, deadlineDays:e.target.value }))} />
+          <div>
+            <label>Recurrence</label>
+            <select value={form.recurrence} onChange={e => setForm(f => ({ ...f, recurrence:e.target.value }))}>
+              <option value="none">One-off</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+            <Btn variant="ghost" onClick={() => setOpen(false)} disabled={saving}>Cancel</Btn>
+            <Btn variant="primary" loading={saving} onClick={create}>Save template</Btn>
+          </div>
+        </div>
+      </Modal>
+    </DCard>
+  )
+}
+
 function MyTasks({ setPage, setSelectedTask }) {
   const { state } = useStore()
   const { user } = useAuth()
@@ -2679,6 +2932,7 @@ function MyTasks({ setPage, setSelectedTask }) {
         <PageTitle sub={`${myTasks.length} tasks posted`}>My Tasks</PageTitle>
         <Btn onClick={() => setPage('tasks-new')}>+ New Task</Btn>
       </div>
+      <TemplatesPanel setPage={setPage} setSelectedTask={setSelectedTask} />
       <div className="feed-scroll" style={{ display:'flex', gap:2, marginBottom:20, background:'var(--bg-elevated)', borderRadius:12, padding:3, overflowX:'auto', maxWidth:'fit-content' }}>
         {['all','open','in_progress','completed','disputed','expired'].map(s => (
           <button key={s} onClick={() => setFilter(s)}
@@ -4113,41 +4367,108 @@ function Profile({ openProfile }) {
   )
 }
 
+// Admin monitoring overview — real platform stats + recent activity (§7.8).
+function AdminDashboard() {
+  const token = () => localStorage.getItem('rl_token')
+  const [stats, setStats]   = useState(null)
+  const [activity, setActivity] = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [error, setError]   = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    Promise.all([
+      fetch('/admin/stats', { headers:{ Authorization:`Bearer ${token()}` } }).then(r => r.ok ? r.json() : Promise.reject(new Error('stats'))),
+      fetch('/admin/activity?limit=20', { headers:{ Authorization:`Bearer ${token()}` } }).then(r => r.ok ? r.json() : { activity:[] }),
+    ]).then(([s, a]) => { if (alive) { setStats(s); setActivity(a?.activity || []); setLoading(false) } })
+      .catch(() => { if (alive) { setError('Could not load admin stats'); setLoading(false) } })
+    return () => { alive = false }
+  }, [])
+
+  if (loading) return <div style={{ padding:48, textAlign:'center' }}><Spinner /></div>
+  if (error || !stats) return <EmptyState icon="◷" message={error || 'No stats'} />
+
+  const t = stats.tasks?.by_status || {}
+  const d = stats.disputes?.by_status || {}
+  const Tile = ({ label, value, sub, accent }) => (
+    <DCard hover={false} style={{ minWidth:150 }}>
+      <Mono style={{ display:'block', marginBottom:8 }}>{label}</Mono>
+      <div style={{ fontFamily:'var(--font-display)', fontSize:'1.9rem', fontWeight:700, lineHeight:1, color:accent?'var(--accent)':'var(--text-primary)' }}>{value}</div>
+      {sub && <div style={{ fontSize:'0.74rem', color:'var(--text-muted)', marginTop:6 }}>{sub}</div>}
+    </DCard>
+  )
+
+  return (
+    <div className="page-enter">
+      <PageTitle sub="Platform overview — live">Admin Dashboard</PageTitle>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:12, marginBottom:24 }}>
+        <Tile label="Users" value={stats.users.total} sub={`+${stats.users.new_7d} this week`} accent />
+        <Tile label="Tasks" value={stats.tasks.total} sub={`${t.open||0} open · ${t.completed||0} done`} />
+        <Tile label="Completion" value={stats.completion_rate != null ? `${stats.completion_rate}%` : '—'} />
+        <Tile label="Bids" value={stats.bids.total} />
+        <Tile label="Open disputes" value={d.open || 0} accent={!!d.open} />
+        <Tile label="Businesses" value={stats.businesses.total} sub={`${stats.businesses.active} active`} />
+      </div>
+      <DCard hover={false}>
+        <Mono style={{ display:'block', marginBottom:12 }}>Recent activity</Mono>
+        {activity.length === 0 ? <EmptyState icon="◷" message="No activity recorded yet — actions will appear here." /> : (
+          <div style={{ display:'flex', flexDirection:'column' }}>
+            {activity.map((a, i) => (
+              <div key={a.activity_id} style={{ display:'flex', justifyContent:'space-between', gap:10, padding:'9px 0', borderBottom:i<activity.length-1?'1px solid var(--border)':'none' }}>
+                <div style={{ minWidth:0 }}>
+                  <span style={{ fontWeight:600, fontSize:'0.85rem' }}>{a.action}</span>
+                  <span style={{ fontSize:'0.8rem', color:'var(--text-muted)' }}> · {a.actor_name || a.actor_role || 'system'}</span>
+                </div>
+                <Mono style={{ flexShrink:0 }}>{new Date(a.created_at).toLocaleString()}</Mono>
+              </div>
+            ))}
+          </div>
+        )}
+      </DCard>
+    </div>
+  )
+}
+
 function AdminDisputes({ setPage, setSelectedDispute }) {
-  const { state } = useStore()
-  const [filter, setFilter] = useState('open')
-  const filtered = state.disputes.filter(d=>filter==='all'||d.status===filter)
+  const token = () => localStorage.getItem('rl_token')
+  const [disputes, setDisputes] = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [filter, setFilter]     = useState('all')
+
+  useEffect(() => {
+    let alive = true
+    fetch('/disputes', { headers:{ Authorization:`Bearer ${token()}` } })
+      .then(r => (r.ok ? r.json() : { disputes:[] }))
+      .then(d => { if (alive) { setDisputes(d.disputes || []); setLoading(false) } })
+      .catch(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [])
+
+  const filtered = disputes.filter(d => filter==='all' || d.status===filter)
+  const badgeFor = s => s==='open' ? 'disputed' : s==='under_review' ? 'pending' : 'completed'
+
   return (
     <div className="page-enter">
       <PageTitle sub="Review and resolve platform disputes">Dispute Queue</PageTitle>
       <div className="feed-scroll" style={{ display:'flex', gap:2, marginBottom:20, background:'var(--bg-elevated)', borderRadius:12, padding:3, overflowX:'auto', maxWidth:'fit-content' }}>
-        {['all','open','under_review','resolved_creator','resolved_earner'].map(s => (
+        {['all','open','under_review','resolved_creator','resolved_earner','closed'].map(s => (
           <button key={s} onClick={() => setFilter(s)}
             style={{ padding:'7px 14px', borderRadius:9, fontSize:'0.8rem', fontFamily:'var(--font-body)', fontWeight:600, cursor:'pointer', transition:'all 150ms ease', border:'none', whiteSpace:'nowrap', background:filter===s?'var(--bg-surface)':'transparent', color:filter===s?'var(--accent)':'var(--text-muted)', boxShadow:filter===s?'0 1px 3px rgba(33,28,46,.14)':'none' }}>
-            {s.replace('_',' ')} ({s==='all'?state.disputes.length:state.disputes.filter(d=>d.status===s).length})
+            {s.replace('_',' ')} ({s==='all'?disputes.length:disputes.filter(d=>d.status===s).length})
           </button>
         ))}
       </div>
-      {filtered.length===0?<EmptyState icon="⚖" message="No disputes in this category" />:(
+      {loading ? <div style={{ padding:40, textAlign:'center' }}><Spinner /></div> :
+       filtered.length===0 ? <EmptyState icon="⚖" message="No disputes in this category" /> : (
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
           {filtered.map(d => (
             <DCard key={d.dispute_id} onClick={() => { setSelectedDispute(d.dispute_id); setPage('admin-dispute-detail') }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                <div style={{ flex:1 }}>
-                  <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:8 }}>
-                    <Badge variant={d.status==='open'?'disputed':d.status==='under_review'?'pending':'completed'}>{d.status.replace('_',' ')}</Badge>
-                    <span style={{ fontFamily:'var(--font-display)', fontWeight:600, fontSize:'1.05rem' }}>{d.task_title}</span>
-                  </div>
-                  <p style={{ fontSize:'0.85rem', color:'var(--text-secondary)', marginBottom:10, lineHeight:1.5 }}>{d.reason.slice(0,160)}{d.reason.length>160?'…':''}</p>
-                  <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
-                    <Mono>Creator: {d.creator_email}</Mono><Mono>Earner: {d.earner_email}</Mono><Mono>Opened: {new Date(d.opened_at).toLocaleDateString()}</Mono>
-                  </div>
-                </div>
-                <div style={{ textAlign:'right', marginLeft:20, flexShrink:0 }}>
-                  <div style={{ fontFamily:'var(--font-mono)', fontSize:'1.2rem', color:'var(--accent)', fontWeight:500 }}>R{(d.amount_cents/100).toFixed(0)}</div>
-                  <Mono>in escrow</Mono>
-                </div>
+              <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:8, flexWrap:'wrap' }}>
+                <Badge variant={badgeFor(d.status)}>{d.status.replace('_',' ')}</Badge>
+                <span style={{ fontFamily:'var(--font-display)', fontWeight:600, fontSize:'1.05rem' }}>{d.task_title}</span>
               </div>
+              <p style={{ fontSize:'0.85rem', color:'var(--text-secondary)', marginBottom:10, lineHeight:1.5 }}>{d.reason.slice(0,160)}{d.reason.length>160?'…':''}</p>
+              <Mono>Opened {new Date(d.opened_at).toLocaleDateString()}{d.resolved_at ? ` · resolved ${new Date(d.resolved_at).toLocaleDateString()}` : ''}</Mono>
             </DCard>
           ))}
         </div>
@@ -4157,89 +4478,78 @@ function AdminDisputes({ setPage, setSelectedDispute }) {
 }
 
 function AdminDisputeDetail({ disputeId, setPage }) {
-  const { state, dispatch } = useStore()
   const toast = useToast()
-  const dispute = state.disputes.find(d=>d.dispute_id===disputeId)
-  const task    = dispute?state.tasks.find(t=>t.task_id===dispute.task_id):null
-  const [note, setNote]         = useState('')
-  const [noteErr, setNoteErr]   = useState('')
-  const [resolveModal, setResolveModal] = useState(null)
+  const token = () => localStorage.getItem('rl_token')
+  const [data, setData]       = useState(null)   // { dispute, events }
+  const [loading, setLoading] = useState(true)
+  const [note, setNote]       = useState('')
+  const [resolveModal, setResolveModal] = useState(null)   // 'refund' | 'release'
   const [resolveLoading, setResolveLoading] = useState(false)
-  const [timeline, setTimeline] = useState([
-    { action:'opened',   actor:'Creator', note:'Dispute raised by creator', time:dispute?.opened_at||new Date().toISOString() },
-    { action:'assigned', actor:'Admin',   note:'Assigned for admin review',  time:new Date(Date.now()-3600000).toISOString() },
-  ])
-  if (!dispute) return <EmptyState message="Dispute not found" action={<Btn onClick={() => setPage('admin-disputes')}>← Back</Btn>} />
-  const isResolved = dispute.status.startsWith('resolved')
 
-  function saveNote() {
-    if (!note.trim()||note.trim().length<5) { setNoteErr('Note must be at least 5 characters'); return }
-    setNoteErr('')
-    setTimeline(t=>[...t,{action:'note_added',actor:'Admin',note:note.trim(),time:new Date().toISOString()}])
-    dispatch({type:'UPDATE_DISPUTE',dispute_id:disputeId,changes:{admin_notes:note.trim()}})
-    setNote(''); toast('Note saved','success')
+  async function load() {
+    try {
+      const res = await fetch(`/disputes/${disputeId}`, { headers:{ Authorization:`Bearer ${token()}` } })
+      if (res.ok) setData(await res.json())
+    } catch { /* offline */ } finally { setLoading(false) }
   }
+  useEffect(() => { load() }, [disputeId]) // eslint-disable-line
 
-  function resolve() {
+  if (loading) return <div style={{ padding:48, textAlign:'center' }}><Spinner /></div>
+  if (!data?.dispute) return <EmptyState message="Dispute not found" action={<Btn onClick={() => setPage('admin-disputes')}>← Back</Btn>} />
+  const dispute = data.dispute
+  const timeline = (data.events || []).map(e => ({ action:e.action, actor:e.actor_name || '—', note:e.note || '', time:e.created_at }))
+  const isResolved = dispute.status.startsWith('resolved') || dispute.status === 'closed'
+
+  async function patchDispute(body, msg) {
     setResolveLoading(true)
-    setTimeout(() => {
-      const status = resolveModal==='refund'?'resolved_creator':'resolved_earner'
-      dispatch({type:'UPDATE_DISPUTE',dispute_id:disputeId,changes:{status,resolved_at:new Date().toISOString(),resolution:resolveModal}})
-      if (task) dispatch({type:'UPDATE_TASK',task_id:task.task_id,changes:{status:'completed'}})
-      dispatch({type:'SET_ESCROW',task_id:dispute.task_id,status:resolveModal==='refund'?'refunded':'released'})
-      setTimeline(t=>[...t,{action:'resolved',actor:'Admin',note:resolveModal==='refund'?'Resolved: Refund to creator':'Resolved: Release to earner',time:new Date().toISOString()}])
-      toast(`Dispute resolved — ${resolveModal==='refund'?'Creator refunded':'Earner paid'}`, 'success')
-      setResolveLoading(false); setResolveModal(null)
-    }, 1200)
+    try {
+      const res = await fetch(`/disputes/${disputeId}`, { method:'PATCH', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` }, body: JSON.stringify(body) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.message || 'Update failed')
+      toast(msg, 'success'); setResolveModal(null); setNote(''); load()
+    } catch (err) { toast(err.message, 'error') } finally { setResolveLoading(false) }
+  }
+  function saveNote() {
+    if (!note.trim() || note.trim().length < 5) { toast('Note must be at least 5 characters', 'error'); return }
+    patchDispute({ admin_notes: note.trim() }, 'Note saved')
+  }
+  function resolve() {
+    patchDispute({ status: resolveModal==='refund' ? 'resolved_creator' : 'resolved_earner', resolution: resolveModal },
+      `Dispute resolved in favour of the ${resolveModal==='refund' ? 'creator' : 'earner'}`)
   }
 
   return (
     <div className="page-enter" style={{ maxWidth:960 }}>
       <button onClick={() => setPage('admin-disputes')} style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'0.78rem', fontFamily:'var(--font-mono)', textTransform:'uppercase', letterSpacing:'0.08em', cursor:'pointer', marginBottom:20 }}>← Back to Queue</button>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:24, flexWrap:'wrap', gap:12 }}>
-        <div>
-          <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:8 }}><Badge variant={isResolved?'completed':'disputed'}>{dispute.status.replace('_',' ')}</Badge><Mono>Dispute #{dispute.dispute_id}</Mono></div>
-          <h1 style={{ fontFamily:'var(--font-display)', fontSize:'1.8rem', fontWeight:700 }}>{dispute.task_title}</h1>
-        </div>
-        <div style={{ textAlign:'right' }}><div style={{ fontFamily:'var(--font-mono)', fontSize:'1.5rem', color:'var(--accent)', fontWeight:500 }}>R{(dispute.amount_cents/100).toFixed(0)}</div><Mono>{isResolved?'resolved':'held in escrow'}</Mono></div>
+      <div style={{ marginBottom:24 }}>
+        <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:8, flexWrap:'wrap' }}><Badge variant={isResolved?'completed':'disputed'}>{dispute.status.replace('_',' ')}</Badge><Mono>Dispute #{String(dispute.dispute_id).slice(0,8)}</Mono></div>
+        <h1 style={{ fontFamily:'var(--font-display)', fontSize:'1.8rem', fontWeight:700 }}>{dispute.task_title}</h1>
       </div>
       <div className="stack-mobile" style={{ display:'grid', gridTemplateColumns:'1fr 300px', gap:20 }}>
         <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
           <DCard hover={false}><Mono size="0.68rem" color="var(--danger)" style={{ display:'block', marginBottom:10 }}>Dispute Reason</Mono><p style={{ color:'var(--text-secondary)', lineHeight:1.75 }}>{dispute.reason}</p></DCard>
-          <DCard hover={false}>
-            <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:14 }}>Message Log (Task Context)</Mono>
-            <div style={{ display:'flex', flexDirection:'column', gap:10, maxHeight:260, overflowY:'auto' }}>
-              {state.messages.slice(0,6).map(m => (
-                <div key={m.message_id} style={{ background:'var(--bg-elevated)', borderRadius:'var(--radius-sm)', padding:'10px 12px' }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
-                    <Mono color="var(--accent)" size="0.62rem">{m.sender_name}</Mono>
-                    <Mono size="0.6rem">{new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</Mono>
-                  </div>
-                  <p style={{ fontSize:'0.85rem', color:'var(--text-secondary)' }}>{m.content}</p>
-                </div>
-              ))}
-            </div>
-          </DCard>
+          {Array.isArray(dispute.evidence_urls) && dispute.evidence_urls.length>0 && (
+            <DCard hover={false}>
+              <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:10 }}>Evidence</Mono>
+              <ul style={{ paddingLeft:18, margin:0 }}>{dispute.evidence_urls.map((u,i) => <li key={i} style={{ marginBottom:4 }}><a href={u} target="_blank" rel="noreferrer" style={{ color:'var(--accent)', fontSize:'0.85rem' }}>{u}</a></li>)}</ul>
+            </DCard>
+          )}
+          {dispute.admin_notes && (
+            <DCard hover={false}><Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:10 }}>Admin Notes</Mono><p style={{ color:'var(--text-secondary)', lineHeight:1.7 }}>{dispute.admin_notes}</p></DCard>
+          )}
           {!isResolved&&(
             <>
               <DCard hover={false}>
                 <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:12 }}>Internal Notes</Mono>
-                <Textarea placeholder="Add investigation notes visible only to admins…" value={note} onChange={e=>{setNote(e.target.value);setNoteErr('')}} error={noteErr} />
-                <Btn variant="secondary" size="sm" style={{ marginTop:10 }} onClick={saveNote}>Save Note</Btn>
+                <Textarea placeholder="Add investigation notes visible only to admins…" value={note} onChange={e=>setNote(e.target.value)} />
+                <Btn variant="secondary" size="sm" style={{ marginTop:10 }} loading={resolveLoading} onClick={saveNote}>Save Note</Btn>
               </DCard>
               <DCard hover={false} style={{ border:'1px solid var(--border-strong)' }}>
-                <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:16 }}>Resolution</Mono>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-                  <div style={{ background:'rgba(239,68,68,.05)', border:'1px solid rgba(239,68,68,.2)', borderRadius:'var(--radius-md)', padding:16 }}>
-                    <Mono color="var(--danger)" size="0.68rem" style={{ display:'block', marginBottom:8 }}>Refund Creator</Mono>
-                    <p style={{ fontSize:'0.8rem', color:'var(--text-muted)', marginBottom:12, lineHeight:1.5 }}>Cancel the PaymentIntent. Held funds return to creator's card.</p>
-                    <Btn variant="danger" fullWidth onClick={() => setResolveModal('refund')}>Refund Creator</Btn>
-                  </div>
-                  <div style={{ background:'rgba(16,185,129,.05)', border:'1px solid rgba(16,185,129,.2)', borderRadius:'var(--radius-md)', padding:16 }}>
-                    <Mono color="var(--success)" size="0.68rem" style={{ display:'block', marginBottom:8 }}>Release to Earner</Mono>
-                    <p style={{ fontSize:'0.8rem', color:'var(--text-muted)', marginBottom:12, lineHeight:1.5 }}>Capture the PaymentIntent. Funds transfer to earner's Stripe account.</p>
-                    <Btn variant="success" fullWidth onClick={() => setResolveModal('release')}>Release to Earner</Btn>
-                  </div>
+                <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:8 }}>Resolution</Mono>
+                <p style={{ fontSize:'0.8rem', color:'var(--text-muted)', marginBottom:14, lineHeight:1.5 }}>Record the outcome. Funds settlement runs automatically once escrow/payments are live.</p>
+                <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+                  <Btn variant="danger" onClick={() => setResolveModal('refund')}>Resolve for creator</Btn>
+                  <Btn variant="success" onClick={() => setResolveModal('release')}>Resolve for earner</Btn>
                 </div>
               </DCard>
             </>
@@ -4253,15 +4563,6 @@ function AdminDisputeDetail({ disputeId, setPage }) {
           )}
         </div>
         <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-          <DCard hover={false}>
-            <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:14 }}>Parties</Mono>
-            {[{label:'Creator',email:dispute.creator_email,role:'creator'},{label:'Earner',email:dispute.earner_email,role:'earner'}].map(p => (
-              <div key={p.role} style={{ background:'var(--bg-elevated)', borderRadius:'var(--radius-sm)', padding:12, marginBottom:8 }}>
-                <Badge variant={p.role}>{p.label}</Badge>
-                <div style={{ marginTop:6, fontSize:'0.82rem', color:'var(--text-secondary)' }}>{p.email}</div>
-              </div>
-            ))}
-          </DCard>
           <DCard hover={false}>
             <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:14 }}>Audit Timeline</Mono>
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -4280,86 +4581,109 @@ function AdminDisputeDetail({ disputeId, setPage }) {
               ))}
             </div>
           </DCard>
-          {task&&(
-            <DCard hover={false}>
-              <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:10 }}>Task Info</Mono>
-              {[['Budget',`R${task.budget}`],['Status',task.status.replace('_',' ')],['Deadline',new Date(task.deadline).toLocaleDateString()]].map(([k,v]) => (
-                <div key={k} style={{ display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom:'1px solid var(--border)' }}>
-                  <Mono>{k}</Mono><span style={{ fontSize:'0.84rem', color:'var(--text-primary)' }}>{v}</span>
-                </div>
-              ))}
-            </DCard>
-          )}
         </div>
       </div>
       <ConfirmModal open={!!resolveModal} onClose={() => setResolveModal(null)} onConfirm={resolve} loading={resolveLoading}
-        title={resolveModal==='refund'?'Refund Creator':'Release to Earner'}
-        confirmLabel={resolveModal==='refund'?'Confirm Refund':'Confirm Release'}
+        title={resolveModal==='refund'?'Resolve for creator':'Resolve for earner'}
+        confirmLabel="Confirm resolution"
         confirmVariant={resolveModal==='refund'?'danger':'success'}
-        message={resolveModal==='refund'?`This will cancel the PaymentIntent and return R${(dispute.amount_cents/100).toFixed(0)} to the creator. This cannot be undone.`:`This will transfer R${(dispute.amount_cents/100).toFixed(0)} to the earner's Stripe account. This cannot be undone.`} />
+        message={`Mark this dispute resolved in favour of the ${resolveModal==='refund'?'creator':'earner'}? It's recorded now; any funds settlement happens automatically once payments go live.`} />
     </div>
   )
 }
 
-const MOCK_USERS_ADMIN = [
-  { user_id:'u1', email:'creator@demo.com',  role:'creator', displayName:'Demo Creator', created_at:'2025-01-15T00:00:00Z', status:'active',    tasks:4, spent:1250 },
-  { user_id:'u3', email:'earner@demo.com',   role:'earner',  displayName:'Alex Chen',    created_at:'2025-01-20T00:00:00Z', status:'active',    tasks:3, earned:920 },
-  { user_id:'u2', email:'creator2@demo.com', role:'creator', displayName:'James Lee',    created_at:'2025-02-01T00:00:00Z', status:'active',    tasks:2, spent:1600 },
-  { user_id:'u5', email:'maria@demo.com',    role:'earner',  displayName:'Maria Santos', created_at:'2025-02-10T00:00:00Z', status:'active',    tasks:5, earned:1800 },
-  { user_id:'u6', email:'james@demo.com',    role:'earner',  displayName:'James Kim',    created_at:'2025-03-01T00:00:00Z', status:'suspended', tasks:1, earned:0 },
-]
-
 function AdminUsers() {
   const toast = useToast()
-  const [users, setUsers] = useState(MOCK_USERS_ADMIN)
-  const [search, setSearch]       = useState('')
+  const token = () => localStorage.getItem('rl_token')
+  const [users, setUsers]   = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch]   = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
-  const [banModal, setBanModal]   = useState(null)
-  const filtered = users.filter(u => (roleFilter==='all'||u.role===roleFilter) && (!search||u.email.toLowerCase().includes(search.toLowerCase())||u.displayName.toLowerCase().includes(search.toLowerCase())))
-  function toggleBan(u) { setUsers(us=>us.map(x=>x.user_id===u.user_id?{...x,status:x.status==='suspended'?'active':'suspended'}:x)); toast(`${u.displayName} ${u.status==='suspended'?'reinstated':'suspended'}`,'warning'); setBanModal(null) }
+  const [banModal, setBanModal] = useState(null)
+  const [busy, setBusy]       = useState(false)
+  const th = { padding:'10px 16px', textAlign:'left', fontFamily:'var(--font-mono)', fontSize:'0.65rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.08em', fontWeight:400 }
+
+  async function load() {
+    setLoading(true)
+    try {
+      const res = await fetch('/admin/users?limit=100', { headers:{ Authorization:`Bearer ${token()}` } })
+      if (res.ok) { const d = await res.json(); setUsers(d.users || []) }
+    } catch { /* offline */ } finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, []) // eslint-disable-line
+
+  const statusOf = u => u.deleted_at ? 'deleted' : u.suspended_at ? 'suspended' : 'active'
+  const filtered = users.filter(u => {
+    if (roleFilter !== 'all' && u.role !== roleFilter) return false
+    if (search) { const s = search.toLowerCase(); return (u.email||'').toLowerCase().includes(s) || (u.display_name||'').toLowerCase().includes(s) }
+    return true
+  })
+
+  async function moderate(u, suspend) {
+    setBusy(true)
+    try {
+      const res = await fetch(`/admin/users/${u.user_id}`, {
+        method:'PATCH', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
+        body: JSON.stringify({ suspended: suspend }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.message || 'Could not update user')
+      toast(`${u.display_name || u.email} ${suspend ? 'suspended' : 'reinstated'}`, suspend ? 'warning' : 'success')
+      setBanModal(null); load()
+    } catch (err) { toast(err.message, 'error') } finally { setBusy(false) }
+  }
+
   return (
     <div className="page-enter">
       <PageTitle sub={`${users.length} registered users`}>User Management</PageTitle>
       <div style={{ display:'flex', gap:10, marginBottom:24, flexWrap:'wrap', alignItems:'flex-end' }}>
-        <Input placeholder="Search by name or email…" value={search} onChange={e=>setSearch(e.target.value)} style={{ width:260 }} />
+        <Input placeholder="Search by name or email…" aria-label="Search users" value={search} onChange={e=>setSearch(e.target.value)} style={{ width:260 }} />
         <SelectField value={roleFilter} onChange={e=>setRoleFilter(e.target.value)} style={{ minWidth:140 }}>
-          <option value="all">All Roles</option><option value="creator">Creators</option><option value="earner">Earners</option>
+          <option value="all">All Roles</option><option value="member">Members</option><option value="creator">Creators</option><option value="earner">Earners</option><option value="admin">Admins</option>
         </SelectField>
       </div>
-      <DCard hover={false} style={{ padding:0, overflow:'hidden' }}>
-        <table style={{ width:'100%', borderCollapse:'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom:'1px solid var(--border)', background:'var(--bg-elevated)' }}>
-              {['User','Role','Status','Joined','Activity','Actions'].map(h => (
-                <th key={h} style={{ padding:'10px 16px', textAlign:'left', fontFamily:'var(--font-mono)', fontSize:'0.65rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.08em', fontWeight:400 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((u,i) => (
-              <tr key={u.user_id} style={{ borderBottom:i<filtered.length-1?'1px solid var(--border)':'none', opacity:u.status==='suspended'?0.6:1 }}>
-                <td style={{ padding:'12px 16px' }}><div style={{ fontWeight:600, fontSize:'0.88rem' }}>{u.displayName}</div><div style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>{u.email}</div></td>
-                <td style={{ padding:'12px 16px' }}><Badge variant={u.role}>{u.role}</Badge></td>
-                <td style={{ padding:'12px 16px' }}><Badge variant={u.status==='active'?'open':'disputed'}>{u.status}</Badge></td>
-                <td style={{ padding:'12px 16px' }}><Mono>{new Date(u.created_at).toLocaleDateString()}</Mono></td>
-                <td style={{ padding:'12px 16px' }}><Mono>{u.tasks} tasks · </Mono><Mono color="var(--accent)">{u.spent?`R${u.spent} spent`:`R${u.earned} earned`}</Mono></td>
-                <td style={{ padding:'12px 16px' }}>
-                  <div style={{ display:'flex', gap:8 }}>
-                    <Btn variant="ghost" size="sm" onClick={() => toast(`Viewing ${u.displayName}'s profile`,'info')}>View</Btn>
-                    <Btn variant={u.status==='suspended'?'success':'danger'} size="sm" onClick={() => setBanModal(u)}>{u.status==='suspended'?'Reinstate':'Suspend'}</Btn>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {filtered.length===0&&<EmptyState icon="◈" message="No users match your search" />}
-      </DCard>
-      <ConfirmModal open={!!banModal} onClose={() => setBanModal(null)} onConfirm={() => toggleBan(banModal)}
-        title={banModal?.status==='suspended'?'Reinstate User':'Suspend User'}
-        confirmLabel={banModal?.status==='suspended'?'Reinstate':'Suspend'}
-        confirmVariant={banModal?.status==='suspended'?'success':'danger'}
-        message={banModal?(banModal.status==='suspended'?`Reinstate ${banModal.displayName}'s account? They will regain access immediately.`:`Suspend ${banModal.displayName}'s account? They will lose access until reinstated.`):''} />
+      {loading ? <div style={{ padding:40, textAlign:'center' }}><Spinner /></div> : (
+        <DCard hover={false} style={{ padding:0, overflow:'hidden' }}>
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', minWidth:640 }}>
+              <thead>
+                <tr style={{ borderBottom:'1px solid var(--border)', background:'var(--bg-elevated)' }}>
+                  {['User','Role','Status','Joined','Tasks','Rating','Actions'].map(h => <th key={h} style={th}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((u, i) => {
+                  const st = statusOf(u)
+                  return (
+                    <tr key={u.user_id} style={{ borderBottom:i<filtered.length-1?'1px solid var(--border)':'none', opacity:st!=='active'?0.6:1 }}>
+                      <td style={{ padding:'12px 16px' }}><div style={{ fontWeight:600, fontSize:'0.88rem' }}>{u.display_name || '—'}</div><div style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>{u.email}</div></td>
+                      <td style={{ padding:'12px 16px' }}><Badge variant={u.role}>{u.role}</Badge></td>
+                      <td style={{ padding:'12px 16px' }}><Badge variant={st==='active'?'open':'disputed'}>{st}</Badge></td>
+                      <td style={{ padding:'12px 16px' }}><Mono>{new Date(u.created_at).toLocaleDateString()}</Mono></td>
+                      <td style={{ padding:'12px 16px' }}><Mono>{u.tasks_posted ?? 0}</Mono></td>
+                      <td style={{ padding:'12px 16px' }}><Mono>{u.rating_count > 0 ? `★ ${Number(u.avg_rating).toFixed(1)}` : '—'}</Mono></td>
+                      <td style={{ padding:'12px 16px' }}>
+                        {st !== 'deleted' && (
+                          <Btn variant={st==='suspended'?'success':'danger'} size="sm" onClick={() => setBanModal(u)}>{st==='suspended'?'Reinstate':'Suspend'}</Btn>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          {filtered.length===0 && <EmptyState icon="◈" message="No users match your search" />}
+        </DCard>
+      )}
+      <ConfirmModal open={!!banModal} onClose={() => setBanModal(null)} loading={busy}
+        onConfirm={() => moderate(banModal, statusOf(banModal) !== 'suspended')}
+        title={banModal && statusOf(banModal)==='suspended' ? 'Reinstate User' : 'Suspend User'}
+        confirmLabel={banModal && statusOf(banModal)==='suspended' ? 'Reinstate' : 'Suspend'}
+        confirmVariant={banModal && statusOf(banModal)==='suspended' ? 'success' : 'danger'}
+        message={banModal ? (statusOf(banModal)==='suspended'
+          ? `Reinstate ${banModal.display_name || banModal.email}? They'll regain access immediately.`
+          : `Suspend ${banModal.display_name || banModal.email}? Their active sessions end and they can't sign in until reinstated.`) : ''} />
     </div>
   )
 }
@@ -4638,7 +4962,7 @@ export default function App() {
   // admins on their dispute queue. Used by the logo and the bottom-nav home tab.
   function appHome() {
     if (!user) return 'tasks-browse'
-    if (user.role === 'admin') return 'admin-disputes'
+    if (user.role === 'admin') return 'dashboard'
     return 'tasks-browse'
   }
   function goAppHome() {
@@ -4684,7 +5008,7 @@ export default function App() {
 
   function renderDashPage() {
     switch (dashPage) {
-      case 'dashboard':            return <Dashboard setPage={setDashPage} setSelectedTask={setSelectedTask} />
+      case 'dashboard':            return user.role==='admin' ? <AdminDashboard /> : <Dashboard setPage={setDashPage} setSelectedTask={setSelectedTask} />
       case 'tasks-browse':         return <TaskBrowse setPage={setDashPage} setSelectedTask={setSelectedTask} />
       case 'search':               return <SearchResults query={searchQuery} setPage={setDashPage} setSelectedTask={setSelectedTask} openProfile={(uid) => { setSelectedUser(uid); setDashPage('public-profile') }} />
 
