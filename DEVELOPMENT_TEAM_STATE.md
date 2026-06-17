@@ -258,6 +258,75 @@ Owner: set up §7.4's P1 (transactional email), all mail **from a noreply sender
 
 ---
 
+## 6.12 — Sprint: §7.5 Core Marketplace (bounded) — ✅ COMPLETE (2026-06-15)
+
+Two clearest P2 wins; the escrow-paired completion handshake and the P3 items (favourites, recurring) stay deferred.
+
+1. **Task edit + cancel** — fills a CRUD gap (no way to edit/cancel a posted task today). `PATCH /tasks/:id` (creator edits while `open`) + `PATCH /tasks/:id/cancel` (→ `cancelled`; notifies bidders). Migration 13 keeps the init file in sync with the live `tasks_status_check` (already allows `cancelled`). Frontend: Edit/Cancel controls on the creator's open task.
+2. **Data-driven categories taxonomy** — mirror `locations`: migration 14 `categories` table (seeded from the hard-coded `CATEGORIES`) + public `GET /categories`; a `useCategories()` hook drives the browse filter chips (fallback to the constant). Removes the hard-coded category lock-in.
+
+Tests for edit (authz + open-only), cancel, and `/categories`.
+
+**Outcome:** both shipped. `PATCH /tasks/:id` (edit, open-only) + `PATCH /tasks/:id/cancel` (rejects pending bids, notifies bidders); migrations 13 (cancel status) + 14 (categories, 8 seeded) applied live; `GET /categories` + `useCategories()` drives the browse filter chips (fallback to constant); TaskDetail gained an Edit modal + Cancel button for the creator's open task. **Backend 102 tests** (+9). Verified live: create→edit (title/budget)→cancel; editing a cancelled task → 404; `/categories` → 8. Note: editing is allowed while bids exist (terms change under bidders — acceptable for MVP; lock-after-first-bid is a possible refinement). **Deferred:** two-party completion handshake (escrow-paired), saved/favourites + recurring (P3).
+
+---
+
+## 6.13 — Sprint: §7.5 handshake + templates/recurring — ✅ COMPLETE (2026-06-15)
+
+(Saved/favourite tasks explicitly NOT implemented, per owner.)
+
+1. **Two-party completion handshake** — migration 15 adds a `submitted` task status. `PATCH /tasks/:id/submit` (assignee: in_progress→submitted, notifies creator); `complete` now accepts `submitted` (or `in_progress`, so the creator can still force-complete); `PATCH /tasks/:id/request-changes` (creator: submitted→in_progress). Builds the confirm step escrow will later hook release onto. Frontend: earner "Submit work", creator "Confirm" / "Request changes".
+2. **Recurring / templated tasks** — migration 16 `task_templates` (title/description/budget/deadline_days/tags/campus/recurrence/next_run_at). `routes/templates.js`: CRUD + `POST /templates/:id/use` (spawn a task now). `jobs.sendRecurring()` spawns tasks for due recurring templates on the scheduler. Frontend: a Templates manager (list / use / delete / create) in My Tasks.
+
+Tests for submit/complete/request-changes, template CRUD+use, recurring job.
+
+**Outcome:** both shipped. Migrations 15 (`submitted` status) + 16 (`task_templates`) applied live. Handshake: `/submit`, `/request-changes`, `complete` accepts submitted|in_progress; TaskDetail shows role/state-aware cards (earner Submit, creator Confirm/Request-changes, earner Awaiting). Templates: `routes/templates.js` CRUD + `/use`; `jobs.sendRecurring()` on the scheduler; a Templates manager (list/use/delete + create modal w/ recurrence) on My Tasks. **Backend 116 tests** (+14). Verified live: full handshake lifecycle (accept→submit→request-changes→submit→complete), template create→use→delete, and `sendRecurring` spawned 1 + advanced next_run_at. (Live verify needed a temp server — the dev backend was down; cleaned up after.)
+
+---
+
+## 6.14 — Sprint: §7.7 Observability & DevEx (bounded) — ✅ COMPLETE (2026-06-15)
+
+Focused, dependency-free slice. Deferred (risky/broad): splitting `App.jsx`, full a11y audit, Playwright E2E, OpenAPI.
+
+1. **Access logging** — request-completion log (method/path/status/durationMs/reqId), skipping `/health`. Builds on the existing request-ID + structured logger.
+2. **Crash handling + capture chokepoint** — `server/observability.js` `captureException()` (structured now; Sentry-ready via `SENTRY_DSN`, same provider-stub pattern as email) + `unhandledRejection`/`uncaughtException` handlers; wired into the global error handler.
+3. **DB index audit** — migration 17: `tasks(assigned_to)` (real gap), `tasks(status, created_at DESC)` (feed), `reviews(reviewer_id)`, and `pg_trgm` GIN indexes for the ILIKE search (display_name / task title / business name).
+4. **DevEx** — `.github/PULL_REQUEST_TEMPLATE.md`; `SENTRY_DSN` documented in `.env.example` + runbook.
+5. **Frontend tests** — a couple more (landing render + auth-modal open).
+
+**Outcome:** shipped. Access log (one structured `request` line per call w/ status+ms+reqId, `/health` excluded — verified live, incl. a mount-path capture fix). `observability.js` `captureException` chokepoint + `unhandledRejection`/`uncaughtException` handlers (the latter caught a real EADDRINUSE live); global error handler routes through it; Sentry-ready via `SENTRY_DSN`. Migration 17 applied: `idx_tasks_assigned_to` (real gap), `idx_tasks_status_created`, `idx_reviews_reviewer_id`, + `pg_trgm` GIN on display_name/task title/business name (indexable search). PR template added; `SENTRY_DSN` in `.env.example`. Frontend **3 tests** (+2). Backend 116. **Deferred:** split `App.jsx` (risky), Playwright E2E, OpenAPI, pre-commit hooks, the actual `@sentry/node` SDK (one-step once a DSN exists).
+
+**Accessibility pass (added 2026-06-16):** global `:focus-visible` outline; shared `Input` now associates `<label>`↔input (`useId`) + `aria-invalid`/`aria-describedby`; shared `Modal` got `role="dialog"`/`aria-modal`/`aria-labelledby` + Escape-to-close + focus-on-open + return-focus + labelled close. Discovered the **AuthModal is custom** (doesn't use shared `Modal`/`Input`) and fixed it too: dialog semantics, `aria-label`led Email/Password, Escape-to-close. Icon-only buttons labelled (search, messages, alerts w/ unread count, account menu, hamburger) with decorative glyphs `aria-hidden`. Dashboard already had a `<main>` landmark. Verified live via DOM (focus-visible present, AuthModal `role=dialog` + 2 labelled inputs + Escape closes); locked with a frontend test assertion. Still open: contrast audit, full keyboard-nav sweep of every screen.
+
+---
+
+## 6.15 — Sprint: §7.8 Admin & Ops — ✅ COMPLETE (2026-06-16)
+
+Owner priorities: admins can **monitor everything** + **manage businesses**. Found: business CRUD already admin-gated + wired; but disputes/users admin pages use MOCK data, there's no stats/activity endpoint, and **no admin account exists** (10 members, 0 admins).
+
+1. **Admin account path** — `requireAdmin` shared middleware + `server/scripts/make-admin.mjs <email>` to promote a user (no admin features are usable without one).
+2. **Monitoring backend** — `routes/admin.js`: `GET /admin/stats` (users/tasks-by-status/bids/disputes/businesses + completion rate), `GET /admin/activity` (paginated `activity_logs` feed), `GET /admin/users` (paginated, searchable). Admin-only.
+3. **Frontend** — Admin dashboard renders real stats + recent activity; wire AdminDisputes/AdminDisputeDetail to the real `/disputes` API (was mock); wire AdminUsers to `/admin/users`. Businesses admin already works for admins — confirm.
+
+Tests for admin authz + endpoints.
+
+**Outcome:** shipped + verified live. `requireAdmin` middleware; `routes/admin.js` (`/admin/stats`, `/admin/activity`, `/admin/users`, admin-only). Migration 18 **created the `activity_logs` table** (it was referenced everywhere but never defined → the audit trail had silently no-op'd for the whole project). `make-admin` script promotes a user. **AdminDashboard** (real stats + activity feed) is now the admin landing page with a nav link. **Two pre-existing bugs surfaced + fixed:** (1) `POST /businesses` 500'd whenever `feePaid` was null — `$14` reused in a value + `CASE` couldn't infer type; cast to `::numeric`. This is why "add a business" never worked. (2) Every `activity_logs` INSERT failed ("inconsistent types deduced for $1") because `$1` was reused for `actor_id` (UUID) + `entity_id` (TEXT); migration 19 makes `entity_id` UUID. **Backend 121 tests** (+5). Verified live: member→403, admin adds a business (appears in public Local directory), activity feed records logins, dashboard shows businesses=1. **To use:** run `npm run make-admin <your-email>` then sign out/in. **Deferred:** wiring AdminUsers/AdminDisputes *frontend* to the real endpoints (still mock; endpoints + AdminBusinesses already real), analytics charts, suspend/ban + dispute-resolve actions, campus-admin UI, feature flags, backup runbook.
+
+---
+
+## 6.16 — Sprint: §7.8 admin frontend wiring + moderation — ✅ COMPLETE (2026-06-16)
+
+The deferred admin increment: wire the mock admin pages to the real backend + add moderation/resolution actions.
+
+1. **User moderation** — migration 20 (`users.suspended_at`); `PATCH /admin/users/:id` (suspend/unsuspend + role change; can't self-target; bumps token_version); login rejects suspended. AdminUsers → real `/admin/users` + Suspend button.
+2. **Disputes** — AdminDisputes → real `/disputes` queue; AdminDisputeDetail → real `/disputes/:id` (+ events), resolve via the existing `PATCH /disputes/:id` (resolved_creator/earner + resolution + notes). Drop the mock escrow/Stripe UI (no payments yet).
+
+Tests for the user-moderation endpoint.
+
+**Outcome:** shipped + verified live. Migration 20 (`users.suspended_at`); `PATCH /admin/users/:id` (suspend/unsuspend/role, can't self-target, bumps token_version); login returns 403 for suspended. **AdminUsers**, **AdminDisputes**, **AdminDisputeDetail** all rewired from mock → real APIs (disputes detail now shows reason/evidence/admin-notes/event-timeline and resolves via `PATCH /disputes/:id`; dropped the mock escrow/Stripe UI). **Backend 125 tests** (+4). Verified live: suspend→login 403→reinstate→login OK, self-suspend→400; dispute raise→admin queue=1→resolve (resolved_creator/refund, 2 events); both pages render real data via client nav. **Note:** `/admin/*` is now both an API prefix and SPA routes — full-page refresh on an admin page hits the proxy (same known limitation as `/profile`, `/messages`); client-side nav is fine. Verification left test artifacts (suspended/reinstated users, a resolved dispute).
+
+---
+
 ## 7. Backlog & Future Considerations
 
 Groomed 2026-06-15 by all four personas. This is the menu of work beyond the MVP
@@ -298,13 +367,13 @@ sprints — nothing here is committed to a sprint yet. **Blocker legend:**
 - ⬜ Native PWA push notifications — **P3** (email push covers the need for now)
 - ⬜ Per-type muting / richer digest scheduling — **P3**
 
-### 7.5 Core Marketplace
-- Task edit / cancel; bid edit / withdraw polish — **P2**
-- Saved / favourite tasks; follow a creator — **P3**
-- Search & filter improvements (full-text, campus/distance filters) — **P2**
-- **Data-driven skills/categories taxonomy** (mirror the `locations` pattern so tags aren't hard-coded) — **P2**
-- Two-party completion handshake (both confirm done) — pairs with escrow 💳 — **P2**
-- Recurring / templated tasks — **P3**
+### 7.5 Core Marketplace  *(edit/cancel + categories shipped 2026-06-15 — see §6.12)*
+- ✅ Task edit / cancel (`PATCH /tasks/:id`, `/cancel`)
+- ✅ **Data-driven categories taxonomy** (`categories` table + `GET /categories` + `useCategories()`)
+- ✅ Two-party completion handshake (`/submit`, `/request-changes`, creator-confirm `complete`)
+- ✅ Recurring / templated tasks (`task_templates`, `/templates` CRUD+use, `sendRecurring` job)
+- ❌ Saved / favourite tasks; follow a creator — **WILL NOT IMPLEMENT** (owner decision 2026-06-15)
+- ⬜ Search & filter improvements (full-text, campus/distance filters) — **P2** (still open)
 
 ### 7.6 Payments & Escrow 💳🏢 (MVP-3 — parked until company registration)
 - Paystack (primary) + Ozow via Paystack; ZAR — **P0 when unblocked**
@@ -313,20 +382,23 @@ sprints — nothing here is committed to a sprint yet. **Blocker legend:**
 - Webhook signature verification + idempotency + reconciliation
 - Schema re-platform: Stripe/USD → Paystack/ZAR (see TD-3)
 
-### 7.7 Quality, Observability & DevEx
-- Expand frontend component tests (harness now exists) — **P2**
-- E2E smoke (Playwright): signup → post → bid → accept — **P2**
-- Error tracking (Sentry) + **access logging** (we log errors only; add a request log with status + duration + reqId) — **P2**
-- Performance: split the 4.5k-line `App.jsx`, route-level code-splitting, image optimization — **P2**
-- **Accessibility audit** (aria, keyboard nav, contrast) — the mobile pass was visual only — **P2**
-- DB index audit; OpenAPI / API docs — **P3**
-- Pre-commit hooks (lint/test); branch protection + PR template — **P3**
+### 7.7 Quality, Observability & DevEx  *(observability/index/PR-template shipped 2026-06-15 — see §6.14)*
+- ✅ **Access logging** (structured `request` line: status+ms+reqId) + crash handlers + `captureException` chokepoint (Sentry-ready via `SENTRY_DSN`)
+- ✅ **DB index audit** (migration 17: `tasks(assigned_to)`, `(status,created_at)`, `reviews(reviewer_id)`, `pg_trgm` search indexes)
+- ✅ PR template
+- 🟡 Expand frontend tests — started (3 tests); more as components are extracted
+- ⬜ E2E smoke (Playwright): signup → post → bid → accept — **P2**
+- ⬜ Performance: split the 4.5k-line `App.jsx`, code-splitting, image optimization — **P2** (risky; needs component tests first)
+- 🟡 **Accessibility** — done: focus-visible, Input label association, Modal + AuthModal dialog semantics/Escape/focus, icon-button labels, `<main>` landmark. Open: contrast audit + full keyboard-nav sweep.
+- ⬜ Wire the actual `@sentry/node` SDK + DSN; OpenAPI docs; pre-commit hooks — **P3**
 
-### 7.8 Admin & Ops
-- Admin dashboard: users, tasks, disputes, businesses, `activity_logs` viewer — **P2**
-- Basic analytics (signups, tasks posted, completion rate; GMV once payments land) — **P2**
-- Campus/zone admin UI (add a campus without writing SQL) — **P3**
-- Feature flags; Neon backup/restore runbook — **P3**
+### 7.8 Admin & Ops  *(monitoring + business mgmt shipped 2026-06-16 — see §6.15)*
+- ✅ Admin dashboard (live stats + activity feed) + `/admin/stats|activity|users` endpoints + `make-admin` script
+- ✅ `activity_logs` table finally created (audit trail now records) + 2 latent bugs fixed (business create, activity insert)
+- ✅ Business management works for admins (was blocked by the create bug + no admin account)
+- ✅ AdminUsers/AdminDisputes/AdminDisputeDetail wired to real endpoints + suspend/ban + dispute-resolve actions (migration 20, `PATCH /admin/users/:id`)
+- ⬜ Analytics charts (trends/GMV once payments) — **P2**
+- ⬜ Campus/zone admin UI; feature flags; Neon backup/restore runbook — **P3**
 
 ### 7.9 Compliance & Legal
 - POPIA: data export/erasure endpoints; re-prompt consent when the policy version changes — **P2**
@@ -339,6 +411,13 @@ sprints — nothing here is committed to a sprint yet. **Blocker legend:**
 
 - **2026-06-15 — Session 0 (induction):** Full baseline audit by all four personas. No prior state file found; created this document. Mapped monolith-vs-microservice drift (TD-1/TD-4), zero-test gap (TD-2), and Stripe-vs-Paystack payment mismatch (TD-3). Defined the 3 MVP features.
 - **2026-06-15 — Session 0b (decisions ratified):** Product Owner answered all four §6 questions: monolith adopted / `services/` retired, Paystack-primary (Ozow via Paystack later), brand = **ReLivR**, **multi-campus from day one with affiliation trust tags**. Roadmap re-sequenced: MVP-2 is now **Multi-Campus Identity & Affiliation Trust Tags** (promoted ahead of payments because it's the trust backbone and reshapes the data model); payments moved to MVP-3; reviews/disputes + auth-hardening deferred to Sprint 4.
+- **2026-06-16 — §7.8 admin frontend wiring + moderation DELIVERED:** AdminUsers/AdminDisputes/AdminDisputeDetail rewired mock→real APIs. User moderation: migration 20 (`suspended_at`), `PATCH /admin/users/:id` (suspend/role, self-target guard, session-kill), login blocks suspended. Dispute detail resolves via `PATCH /disputes/:id` (real events timeline; dropped mock escrow UI). Backend 125 tests. Verified live (suspend/reinstate/self-guard; dispute raise→resolve; pages render real data). Admin area is now fully real. Uncommitted on `feat/foundation-mobile-hardening`.
+- **2026-06-16 — §7.8 Admin & Ops DELIVERED:** Admin monitoring (`/admin/stats|activity|users`, `requireAdmin`, AdminDashboard with live stats + activity feed, now the admin landing page) + `make-admin` ops script. Created the long-missing `activity_logs` table (migration 18) so the audit trail finally records. Fixed two pre-existing latent bugs the sprint surfaced: `POST /businesses` 500 on null `feePaid` (the reason "add a business" never worked) and the `activity_logs` insert type error (migration 19, entity_id→UUID). Business management confirmed working for admins. Backend 121 tests. Verified live end-to-end. **Run `npm run make-admin <email>` to get an admin account.** Deferred: AdminUsers/AdminDisputes frontend wiring, analytics, suspend/resolve actions. Uncommitted on `feat/foundation-mobile-hardening`.
+- **2026-06-16 — §7.7 accessibility pass:** focus-visible outline, `Input` label association, shared `Modal` + custom `AuthModal` dialog semantics (role/aria-modal/labelledby, Escape, focus mgmt), icon-button aria-labels. Verified live via DOM + a frontend test assertion. Contrast + full keyboard-nav sweep still open. Uncommitted.
+- **2026-06-15 — §7.7 Observability & DevEx (bounded) DELIVERED:** Structured access logging (per-request status/ms/reqId), crash handlers + `captureException` chokepoint (Sentry-ready via `SENTRY_DSN`), DB index audit (migration 17: tasks(assigned_to) + (status,created_at) + reviews(reviewer_id) + pg_trgm search indexes), and a PR template. Backend 116 tests / frontend 3 (+2). Verified live (access log paths, crash handler caught a real EADDRINUSE, indexes created). Deferred: App.jsx split, full a11y, Playwright, OpenAPI, the @sentry/node SDK. Uncommitted on `feat/foundation-mobile-hardening`.
+- **2026-06-15 — §7.5 handshake + templates/recurring DELIVERED:** Two-party completion handshake (earner `/submit` → creator `/complete` or `/request-changes`; migration 15 `submitted` status) and recurring/templated tasks (migration 16 `task_templates`, `/templates` CRUD+use, `sendRecurring` scheduler job, Templates manager on My Tasks). Backend 116 tests. Verified live (full handshake lifecycle + template use + recurring spawn). Saved/favourites explicitly NOT implemented per owner. §7.5 now: edit/cancel, categories, handshake, recurring done; only search/filter improvements remain. Uncommitted on `feat/foundation-mobile-hardening`.
+- **2026-06-15 — §7.5 Core Marketplace (bounded) DELIVERED:** Task edit + cancel (`PATCH /tasks/:id`, `/cancel` — open-only, rejects pending bids, notifies bidders) and a data-driven categories taxonomy (`categories` table mirroring locations, `GET /categories`, `useCategories()` driving the browse chips). Migrations 13+14 applied live. TaskDetail Edit modal + Cancel button. Backend 102 tests. Verified live (create→edit→cancel, /categories=8). Deferred: completion handshake (escrow-paired), favourites/recurring. Pushed branch `feat/foundation-mobile-hardening`; §7.5 changes uncommitted on top.
+- **2026-06-15 — Committed + pushed foundation/search/security/email work** to `feat/foundation-mobile-hardening` (3 area commits on top of the earlier 4).
 - **2026-06-15 — Email push + digest; WebSocket bookmarked:** Removed the dead `SocketContext` stub (real-time messaging deferred per owner). Notification delivery is now an `email_frequency` preference — 'instant' (per-event push email), 'daily' (batched digest via a scheduled `sendDigests()` job, 20h-gated), or 'off'. Migration 12 + Profile→Security 3-way selector. Backend 93 tests. Verified live: digest sent 1 then 0 (cadence gate). Still needs a Resend key to actually deliver. Branch `feat/foundation-mobile-hardening`; not committed.
 - **2026-06-15 — §7.4 Transactional email (noreply) DELIVERED:** All ReLivR mail now sends from `ReLivR <noreply@relivr.app>` (env-overridable) via Resend when `RESEND_API_KEY` is set, else logs a dev stub. `createNotification` emails recipients on all events (bids/awards/reviews/disputes/messages), opt-out aware; security mail always sends. Migration 11 (`email_opt_out`) + Profile→Security toggle + new-message notifications. Backend 90 tests (+6). To go live: verify a domain with Resend + set the key. Deferred: WebSocket real-time, PWA push, email digest. Branch `feat/foundation-mobile-hardening`; not committed.
 - **2026-06-15 — §7.2 Auth & Security (bounded) DELIVERED:** Per-account login lockout (progressive backoff), `POST /auth/logout-all`, account deletion (POPIA anonymise + `deleted_at`), `GET /profile/export` (POPIA portability), and `docs/SECURITY_RUNBOOK.md`. Migration 10 applied live. Profile→Security tab wired (download data / sign out everywhere / delete account). **Backend 84 tests** (+10). Refresh tokens + 2FA deferred as separate efforts. Branch `feat/foundation-mobile-hardening`; not committed.
