@@ -5,6 +5,9 @@
 import 'dotenv/config'
 import assertEnv from './env.js'
 import log from './log.js'
+import { installCrashHandlers } from './observability.js'
+
+installCrashHandlers()
 
 try {
   assertEnv()

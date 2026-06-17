@@ -41,6 +41,12 @@ export async function requireAuth(req, res, next) {
   next()
 }
 
+// Admin gate — runs after requireAuth (which sets req.userRole from the JWT).
+export function requireAdmin(req, res, next) {
+  if (req.userRole !== 'admin') return res.status(403).json({ message: 'Admin access required.' })
+  next()
+}
+
 export function handleValidation(req, res, next) {
   // imported lazily to keep middleware dependency-free at top level
   const { validationResult } = req.app.locals.validator

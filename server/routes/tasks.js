@@ -257,9 +257,77 @@ router.patch('/:taskId/bids/:bidId/accept',
   }
 )
 
-// PATCH /tasks/:taskId/complete — creator marks task done
-// NEW for MVP: with escrow deferred this is a simple status transition.
-// When Stripe escrow lands post-launch, capture/transfer logic slots in here.
+// PATCH /tasks/:taskId/submit — the assigned earner submits finished work for
+// the creator to review (in_progress → submitted). First half of the handshake.
+router.patch('/:taskId/submit',
+  requireAuth,
+  [param('taskId').isUUID()],
+  check,
+  async (req, res) => {
+    const { taskId } = req.params
+    try {
+      const { rows } = await pool.query(
+        `UPDATE tasks SET status = 'submitted', updated_at = NOW()
+         WHERE task_id = $1 AND assigned_to = $2 AND status = 'in_progress'
+         RETURNING *`,
+        [taskId, req.userId])
+      if (rows.length === 0) {
+        return res.status(404).json({ message: 'Task not found, not assigned to you, or not in progress.' })
+      }
+      const task = rows[0]
+      createNotification({
+        userId: task.creator_id,
+        type: 'task.submitted',
+        title: 'Work submitted for review',
+        body: `Work on "${task.title}" was submitted. Review it and confirm completion.`,
+        referenceId: taskId,
+      })
+      return res.status(200).json({ task })
+    } catch (err) {
+      log.error('submit task', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// PATCH /tasks/:taskId/request-changes — creator sends submitted work back to
+// the earner (submitted → in_progress).
+router.patch('/:taskId/request-changes',
+  requireAuth,
+  [param('taskId').isUUID()],
+  check,
+  async (req, res) => {
+    const { taskId } = req.params
+    try {
+      const { rows } = await pool.query(
+        `UPDATE tasks SET status = 'in_progress', updated_at = NOW()
+         WHERE task_id = $1 AND creator_id = $2 AND status = 'submitted'
+         RETURNING *`,
+        [taskId, req.userId])
+      if (rows.length === 0) {
+        return res.status(404).json({ message: 'Task not found, not yours, or not awaiting review.' })
+      }
+      const task = rows[0]
+      if (task.assigned_to) {
+        createNotification({
+          userId: task.assigned_to,
+          type: 'task.changes_requested',
+          title: 'Changes requested',
+          body: `The creator asked for changes on "${task.title}".`,
+          referenceId: taskId,
+        })
+      }
+      return res.status(200).json({ task })
+    } catch (err) {
+      log.error('request changes', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// PATCH /tasks/:taskId/complete — creator confirms completion. Second half of
+// the handshake: accepts a 'submitted' task (or 'in_progress', so the creator
+// can still complete directly). Escrow release will hook in here later.
 router.patch('/:taskId/complete',
   requireAuth,
   [param('taskId').isUUID()],
@@ -269,12 +337,12 @@ router.patch('/:taskId/complete',
     try {
       const { rows } = await pool.query(
         `UPDATE tasks SET status = 'completed', updated_at = NOW()
-         WHERE task_id = $1 AND creator_id = $2 AND status = 'in_progress'
+         WHERE task_id = $1 AND creator_id = $2 AND status IN ('submitted', 'in_progress')
          RETURNING *`,
         [taskId, req.userId]
       )
       if (rows.length === 0) {
-        return res.status(404).json({ message: 'Task not found, not yours, or not in progress.' })
+        return res.status(404).json({ message: 'Task not found, not yours, or not ready to complete.' })
       }
       const task = rows[0]
       if (task.assigned_to) {
@@ -290,6 +358,91 @@ router.patch('/:taskId/complete',
     } catch (err) {
       log.error('complete task', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// PATCH /tasks/:taskId — creator edits an OPEN task (locked once work starts).
+router.patch('/:taskId',
+  requireAuth,
+  [
+    param('taskId').isUUID(),
+    body('title').optional().trim().notEmpty().isLength({ max: 255 }),
+    body('description').optional().trim().notEmpty(),
+    body('budget').optional().isFloat({ gt: 0 }),
+    body('deadline').optional().isISO8601(),
+    body('skill_tags').optional().isArray(),
+    body('campus_zone').optional({ nullable: true }).trim(),
+  ],
+  check,
+  async (req, res) => {
+    const { taskId } = req.params
+    if (req.body.deadline && new Date(req.body.deadline) <= new Date()) {
+      return res.status(400).json({ message: 'Deadline must be in the future.' })
+    }
+    const editable = ['title', 'description', 'budget', 'deadline', 'skill_tags', 'campus_zone']
+    const sets = []; const vals = []; let i = 1
+    for (const f of editable) {
+      if (req.body[f] !== undefined) { sets.push(`${f} = $${i++}`); vals.push(req.body[f]) }
+    }
+    if (sets.length === 0) return res.status(400).json({ message: 'Nothing to update.' })
+    sets.push('updated_at = NOW()')
+    vals.push(taskId, req.userId)
+    try {
+      const { rows } = await pool.query(
+        `UPDATE tasks SET ${sets.join(', ')}
+         WHERE task_id = $${i++} AND creator_id = $${i} AND status = 'open'
+         RETURNING *`, vals)
+      if (rows.length === 0) {
+        return res.status(404).json({ message: 'Task not found, not yours, or no longer editable.' })
+      }
+      return res.status(200).json({ task: rows[0] })
+    } catch (err) {
+      log.error('PATCH /tasks/:taskId', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// PATCH /tasks/:taskId/cancel — creator cancels an OPEN task; pending bids are
+// rejected and bidders notified.
+router.patch('/:taskId/cancel',
+  requireAuth,
+  [param('taskId').isUUID()],
+  check,
+  async (req, res) => {
+    const { taskId } = req.params
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      const { rows } = await client.query(
+        `UPDATE tasks SET status = 'cancelled', updated_at = NOW()
+         WHERE task_id = $1 AND creator_id = $2 AND status = 'open'
+         RETURNING *`, [taskId, req.userId])
+      if (rows.length === 0) {
+        await client.query('ROLLBACK')
+        return res.status(404).json({ message: 'Task not found, not yours, or not cancellable.' })
+      }
+      await client.query("UPDATE bids SET status = 'rejected' WHERE task_id = $1 AND status = 'pending'", [taskId])
+      await client.query('COMMIT')
+
+      const bidders = await pool.query('SELECT DISTINCT bidder_id FROM bids WHERE task_id = $1', [taskId])
+      for (const b of bidders.rows) {
+        createNotification({
+          userId: b.bidder_id,
+          type: 'task.cancelled',
+          title: 'A task was cancelled',
+          body: `"${rows[0].title}" was cancelled by the creator.`,
+          referenceId: taskId,
+        })
+      }
+      return res.status(200).json({ task: rows[0] })
+    } catch (err) {
+      await client.query('ROLLBACK')
+      log.error('PATCH /tasks/:taskId/cancel', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    } finally {
+      client.release()
     }
   }
 )

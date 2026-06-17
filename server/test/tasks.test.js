@@ -101,6 +101,79 @@ describe('PATCH /tasks/bids/:bidId/withdraw', () => {
   })
 })
 
+describe('PATCH /tasks/:taskId (edit)', () => {
+  it('edits an open task (200)', async () => {
+    mockDb(pool, sql => /UPDATE tasks SET/.test(sql) ? { rows: [{ task_id: TASK_ID, title: 'Updated' }] } : undefined)
+    const res = await request(app).patch(`/tasks/${TASK_ID}`).set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Updated', budget: 300 })
+    expect(res.status).toBe(200)
+    expect(res.body.task.title).toBe('Updated')
+  })
+  it('404 when the task is not open / not yours', async () => {
+    mockDb(pool, sql => /UPDATE tasks SET/.test(sql) ? { rows: [] } : undefined)
+    const res = await request(app).patch(`/tasks/${TASK_ID}`).set('Authorization', `Bearer ${token}`).send({ title: 'x' })
+    expect(res.status).toBe(404)
+  })
+  it('400 when nothing is provided', async () => {
+    mockDb(pool)
+    const res = await request(app).patch(`/tasks/${TASK_ID}`).set('Authorization', `Bearer ${token}`).send({})
+    expect(res.status).toBe(400)
+  })
+  it('400 on a past deadline', async () => {
+    mockDb(pool)
+    const res = await request(app).patch(`/tasks/${TASK_ID}`).set('Authorization', `Bearer ${token}`)
+      .send({ deadline: '2000-01-01T00:00:00Z' })
+    expect(res.status).toBe(400)
+  })
+  it('requires auth (401)', async () => {
+    const res = await request(app).patch(`/tasks/${TASK_ID}`).send({ title: 'x' })
+    expect(res.status).toBe(401)
+  })
+})
+
+describe('PATCH /tasks/:taskId/cancel', () => {
+  it('cancels an open task (200)', async () => {
+    mockDb(pool)
+    pool.connect.mockResolvedValue(mockClient(sql =>
+      /UPDATE tasks SET status = 'cancelled'/.test(sql) ? { rows: [{ task_id: TASK_ID, title: 'Fix bike' }] } : undefined))
+    const res = await request(app).patch(`/tasks/${TASK_ID}/cancel`).set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(200)
+  })
+  it('404 when not cancellable', async () => {
+    mockDb(pool)
+    pool.connect.mockResolvedValue(mockClient(sql =>
+      /UPDATE tasks SET status = 'cancelled'/.test(sql) ? { rows: [] } : undefined))
+    const res = await request(app).patch(`/tasks/${TASK_ID}/cancel`).set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('completion handshake', () => {
+  it('earner submits work (in_progress → submitted, 200)', async () => {
+    mockDb(pool, sql => /UPDATE tasks SET status = 'submitted'/.test(sql)
+      ? { rows: [{ task_id: TASK_ID, creator_id: 'c-1', title: 'Fix bike' }] } : undefined)
+    const res = await request(app).patch(`/tasks/${TASK_ID}/submit`).set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(200)
+  })
+  it('404 when submitting a task not assigned to you', async () => {
+    mockDb(pool, sql => /UPDATE tasks SET status = 'submitted'/.test(sql) ? { rows: [] } : undefined)
+    const res = await request(app).patch(`/tasks/${TASK_ID}/submit`).set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(404)
+  })
+  it('creator requests changes (submitted → in_progress, 200)', async () => {
+    mockDb(pool, sql => /UPDATE tasks SET status = 'in_progress'/.test(sql)
+      ? { rows: [{ task_id: TASK_ID, assigned_to: 'e-1', title: 'Fix bike' }] } : undefined)
+    const res = await request(app).patch(`/tasks/${TASK_ID}/request-changes`).set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(200)
+  })
+  it('creator confirms completion (200)', async () => {
+    mockDb(pool, sql => /UPDATE tasks SET status = 'completed'/.test(sql)
+      ? { rows: [{ task_id: TASK_ID, assigned_to: 'e-1', title: 'Fix bike' }] } : undefined)
+    const res = await request(app).patch(`/tasks/${TASK_ID}/complete`).set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(200)
+  })
+})
+
 describe('POST /tasks/admin/expire', () => {
   it('forbids non-admins (403)', async () => {
     mockDb(pool)

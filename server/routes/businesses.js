@@ -163,8 +163,8 @@ router.post('/',
            (name, category, description, address, map_hint, phone, whatsapp, email,
             hours, image_urls, logo_url, link_url, status, fee_paid, paid_at,
             signed_by_rep, notes)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
-                 CASE WHEN $14 IS NOT NULL THEN NOW() ELSE NULL END,$15,$16)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::numeric,
+                 CASE WHEN $14::numeric IS NOT NULL THEN NOW() ELSE NULL END,$15,$16)
          RETURNING *`,
         [b.name, b.category, b.description || null, b.address || null, b.mapHint || null,
          b.phone || null, b.whatsapp || null, b.email || null, b.hours || null,

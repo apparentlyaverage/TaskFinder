@@ -11,6 +11,7 @@ import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import { randomUUID } from 'node:crypto'
 import log from './log.js'
+import { captureException } from './observability.js'
 
 import authRouter     from './routes/auth.js'
 import tasksRouter    from './routes/tasks.js'
@@ -21,6 +22,9 @@ import businessesRouter from './routes/businesses.js'
 import locationsRouter from './routes/locations.js'
 import disputesRouter from './routes/disputes.js'
 import searchRouter from './routes/search.js'
+import categoriesRouter from './routes/categories.js'
+import templatesRouter from './routes/templates.js'
+import adminRouter from './routes/admin.js'
 import { pool } from './db.js'
 
 const app = express()
@@ -33,6 +37,21 @@ app.set('trust proxy', 1)
 app.use((req, res, next) => {
   req.id = req.headers['x-request-id'] || randomUUID()
   res.setHeader('X-Request-Id', req.id)
+  next()
+})
+
+// ── Access log — one structured line per request on completion (§7.7) ─────────
+app.use((req, res, next) => {
+  const start = process.hrtime.bigint()
+  // Capture now: Express rewrites req.url to the router-relative path during
+  // routing, so reading it in 'finish' would lose the mount prefix.
+  const path = req.path
+  const method = req.method
+  res.on('finish', () => {
+    if (path === '/health') return // health checks are noise
+    const ms = Number(process.hrtime.bigint() - start) / 1e6
+    log.info('request', { reqId: req.id, method, path, status: res.statusCode, ms: Math.round(ms) })
+  })
   next()
 })
 
@@ -88,11 +107,14 @@ app.use('/businesses', businessesRouter)
 app.use('/locations', locationsRouter)
 app.use('/disputes', disputesRouter)
 app.use('/search', searchRouter)
+app.use('/categories', categoriesRouter)
+app.use('/templates', templatesRouter)
+app.use('/admin', adminRouter)
 
 // 404 + error handlers
 app.use((req, res) => res.status(404).json({ message: 'Not found.' }))
 app.use((err, req, res, next) => {
-  log.error('request.unhandled', { reqId: req.id, method: req.method, path: req.path, msg: err.message })
+  captureException(err, { reqId: req.id, method: req.method, path: req.path })
   res.status(500).json({ message: 'Internal server error.' })
 })
 

@@ -282,7 +282,7 @@ router.post('/login',
     try {
       const { rows } = await pool.query(
         `SELECT u.user_id, u.email, u.role, u.password_hash, u.token_version,
-                u.failed_login_attempts, u.locked_until, u.deleted_at,
+                u.failed_login_attempts, u.locked_until, u.deleted_at, u.suspended_at,
                 up.display_name, up.avatar_url
          FROM users u LEFT JOIN user_profiles up ON u.user_id = up.user_id
          WHERE u.email = $1`, [email])
@@ -290,6 +290,7 @@ router.post('/login',
       const user = rows[0]
       // Closed accounts can't sign in (and we don't reveal that they existed).
       if (user.deleted_at) return res.status(401).json({ message: 'Invalid credentials.' })
+      if (user.suspended_at) return res.status(403).json({ message: 'This account has been suspended. Contact support.' })
       // Per-account lockout (independent of the per-IP rate limit).
       if (user.locked_until && new Date(user.locked_until) > new Date()) {
         return res.status(423).json({ message: 'Account temporarily locked after repeated failed logins. Please try again later.' })

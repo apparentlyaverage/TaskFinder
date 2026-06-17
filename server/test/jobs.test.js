@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 vi.mock('../email.js', () => ({ sendEmail: vi.fn().mockResolvedValue({ delivered: true }) }))
 
-const { expireDueTasks, sendDigests } = await import('../jobs.js')
+const { expireDueTasks, sendDigests, sendRecurring } = await import('../jobs.js')
 const { sendEmail } = await import('../email.js')
 
 describe('expireDueTasks', () => {
@@ -48,5 +48,25 @@ describe('sendDigests', () => {
     }) }
     expect(await sendDigests(db)).toBe(0)
     expect(sendEmail).not.toHaveBeenCalled()
+  })
+})
+
+describe('sendRecurring', () => {
+  it('spawns a task for a due recurring template and advances next_run_at', async () => {
+    let spawnedTask = false, advanced = false
+    const db = { query: vi.fn(async (sql) => {
+      if (/FROM task_templates/.test(sql)) return { rows: [{ template_id: 'tpl1', user_id: 'u1', title: 'Clean', description: 'd', budget: 150, deadline_days: 7, skill_tags: [], campus_zone: null, recurrence: 'weekly' }] }
+      if (/INSERT INTO tasks/.test(sql)) { spawnedTask = true; return { rows: [{ task_id: 't1' }] } }
+      if (/UPDATE task_templates SET next_run_at/.test(sql)) { advanced = true; return {} }
+      return { rows: [] }
+    }) }
+    expect(await sendRecurring(db)).toBe(1)
+    expect(spawnedTask).toBe(true)
+    expect(advanced).toBe(true)
+  })
+
+  it('does nothing when no templates are due', async () => {
+    const db = { query: vi.fn().mockResolvedValue({ rows: [] }) }
+    expect(await sendRecurring(db)).toBe(0)
   })
 })
