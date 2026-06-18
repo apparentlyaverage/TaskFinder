@@ -327,6 +327,37 @@ Tests for the user-moderation endpoint.
 
 ---
 
+## 6.17 — Sprint: §7.8 analytics, campus admin, flags, ops runbook — ✅ COMPLETE (2026-06-16)
+
+1. **Analytics charts** — `GET /admin/analytics?days=N` time-series (signups / tasks created / tasks completed per day); inline SVG charts on the Admin dashboard (no chart lib).
+2. **Campus/zone admin UI** — admin location CRUD (`POST /admin/locations`, `PATCH /admin/locations/:id` rename/activate) on top of the existing `locations` table; an admin page to add a campus/zone without SQL.
+3. **Feature flags** — migration 21 `feature_flags`; `GET/PATCH /admin/flags` + public `GET /flags` + a `useFlags()` hook; admin toggle page.
+4. **Neon backup/restore runbook** — `docs/OPS_RUNBOOK.md` (PITR, branch-restore, manual `pg_dump`).
+
+Tests for analytics/flags/location-admin endpoints.
+
+**Outcome:** all four shipped + verified live. `GET /admin/analytics` (daily signups/tasks-created/tasks-completed via generate_series) → 3 inline **SVG MiniCharts** on the dashboard (no chart lib). `POST/PATCH /admin/locations` + an **AdminLocations** page (add campus/zone without SQL). Migration 21 `feature_flags` + `GET/PATCH /admin/flags` + public `GET /flags` + `useFlags()` hook + **AdminFlags** toggle page. `docs/OPS_RUNBOOK.md` (Neon PITR/branch-restore/`pg_dump`). Admin nav gained Locations + Flags. **Backend 131 tests** (+6). Verified live: analytics 30-day series, campus+zone added (campuses=2), flag toggle reflected in public `/flags`, all pages render. Test artifacts left: "Test University"/"North Wing" locations.
+
+---
+
+## 6.18 — Sprint: Beta launch positioning — ✅ COMPLETE (2026-06-16)
+
+Owner's beta-launch requirements:
+1. **Brand** → "ReLivR" everywhere (scripted `/ReLiv(?!R)/`→`ReLivR`).
+2. **Payments framing** — remove "live payment system" claims; say **escrow & payments (recurring, split, …) coming soon**. Hide the mock Fund-Escrow UI.
+3. **Countdown** to **2026-07-07** (full launch) on the landing.
+4. **Beta messaging** — "we're in beta, feedback appreciated."
+5. **Feedback channel** — landing form → `POST /feedback` (stored, admin-viewable).
+6. **Launch-reminder waitlist** — landing email capture → `POST /waitlist`.
+7. **Beta-founder tag** — persistent badge for accounts created during beta, visible on profiles.
+
+Backend: migration 22 (`users.beta_founder` + backfill, `waitlist`, `feedback`); public `/feedback` + `/waitlist` (rate-limited); `beta_founder` in profile/me reads; admin views. Frontend: brand sweep, payments→coming-soon copy, landing countdown + beta banner + feedback + waitlist, founder badge. Tests.
+
+**Outcome:** all 7 shipped + verified live. Brand sweep `/ReLiv(?!R)/`→`ReLivR` (43 fixes; 0 stray on landing). Landing now has a **BetaBanner**, **LaunchSection** (live Countdown to 2026-07-07 + waitlist email → `POST /waitlist`), and **FeedbackSection** (→ `POST /feedback`). Payments reframed to **coming soon** on hero/how-it-works/pricing (Earner card now "Free during beta"). **beta_founder** (migration 22, default TRUE, backfilled) shows a **★ Founding Member** badge on public profiles. Admin can view `/admin/feedback` + `/admin/waitlist`. **Backend 135 tests** (+4). Verified live: feedback/waitlist stored + admin-visible, public profile `beta_founder: true`, landing renders all sections (screenshot confirmed).
+**⚠️ Launch-day (2026-07-07) TODO:** `ALTER TABLE users ALTER COLUMN beta_founder SET DEFAULT FALSE;` and email the waitlist. **Remaining:** the deep legal/FAQ/Pricing *info pages* still contain detailed Stripe/escrow/10% prose (landing + main flows are reframed) — a copy pass for those is a follow-up.
+
+---
+
 ## 7. Backlog & Future Considerations
 
 Groomed 2026-06-15 by all four personas. This is the menu of work beyond the MVP
@@ -397,8 +428,11 @@ sprints — nothing here is committed to a sprint yet. **Blocker legend:**
 - ✅ `activity_logs` table finally created (audit trail now records) + 2 latent bugs fixed (business create, activity insert)
 - ✅ Business management works for admins (was blocked by the create bug + no admin account)
 - ✅ AdminUsers/AdminDisputes/AdminDisputeDetail wired to real endpoints + suspend/ban + dispute-resolve actions (migration 20, `PATCH /admin/users/:id`)
-- ⬜ Analytics charts (trends/GMV once payments) — **P2**
-- ⬜ Campus/zone admin UI; feature flags; Neon backup/restore runbook — **P3**
+- ✅ Analytics charts (daily signups/tasks/completions — inline SVG on the dashboard; GMV once payments land)
+- ✅ Campus/zone admin UI (`POST/PATCH /admin/locations` + AdminLocations page)
+- ✅ Feature flags (`feature_flags`, `/admin/flags`, public `/flags`, `useFlags()`, AdminFlags page)
+- ✅ Neon backup/restore runbook (`docs/OPS_RUNBOOK.md`)
+- §7.8 is now fully delivered.
 
 ### 7.9 Compliance & Legal
 - POPIA: data export/erasure endpoints; re-prompt consent when the policy version changes — **P2**
@@ -411,6 +445,9 @@ sprints — nothing here is committed to a sprint yet. **Blocker legend:**
 
 - **2026-06-15 — Session 0 (induction):** Full baseline audit by all four personas. No prior state file found; created this document. Mapped monolith-vs-microservice drift (TD-1/TD-4), zero-test gap (TD-2), and Stripe-vs-Paystack payment mismatch (TD-3). Defined the 3 MVP features.
 - **2026-06-15 — Session 0b (decisions ratified):** Product Owner answered all four §6 questions: monolith adopted / `services/` retired, Paystack-primary (Ozow via Paystack later), brand = **ReLivR**, **multi-campus from day one with affiliation trust tags**. Roadmap re-sequenced: MVP-2 is now **Multi-Campus Identity & Affiliation Trust Tags** (promoted ahead of payments because it's the trust backbone and reshapes the data model); payments moved to MVP-3; reviews/disputes + auth-hardening deferred to Sprint 4.
+- **2026-06-18 — Pre-launch app lock + UI polish + admin seed DELIVERED:** (1) Fixed the landing header — merged the beta banner + navbar into one fixed stacked header (was overlapping); boxed the countdown cells; reframed StatsBar away from live-payment claims ("Free While in Beta" / "Secure Escrow Coming"); banner now mentions escrow coming soon. (2) **Launch gate** — single source of truth `LAUNCH_AT='2026-07-07'` in App.jsx; `isAppLocked(user)` = signed-in AND not admin AND not yet launched. Locked non-admins (sign-in OR sign-up) get a `LaunchGate` founding-member holding screen with live countdown (auto-reloads into the app at launch) instead of the dashboard; admins bypass. Logged-in users also kept off the landing (redirect to app/gate). **NOTE: client-side lock only — backend still serves non-admins; server-side enforcement is a follow-up.** (3) **Admin account** — new idempotent `npm run seed-admin <email> [password]` (creates/promotes admin, sets known password, records POPIA consent). Seeded `admin@relivr.co.za` + promoted the owner's Google account to admin. Gmail-dot footgun found: `normalizeEmail()` strips gmail dots so password login on a dotted gmail can't match — use the dedicated admin email for password login, or Google sign-in for the gmail account. Verified live: admin→Admin Dashboard, member→LaunchGate. Frontend 3 tests pass. Uncommitted on `feat/foundation-mobile-hardening`.
+- **2026-06-16 — Beta launch positioning DELIVERED:** Brand→ReLivR everywhere; landing gained a beta banner, a live countdown to 2026-07-07, a launch-reminder waitlist (`POST /waitlist`), and a feedback channel (`POST /feedback`); payments reframed to "coming soon" (escrow/recurring/split); `beta_founder` marker (migration 22) → ★ Founding Member badge on profiles; admin feedback/waitlist views. Backend 135 tests; verified live + screenshot. Launch-day TODO: flip beta_founder default + email waitlist. Deep info/legal pages still have payment prose (follow-up). Uncommitted on `feat/foundation-mobile-hardening`.
+- **2026-06-16 — §7.8 analytics + campus admin + flags + ops runbook DELIVERED:** Admin analytics endpoint + 3 inline SVG charts on the dashboard; AdminLocations page (`POST/PATCH /admin/locations`) to add campuses/zones without SQL; feature flags (migration 21, `/admin/flags` + public `/flags` + `useFlags()` + AdminFlags page); `docs/OPS_RUNBOOK.md` (Neon backup/restore). Backend 131 tests. Verified live. **§7.8 Admin & Ops is now fully complete.** Uncommitted on `feat/foundation-mobile-hardening`.
 - **2026-06-16 — §7.8 admin frontend wiring + moderation DELIVERED:** AdminUsers/AdminDisputes/AdminDisputeDetail rewired mock→real APIs. User moderation: migration 20 (`suspended_at`), `PATCH /admin/users/:id` (suspend/role, self-target guard, session-kill), login blocks suspended. Dispute detail resolves via `PATCH /disputes/:id` (real events timeline; dropped mock escrow UI). Backend 125 tests. Verified live (suspend/reinstate/self-guard; dispute raise→resolve; pages render real data). Admin area is now fully real. Uncommitted on `feat/foundation-mobile-hardening`.
 - **2026-06-16 — §7.8 Admin & Ops DELIVERED:** Admin monitoring (`/admin/stats|activity|users`, `requireAdmin`, AdminDashboard with live stats + activity feed, now the admin landing page) + `make-admin` ops script. Created the long-missing `activity_logs` table (migration 18) so the audit trail finally records. Fixed two pre-existing latent bugs the sprint surfaced: `POST /businesses` 500 on null `feePaid` (the reason "add a business" never worked) and the `activity_logs` insert type error (migration 19, entity_id→UUID). Business management confirmed working for admins. Backend 121 tests. Verified live end-to-end. **Run `npm run make-admin <email>` to get an admin account.** Deferred: AdminUsers/AdminDisputes frontend wiring, analytics, suspend/resolve actions. Uncommitted on `feat/foundation-mobile-hardening`.
 - **2026-06-16 — §7.7 accessibility pass:** focus-visible outline, `Input` label association, shared `Modal` + custom `AuthModal` dialog semantics (role/aria-modal/labelledby, Escape, focus mgmt), icon-button aria-labels. Verified live via DOM + a frontend test assertion. Contrast + full keyboard-nav sweep still open. Uncommitted.

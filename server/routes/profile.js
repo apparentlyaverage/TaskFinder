@@ -31,7 +31,7 @@ router.get('/', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT u.user_id, u.email, u.role, u.google_id, u.google_avatar_url,
-              u.is_email_verified, u.is_ru_student, u.email_frequency,
+              u.is_email_verified, u.is_ru_student, u.email_frequency, u.beta_founder,
               up.display_name, up.bio, up.skills, up.portfolio_url, up.campus_zone,
               up.avatar_url, up.avg_rating, up.rating_count,
               up.headline, up.services_offered, up.pinned_task_ids, up.featured_review_id
@@ -238,7 +238,7 @@ router.get('/public/:userId',
       // Identity + showcase fields + verification (best-effort on new columns)
       const profileQ = pool.query(
         `SELECT u.user_id, u.role, u.created_at AS joined_at, u.google_avatar_url,
-                u.is_email_verified, u.is_ru_student, u.google_id,
+                u.is_email_verified, u.is_ru_student, u.google_id, u.beta_founder,
                 up.display_name, up.bio, up.skills, up.campus_zone,
                 up.avatar_url, up.avg_rating, up.rating_count,
                 up.headline, up.services_offered, up.pinned_task_ids, up.featured_review_id

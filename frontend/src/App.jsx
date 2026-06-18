@@ -13,6 +13,25 @@ import {
   MOCK_MESSAGES, MOCK_DISPUTES, MOCK_SUGGESTIONS,
 } from './api/mock'
 
+// ─── LAUNCH GATE ─────────────────────────────────────────────────────────────
+// The full app is locked to the public until the launch timer ends. Until then
+// only admins can enter; everyone else (creators/earners) can sign up and join
+// the waitlist, but lands on a "founding member" holding screen instead of the
+// app. The gate auto-opens the moment this date passes — no code change needed.
+// This date is the single source of truth for both the countdown and the gate.
+// All API calls go through this prefix so the deployed frontend (Vercel) can
+// talk to the separate backend (Railway). Set VITE_API_URL in Vercel env vars
+// to your Railway service URL, e.g. https://relivr-server.up.railway.app
+// In development Vite proxies relative paths so this evaluates to ''.
+const API_BASE = import.meta.env.VITE_API_URL ?? ''
+
+export const LAUNCH_AT = '2026-07-07T00:00:00'
+const launchMs = () => new Date(LAUNCH_AT).getTime()
+const hasLaunched = () => Date.now() >= launchMs()
+// A signed-in user is locked out of the app when it hasn't launched and they
+// aren't an admin. Admins always get in (they run the show pre-launch).
+const isAppLocked = (user) => !!user && user.role !== 'admin' && !hasLaunched()
+
 // ─── FONTS & GLOBAL STYLES ───────────────────────────────────────────────────
 const _fl = document.createElement('link')
 _fl.rel = 'stylesheet'
@@ -200,7 +219,7 @@ button:active { transform: scale(.97); }
   .stack-mobile { grid-template-columns: 1fr !important; }
   /* The hero is full-height with a hidden visual column on phones — drop the
      100vh so it doesn't leave a screen of empty space below the copy. */
-  .hero-section { min-height: auto !important; padding-top: 96px !important; padding-bottom: 48px !important; }
+  .hero-section { min-height: auto !important; padding-top: 124px !important; padding-bottom: 48px !important; }
   /* Messages: master-detail → one pane at a time on phones. Show the full-width
      conversation list, and swap to the full-width thread once one is opened
      (the in-thread ← button clears the selection to return to the list). */
@@ -309,7 +328,7 @@ function Logo({ onClick }) {
   return (
     <div onClick={onClick} style={{ display:'flex', alignItems:'center', gap:9, cursor:'pointer', flexShrink:0 }}>
       <div style={{ background:'var(--amber)', color:'#fff', fontFamily:'var(--fd)', fontWeight:800, fontSize:'.88rem', padding:'4px 8px', borderRadius:8, letterSpacing:'.02em' }}>R</div>
-      <span style={{ fontFamily:'var(--fd)', fontSize:'1.15rem', fontWeight:800, letterSpacing:'.02em' }}>ReLiv</span>
+      <span style={{ fontFamily:'var(--fd)', fontSize:'1.15rem', fontWeight:800, letterSpacing:'.02em' }}>ReLivR</span>
     </div>
   )
 }
@@ -548,8 +567,12 @@ function LandingNavbar({ onOpenAuth, onNav, user, onEnterApp }) {
 
   return (
     <>
-      <nav style={{ position:'fixed', top:0, left:0, right:0, zIndex:100, background:scrolled?'rgba(250,249,246,.92)':'transparent', borderBottom:scrolled?'1px solid var(--border-strong)':'1px solid transparent', backdropFilter:scrolled?'blur(14px)':'none', transition:'all 300ms ease', padding:'0 24px' }}>
-        <div style={{ maxWidth:1200, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', height:66 }}>
+      <div style={{ position:'fixed', top:0, left:0, right:0, zIndex:100 }}>
+      <div style={{ background:'var(--amber)', color:'#fff', textAlign:'center', padding:'7px 16px', fontSize:'.8rem', fontFamily:'var(--fb)', fontWeight:600, lineHeight:1.45 }}>
+        🚀 ReLivR is in <strong>beta</strong> — full launch 7 July 2026.<span className="hide-m"> Your feedback shapes what we build.</span> Secure escrow payments coming soon.
+      </div>
+      <nav style={{ background:scrolled?'rgba(250,249,246,.92)':'rgba(250,249,246,.72)', borderBottom:scrolled?'1px solid var(--border-strong)':'1px solid transparent', backdropFilter:'blur(14px)', transition:'all 300ms ease', padding:'0 24px' }}>
+        <div style={{ maxWidth:1200, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', height:64 }}>
           <Logo onClick={() => onNav('home')} />
           <div className="hide-m" style={{ display:'flex', alignItems:'center', gap:32 }}>
             {navItems.map(item => <a key={item.label} href={item.href} className="nav-link">{item.label}</a>)}
@@ -568,6 +591,7 @@ function LandingNavbar({ onOpenAuth, onNav, user, onEnterApp }) {
             style={{ background:'none', border:'none', color:'var(--text-primary)', cursor:'pointer', fontSize:'1.4rem', padding:8 }}><span aria-hidden="true">☰</span></button>
         </div>
       </nav>
+      </div>
 
       <div className={`doverlay ${drawerOpen?'open':''}`} onClick={() => setDrawerOpen(false)} />
       <div className={`drawer ${drawerOpen?'open':''}`}>
@@ -652,7 +676,7 @@ function LandingFooter({ onNav }) {
         </div>
         <Divider style={{ marginBottom:20 }} />
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10 }}>
-          <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em' }}>© 2026 ReLiv (PTY) Ltd · All rights reserved</span>
+          <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em' }}>© 2026 ReLivR (PTY) Ltd · All rights reserved</span>
           <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em' }}>Registered in South Africa · POPIA Compliant</span>
         </div>
       </div>
@@ -688,12 +712,6 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
 
   // Reset to step 1 whenever the modal mode flips (login ⇄ register)
   useEffect(() => { setStep(1); setError('') }, [mode])
-
-  const presets = [
-    { label:'Creator', role:'creator', email:'creator@demo.com' },
-    { label:'Earner',  role:'earner',  email:'earner@demo.com' },
-    { label:'Admin',   role:'admin',   email:'admin@demo.com' },
-  ]
 
   function validateStep1() {
     if (mode==='register' && !name.trim()) return 'Please enter your name'
@@ -736,11 +754,15 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
             popiaConsent: consent,
           }
 
+      const ctrl = new AbortController()
+      const tid  = setTimeout(() => ctrl.abort(), 5000)
       const res  = await fetch(endpoint, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(body),
+        signal:  ctrl.signal,
       })
+      clearTimeout(tid)
       const data = await res.json()
 
       if (!res.ok) {
@@ -788,7 +810,7 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
         <div style={{ padding:'18px 22px 14px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div>
             <div style={{ fontFamily:'var(--fd)', fontSize:'1.25rem', fontWeight:800 }}>{mode==='login'?'Welcome back':(step===1?'Create your account':'Set up your profile')}</div>
-            <div style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em', marginTop:2 }}>{mode==='register' ? `ReLiv · Step ${step} of 2` : 'ReLiv · Rhodes Campus'}</div>
+            <div style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em', marginTop:2 }}>{mode==='register' ? `ReLivR · Step ${step} of 2` : 'ReLivR · Rhodes Campus'}</div>
           </div>
           <button onClick={onClose} aria-label="Close dialog" style={{ background:'none', border:'none', color:'var(--text-muted)', cursor:'pointer', fontSize:'1.1rem', padding:'4px 8px' }}>✕</button>
         </div>
@@ -837,15 +859,6 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
               <>
                 <div><label>Email</label><input type="email" aria-label="Email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@ru.ac.za" required /></div>
                 <div><label>Password</label><input type="password" aria-label="Password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
-                <div>
-                  <Mono style={{ display:'block', marginBottom:8 }}>Quick demo login</Mono>
-                  <div style={{ display:'flex', gap:6 }}>
-                    {presets.map(p => (
-                      <button key={p.role} type="button" onClick={() => { setRole(p.role); setEmail(p.email) }}
-                        style={{ flex:1, padding:'6px 8px', background:role===p.role?'var(--accent-glow)':'var(--bg-elevated)', border:`1px solid ${role===p.role?'var(--accent)':'var(--border)'}`, color:role===p.role?'var(--accent)':'var(--text-muted)', borderRadius:'var(--radius-sm)', fontSize:'0.72rem', fontFamily:'var(--font-mono)', cursor:'pointer', transition:'all 150ms ease' }}>{p.label}</button>
-                    ))}
-                  </div>
-                </div>
               </>
             )}
 
@@ -858,12 +871,12 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
                 <div style={{ background:'var(--accent-glow)', border:'1px solid var(--accent-dim)', borderRadius:12, padding:'12px 14px', display:'flex', gap:10, alignItems:'flex-start' }}>
                   <span style={{ fontSize:'1.1rem' }}>✨</span>
                   <div style={{ fontSize:'.8rem', color:'var(--text-secondary)', lineHeight:1.5 }}>
-                    With one ReLiv account you can <strong style={{ color:'var(--text-primary)' }}>post tasks</strong> when you need help and <strong style={{ color:'var(--text-primary)' }}>bid on tasks</strong> to earn — switch anytime.
+                    With one ReLivR account you can <strong style={{ color:'var(--text-primary)' }}>post tasks</strong> when you need help and <strong style={{ color:'var(--text-primary)' }}>bid on tasks</strong> to earn — switch anytime.
                   </div>
                 </div>
                 <label style={{ display:'flex', gap:8, alignItems:'flex-start', cursor:'pointer' }}>
                   <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} style={{ width:'auto', marginTop:3, flexShrink:0, accentColor:'var(--accent)' }} />
-                  <span style={{ fontSize:'.76rem', color:'var(--text-secondary)', lineHeight:1.5 }}>I agree to the <span style={{ color:'var(--accent)', fontWeight:600 }}>Terms of Service</span> and <span style={{ color:'var(--accent)', fontWeight:600 }}>Privacy Policy</span>, and consent to ReLiv processing my data under POPIA.</span>
+                  <span style={{ fontSize:'.76rem', color:'var(--text-secondary)', lineHeight:1.5 }}>I agree to the <span style={{ color:'var(--accent)', fontWeight:600 }}>Terms of Service</span> and <span style={{ color:'var(--accent)', fontWeight:600 }}>Privacy Policy</span>, and consent to ReLivR processing my data under POPIA.</span>
                 </label>
               </>
             )}
@@ -951,20 +964,20 @@ const FEATURES_DATA = [
 const STEPS_DATA = [
   { n:'01', role:'Creator', color:'var(--amber)', title:'Post Your Task',      desc:'Describe what you need, set a budget, add skill tags. Your task goes live immediately.' },
   { n:'02', role:'Earner',  color:'var(--green)', title:'Submit a Bid',        desc:'Browse tasks matching your skills. Write a pitch, name your price, and submit.' },
-  { n:'03', role:'Creator', color:'var(--amber)', title:'Accept & Lock Funds', desc:'Review bids, pick the best fit, and fund escrow. Your money is protected until delivery.' },
+  { n:'03', role:'Creator', color:'var(--amber)', title:'Accept a Bid', desc:'Review bids and pick the best fit. Secure escrow payments are coming soon — for now, arrange payment with your earner directly.' },
   { n:'04', role:'Both',    color:'var(--purple)',title:'Work & Release',      desc:'Communicate through the platform. When done, release payment. Both sides win.' },
 ]
 
 const STATS_DATA = [
   { v:'R0',   l:'Cost to Start' },
-  { v:'10%',  l:'Fee on Completion Only' },
+  { v:'Beta', l:'Free While in Beta' },
   { v:'24h',  l:'Avg First Bid Time' },
-  { v:'100%', l:'Escrow Protected' },
+  { v:'Soon', l:'Secure Escrow Coming' },
 ]
 
 const TESTIMONIALS_DATA = [
-  { name:'Sipho M.',   role:'3rd Year CS · Earner',       rating:5, text:'I made R2400 in my first two weeks just fixing bugs and building small scripts for other students. ReLiv is the side hustle I didn\'t know I needed.' },
-  { name:'Anika V.',   role:'PostGrad Law · Creator',      rating:5, text:'Got my thesis transcribed, my room cleaned, and my laptop fixed all through ReLiv. The escrow system means I never worried about paying upfront.' },
+  { name:'Sipho M.',   role:'3rd Year CS · Earner',       rating:5, text:'I made R2400 in my first two weeks just fixing bugs and building small scripts for other students. ReLivR is the side hustle I didn\'t know I needed.' },
+  { name:'Anika V.',   role:'PostGrad Law · Creator',      rating:5, text:'Got my thesis transcribed, my room cleaned, and my laptop fixed all through ReLivR. The escrow system means I never worried about paying upfront.' },
   { name:'Lethabo K.', role:'2nd Year Commerce · Earner',  rating:5, text:'The trust score system is what makes it different. People know I\'m a real Rhodes student, not some random from the internet.' },
 ]
 
@@ -995,7 +1008,7 @@ function CampusStrip() {
 
 function Hero({ onOpenAuth }) {
   return (
-    <section className="hero-section" style={{ minHeight:'100vh', display:'flex', alignItems:'center', padding:'110px 24px 72px', position:'relative', overflow:'hidden' }}>
+    <section className="hero-section" style={{ minHeight:'100vh', display:'flex', alignItems:'center', padding:'128px 24px 72px', position:'relative', overflow:'hidden' }}>
       <div style={{ position:'absolute', inset:0, zIndex:0, backgroundImage:'linear-gradient(rgba(33,28,46,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(33,28,46,.05) 1px,transparent 1px)', backgroundSize:'56px 56px' }} />
       <div style={{ position:'absolute', top:'15%', right:'8%', width:500, height:500, background:'radial-gradient(circle,rgba(91,33,182,.07) 0%,transparent 70%)', zIndex:0 }} />
       <div style={{ maxWidth:1200, margin:'0 auto', width:'100%', position:'relative', zIndex:1 }}>
@@ -1003,13 +1016,13 @@ function Hero({ onOpenAuth }) {
           <div style={{ flex:1 }}>
             <div style={{ display:'inline-flex', alignItems:'center', gap:8, background:'rgba(91,33,182,.1)', border:'1px solid rgba(91,33,182,.25)', borderRadius:100, padding:'5px 14px', marginBottom:28, animation:'fadeUp .6s ease both' }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--amber)', animation:'pulse 2s infinite', flexShrink:0 }} />
-              <span style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', letterSpacing:'.1em', textTransform:'uppercase' }}>Now live on Rhodes Campus</span>
+              <span style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', letterSpacing:'.1em', textTransform:'uppercase' }}>Now in beta on Rhodes Campus</span>
             </div>
             <h1 style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(2.8rem,6.5vw,5.2rem)', lineHeight:1.0, letterSpacing:'-.02em', marginBottom:24, animation:'fadeUp .6s .1s ease both', opacity:0, animationFillMode:'forwards' }}>
               Live more.<br /><span style={{ background:'linear-gradient(100deg, transparent 0%, var(--highlight) 6%, var(--highlight) 94%, transparent 100%)', padding:'0 0.18em', borderRadius:12, WebkitBoxDecorationBreak:'clone', boxDecorationBreak:'clone' }}>stress less.</span>
             </h1>
             <p style={{ fontSize:'clamp(.95rem,1.8vw,1.2rem)', color:'#5f5970', lineHeight:1.75, maxWidth:520, marginBottom:36, animation:'fadeUp .6s .2s ease both', opacity:0, animationFillMode:'forwards' }}>
-              ReLiv connects Rhodes University students. Post a task, earn money, or get things done — all with escrow-protected payments and verified student trust scores.
+              ReLivR connects students. Post a task, earn money, or get things done — with verified student trust scores. Secure escrow payments (recurring, split &amp; more) are coming soon.
             </p>
             <div style={{ display:'flex', gap:12, flexWrap:'wrap', animation:'fadeUp .6s .3s ease both', opacity:0, animationFillMode:'forwards' }}>
               <button className="btn-p" style={{ fontSize:'.95rem', padding:'14px 30px' }} onClick={() => onOpenAuth('register')}>Post a Task Free →</button>
@@ -1158,7 +1171,7 @@ function Pricing({ onOpenAuth }) {
             <div style={{ fontFamily:'var(--fd)', fontSize:'3rem', fontWeight:800, lineHeight:1, marginBottom:5 }}>Free</div>
             <p style={{ color:'#6d6678', fontSize:'.875rem', marginBottom:24 }}>to post a task</p>
             <Divider style={{ marginBottom:20 }} />
-            {['Post unlimited tasks','Receive unlimited bids','Built-in messaging','Escrow payment protection','Dispute resolution support'].map(item => (
+            {['Post unlimited tasks','Receive unlimited bids','Built-in messaging','Escrow payments — coming soon','Dispute resolution support'].map(item => (
               <div key={item} style={{ display:'flex', gap:9, alignItems:'center', marginBottom:10 }}>
                 <span style={{ color:'var(--green)', fontSize:'.875rem', flexShrink:0 }}>✓</span>
                 <span style={{ fontSize:'.875rem', color:'#454050' }}>{item}</span>
@@ -1170,12 +1183,12 @@ function Pricing({ onOpenAuth }) {
             <div style={{ position:'absolute', top:-11, left:'50%', transform:'translateX(-50%)', background:'var(--amber)', color:'#fff', fontFamily:'var(--fm)', fontSize:'.58rem', fontWeight:500, textTransform:'uppercase', letterSpacing:'.1em', padding:'3px 12px', borderRadius:100 }}>Most Popular</div>
             <div style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:16 }}>For Earners</div>
             <div style={{ display:'flex', alignItems:'baseline', gap:5, marginBottom:5 }}>
-              <span style={{ fontFamily:'var(--fd)', fontSize:'3rem', fontWeight:800, lineHeight:1 }}>10%</span>
-              <span style={{ color:'#6d6678', fontSize:'.875rem' }}>per completed task</span>
+              <span style={{ fontFamily:'var(--fd)', fontSize:'3rem', fontWeight:800, lineHeight:1 }}>Free</span>
+              <span style={{ color:'#6d6678', fontSize:'.875rem' }}>during beta</span>
             </div>
-            <p style={{ color:'#6d6678', fontSize:'.875rem', marginBottom:24 }}>only when you get paid</p>
+            <p style={{ color:'#6d6678', fontSize:'.875rem', marginBottom:24 }}>secure payouts coming soon</p>
             <Divider style={{ marginBottom:20 }} />
-            {['Bid on any open task','Verified student trust score','Stripe-powered instant payouts','Build a campus reputation','Zero upfront cost'].map(item => (
+            {['Bid on any open task','Verified student trust score','Instant escrow payouts — coming soon','Build a campus reputation','Zero upfront cost'].map(item => (
               <div key={item} style={{ display:'flex', gap:9, alignItems:'center', marginBottom:10 }}>
                 <span style={{ color:'var(--amber)', fontSize:'.875rem', flexShrink:0 }}>✓</span>
                 <span style={{ fontSize:'.875rem', color:'#454050' }}>{item}</span>
@@ -1223,9 +1236,9 @@ function LandingAbout() {
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
         <div className="about-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:72, alignItems:'center' }}>
           <div>
-            <div className="slabel" style={{ marginBottom:18 }}>About ReLiv</div>
+            <div className="slabel" style={{ marginBottom:18 }}>About ReLivR</div>
             <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.6rem)', fontWeight:800, lineHeight:1.1, marginBottom:22 }}>Built for students,<br />by students.</h2>
-            <p style={{ color:'#665f72', lineHeight:1.8, marginBottom:18, fontSize:'.9rem' }}>ReLiv started with a simple observation: Rhodes University has thousands of talented students who need extra income, and thousands more who need help getting things done. We built the infrastructure to connect them safely.</p>
+            <p style={{ color:'#665f72', lineHeight:1.8, marginBottom:18, fontSize:'.9rem' }}>ReLivR started with a simple observation: Rhodes University has thousands of talented students who need extra income, and thousands more who need help getting things done. We built the infrastructure to connect them safely.</p>
             <p style={{ color:'#665f72', lineHeight:1.8, fontSize:'.9rem' }}>Every feature — from the escrow payment system to the trust score engine — was designed with one campus in mind. No bloat. Just a fast, safe marketplace that works.</p>
           </div>
           <div style={{ background:'var(--bg-base)', border:'1px solid var(--border)', borderRadius:14, padding:26, fontFamily:'var(--fm)', fontSize:'.78rem', lineHeight:2, color:'#7c7585' }}>
@@ -1246,6 +1259,143 @@ function LandingAbout() {
         </div>
       </div>
     </section>
+  )
+}
+
+// Beta strip shown above the landing nav.
+// Live countdown to the full launch.
+function Countdown({ target, onComplete }) {
+  const [left, setLeft] = useState(() => Math.max(0, new Date(target) - Date.now()))
+  useEffect(() => {
+    const id = setInterval(() => {
+      const ms = Math.max(0, new Date(target) - Date.now())
+      setLeft(ms)
+      if (ms === 0 && onComplete) { clearInterval(id); onComplete() }
+    }, 1000)
+    return () => clearInterval(id)
+  }, [target, onComplete])
+  const d = Math.floor(left / 86400000), h = Math.floor(left / 3600000) % 24
+  const m = Math.floor(left / 60000) % 60, s = Math.floor(left / 1000) % 60
+  const Cell = ({ n, l }) => (
+    <div style={{ textAlign:'center', minWidth:74, padding:'16px 12px', borderRadius:16, background:'var(--bg-elevated)', border:'1px solid var(--border)', boxShadow:'0 4px 16px rgba(20,18,30,.05)' }}>
+      <div style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(1.9rem,6vw,2.6rem)', lineHeight:1, color:'var(--amber)', fontVariantNumeric:'tabular-nums' }}>{String(n).padStart(2, '0')}</div>
+      <div style={{ fontFamily:'var(--fm)', fontSize:'.58rem', textTransform:'uppercase', letterSpacing:'.14em', color:'var(--text-muted)', marginTop:8 }}>{l}</div>
+    </div>
+  )
+  return (
+    <div style={{ display:'flex', gap:14, justifyContent:'center', flexWrap:'wrap' }} role="timer" aria-label={`${d} days until launch`}>
+      <Cell n={d} l="days" /><Cell n={h} l="hours" /><Cell n={m} l="mins" /><Cell n={s} l="secs" />
+    </div>
+  )
+}
+
+// Launch countdown + reminder waitlist.
+function LaunchSection() {
+  const [email, setEmail]     = useState('')
+  const [done, setDone]       = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [err, setErr]         = useState('')
+  async function submit(e) {
+    e.preventDefault()
+    if (!/.+@.+\..+/.test(email)) { setErr('Enter a valid email'); return }
+    setLoading(true); setErr('')
+    try {
+      const res = await fetch(API_BASE + '/waitlist', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ email }) })
+      if (!res.ok) throw new Error()
+      setDone(true)
+    } catch { setErr('Something went wrong — please try again') } finally { setLoading(false) }
+  }
+  return (
+    <section style={{ padding:'56px 24px', textAlign:'center', background:'var(--bg-surface)', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)' }}>
+      <div style={{ maxWidth:680, margin:'0 auto' }}>
+        <div className="slabel" style={{ justifyContent:'center', marginBottom:14 }}>Full launch · 7 July 2026</div>
+        <h2 style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(1.6rem,4vw,2.4rem)', marginBottom:22 }}>The countdown is on</h2>
+        <div style={{ marginBottom:26 }}><Countdown target={LAUNCH_AT} /></div>
+        <p style={{ color:'#5f5970', marginBottom:20, lineHeight:1.7 }}>
+          We're in <strong>beta</strong> now — sign up to use ReLivR today as a founding member, or drop your email and we'll remind you the moment we fully launch.
+        </p>
+        {done ? (
+          <div style={{ color:'var(--green)', fontWeight:600 }}>✓ You're on the list — we'll email you when ReLivR launches.</div>
+        ) : (
+          <form onSubmit={submit} style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'center' }}>
+            <input type="email" value={email} onChange={e=>{ setEmail(e.target.value); setErr('') }} placeholder="you@email.com" aria-label="Email for launch reminder"
+              style={{ maxWidth:280, padding:'12px 16px', borderRadius:10, border:'1px solid var(--border-strong)', background:'var(--bg-elevated)' }} />
+            <button type="submit" className="btn-p" disabled={loading}>{loading ? '…' : 'Remind me at launch'}</button>
+            {err && <div style={{ width:'100%', color:'var(--red)', fontSize:'.8rem' }}>{err}</div>}
+          </form>
+        )}
+      </div>
+    </section>
+  )
+}
+
+// Beta feedback channel.
+function FeedbackSection() {
+  const [msg, setMsg]     = useState('')
+  const [email, setEmail] = useState('')
+  const [done, setDone]   = useState(false)
+  const [loading, setLoading] = useState(false)
+  async function submit(e) {
+    e.preventDefault()
+    if (msg.trim().length < 3) return
+    setLoading(true)
+    try {
+      const res = await fetch(API_BASE + '/feedback', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ message: msg.trim(), email: email.trim() || undefined }) })
+      if (res.ok) setDone(true)
+    } catch { /* ignore */ } finally { setLoading(false) }
+  }
+  return (
+    <section id="feedback" style={{ padding:'64px 24px' }}>
+      <div style={{ maxWidth:560, margin:'0 auto', textAlign:'center' }}>
+        <div className="slabel" style={{ justifyContent:'center', marginBottom:14 }}>Beta feedback</div>
+        <h2 style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(1.6rem,4vw,2.4rem)', marginBottom:12 }}>Help us shape ReLivR</h2>
+        <p style={{ color:'#5f5970', marginBottom:24, lineHeight:1.7 }}>
+          We're building in the open during our beta, and <strong>any and all feedback is greatly appreciated</strong>. Found a bug, have an idea, or just want to say hi? Tell us.
+        </p>
+        {done ? (
+          <div style={{ color:'var(--green)', fontWeight:600 }}>✓ Thank you — your feedback means a lot during our beta.</div>
+        ) : (
+          <form onSubmit={submit} style={{ display:'flex', flexDirection:'column', gap:12, textAlign:'left' }}>
+            <textarea value={msg} onChange={e=>setMsg(e.target.value)} placeholder="Your feedback…" required aria-label="Your feedback"
+              style={{ minHeight:120, padding:'12px 14px', borderRadius:10, border:'1px solid var(--border-strong)', background:'var(--bg-elevated)' }} />
+            <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email (optional — if you'd like a reply)" aria-label="Your email, optional"
+              style={{ padding:'12px 14px', borderRadius:10, border:'1px solid var(--border-strong)', background:'var(--bg-elevated)' }} />
+            <button type="submit" className="btn-p" disabled={loading} style={{ alignSelf:'center' }}>{loading ? 'Sending…' : 'Send feedback'}</button>
+          </form>
+        )}
+      </div>
+    </section>
+  )
+}
+
+// Holding screen shown to signed-in non-admin users before the launch date.
+// The app itself is locked until the countdown ends; this confirms their spot
+// as a founding member and auto-reloads into the app the moment we launch.
+function LaunchGate({ user, onLogout, onViewLanding }) {
+  return (
+    <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', textAlign:'center', padding:'48px 24px', background:'var(--bg-base)', position:'relative', overflow:'hidden' }}>
+      <div style={{ position:'absolute', top:'-10%', left:'50%', transform:'translateX(-50%)', width:760, height:420, background:'radial-gradient(ellipse,rgba(245,158,11,.10) 0%,transparent 70%)', pointerEvents:'none' }} />
+      <div style={{ position:'relative', zIndex:1, maxWidth:620, width:'100%' }}>
+        <div style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'6px 14px', borderRadius:999, background:'var(--amber)', color:'#fff', fontFamily:'var(--fm)', fontSize:'.62rem', textTransform:'uppercase', letterSpacing:'.14em', fontWeight:700, marginBottom:26 }}>
+          ★ Founding Member
+        </div>
+        <h1 style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(2rem,5vw,3.2rem)', lineHeight:1.05, letterSpacing:'-.02em', marginBottom:16 }}>
+          You're in, {user.displayName?.split(' ')[0] || 'friend'}.
+        </h1>
+        <p style={{ color:'#5f5970', fontSize:'1.05rem', lineHeight:1.7, marginBottom:34, maxWidth:520, marginLeft:'auto', marginRight:'auto' }}>
+          ReLivR opens to everyone on <strong>7 July 2026</strong>. Your account is reserved
+          and you'll wear the <strong>★ Founding Member</strong> badge for being here from day one.
+          We'll email you the moment the doors open — this page unlocks into the app automatically.
+        </p>
+        <div style={{ marginBottom:36 }}>
+          <Countdown target={LAUNCH_AT} onComplete={() => window.location.reload()} />
+        </div>
+        <div style={{ display:'flex', gap:10, justifyContent:'center', flexWrap:'wrap' }}>
+          <button className="btn-s" onClick={onViewLanding}>← Back to site</button>
+          <button className="btn-g" onClick={onLogout}>Sign out</button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -1341,11 +1491,11 @@ function HowItWorksPage({ onNav }) {
     { id:'disputes',  label:'Disputes' },
   ]
   return (
-    <SidebarPage title="How ReLiv Works" subtitle="Product" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>Overview</h2><p>ReLiv is a peer-to-peer service marketplace designed exclusively for Rhodes University students. It connects people who need tasks done (Creators) with people who have the skills to do them (Earners).</p><div className="highlight"><p>🎓 ReLiv is a Rhodes-first platform. Linking your university SSO boosts your trust score significantly.</p></div></div>
+    <SidebarPage title="How ReLivR Works" subtitle="Product" sections={sections} onNav={onNav}>
+      <div id="overview"><h2>Overview</h2><p>ReLivR is a peer-to-peer service marketplace designed exclusively for Rhodes University students. It connects people who need tasks done (Creators) with people who have the skills to do them (Earners).</p><div className="highlight"><p>🎓 ReLivR is a Rhodes-first platform. Linking your university SSO boosts your trust score significantly.</p></div></div>
       <div id="creators"><h2>For Creators</h2><h3>Posting a Task</h3><p>Creating a task takes less than 60 seconds. Provide a title, description, budget, deadline, and skill tags. Once posted, your task is immediately visible and earners with matching skills are notified automatically.</p><h3>Reviewing Bids</h3><p>Earners submit bids with a proposed price and pitch. You can review all bids, message earners directly, and take as long as you need before accepting.</p><h3>Accepting a Bid</h3><p>When you accept a bid, all other bids are automatically declined and the winning earner is notified. You are then prompted to fund the escrow — this secures the payment without charging you yet.</p><h3>Releasing Payment</h3><p>Once the task is complete to your satisfaction, you release the payment. Funds transfer immediately to the earner's account. You are then prompted to leave a review.</p></div>
       <div id="earners"><h2>For Earners</h2><h3>Finding Tasks</h3><p>Browse the task feed by skill, keyword, or campus zone. The Suggestions tab surfaces tasks specifically matched to your skill profile using our Jaccard similarity algorithm.</p><h3>Submitting a Bid</h3><p>Write a pitch explaining why you're the right person for the task and propose your price. You can bid on multiple tasks simultaneously and withdraw a bid at any time before it's accepted.</p><h3>Getting Paid</h3><p>Payments are processed via Stripe Connect and deposited directly to your linked bank account. The platform retains a 10% fee from your payout on each completed task.</p></div>
-      <div id="payments"><h2>Payments & Escrow</h2><p>ReLiv uses an escrow model to protect both parties:</p><ul><li>Creator funds escrow → Stripe holds the money (no transfer yet)</li><li>Work is completed → Creator releases payment</li><li>Stripe captures the payment → Transfers to earner minus 10% platform fee</li><li>If disputed → Escrow is frozen until admin resolves it</li></ul><div className="highlight"><p>Your card is authorised but not charged until you release payment. If you raise a dispute before releasing, no charge is made.</p></div></div>
+      <div id="payments"><h2>Payments & Escrow</h2><p>ReLivR uses an escrow model to protect both parties:</p><ul><li>Creator funds escrow → Stripe holds the money (no transfer yet)</li><li>Work is completed → Creator releases payment</li><li>Stripe captures the payment → Transfers to earner minus 10% platform fee</li><li>If disputed → Escrow is frozen until admin resolves it</li></ul><div className="highlight"><p>Your card is authorised but not charged until you release payment. If you raise a dispute before releasing, no charge is made.</p></div></div>
       <div id="messaging"><h2>Messaging</h2><p>Every task has a built-in messaging thread between the creator and the accepted earner. Messages are stored and visible to admin in the event of a dispute — so keep communication professional and on-platform.</p></div>
       <div id="disputes"><h2>Disputes</h2><p>If something goes wrong, either party can raise a dispute. This immediately freezes the escrow and notifies our admin team. The admin reviews all messages, task requirements, and evidence submitted, then decides to either refund the creator or release payment to the earner.</p></div>
     </SidebarPage>
@@ -1363,7 +1513,7 @@ function FeaturesPage({ onNav }) {
   ]
   return (
     <SidebarPage title="Platform Features" subtitle="Product" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>All Features</h2><p>ReLiv is built with a focused feature set designed around the realities of campus life. Everything was chosen because it solves a real problem for students.</p></div>
+      <div id="overview"><h2>All Features</h2><p>ReLivR is built with a focused feature set designed around the realities of campus life. Everything was chosen because it solves a real problem for students.</p></div>
       <div id="matching"><h2>Smart Matching Engine</h2><p>When a task is posted, our matching engine automatically identifies earners whose skill profiles overlap with the task's skill tags using Jaccard similarity scoring. Earners are ranked by skill overlap score, average rating bonus (up to +20% for 5-star earners), and account longevity.</p></div>
       <div id="trust"><h2>Trust Score System</h2><p>Every user has a trust score between 0 and 100, calculated from:</p><ul><li><strong style={{color:'#3b3548'}}>Identity (40pts)</strong> — Rhodes SSO link (30pts) + verified email (10pts)</li><li><strong style={{color:'#3b3548'}}>Track record (40pts)</strong> — completed tasks (up to 20pts) + average rating (up to 20pts)</li><li><strong style={{color:'#3b3548'}}>Longevity (20pts)</strong> — 5 points per month, capped at 20</li><li><strong style={{color:'#3b3548'}}>Dispute penalty</strong> — -10pts per dispute raised against you</li></ul><div className="highlight"><p>Levels: Unverified (0–19) · New (20–49) · Established (50–79) · Verified (80–100)</p></div></div>
       <div id="escrow"><h2>Escrow System</h2><p>Our escrow is built on Stripe's PaymentIntent API with manual capture. Funds are authorised on the creator's card when escrow is funded, but no actual charge occurs until the creator releases payment. The 10% platform fee is deducted from the earner's payout, not added to the creator's charge.</p></div>
@@ -1383,9 +1533,9 @@ function PricingPage({ onNav, onOpenAuth }) {
   ]
   return (
     <SidebarPage title="Pricing" subtitle="Product" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>Pricing Overview</h2><p>ReLiv uses a simple success-based pricing model. We make money only when transactions succeed — aligning our incentives with yours.</p><div className="highlight"><p>No monthly fees. No posting fees. No signup fees. 10% is deducted from the earner's payout on each completed task.</p></div></div>
+      <div id="overview"><h2>Pricing Overview</h2><p>ReLivR uses a simple success-based pricing model. We make money only when transactions succeed — aligning our incentives with yours.</p><div className="highlight"><p>No monthly fees. No posting fees. No signup fees. 10% is deducted from the earner's payout on each completed task.</p></div></div>
       <div id="creators"><h2>For Creators</h2><p>Posting tasks is completely free. You only pay the agreed task price when you release payment after the work is complete. There are no additional fees charged to creators beyond the agreed task price.</p></div>
-      <div id="earners"><h2>For Earners</h2><p>Bidding and winning tasks is free. When a task is completed and payment is released, ReLiv retains 10% of the task value as a platform fee. Example: You win a R500 task. When the creator releases payment, you receive R450. ReLiv retains R50.</p></div>
+      <div id="earners"><h2>For Earners</h2><p>Bidding and winning tasks is free. When a task is completed and payment is released, ReLivR retains 10% of the task value as a platform fee. Example: You win a R500 task. When the creator releases payment, you receive R450. ReLivR retains R50.</p></div>
       <div id="fees"><h2>Fee Breakdown</h2>
         <table><thead><tr><th>Action</th><th>Creator</th><th>Earner</th></tr></thead><tbody>
           {[['Post a task','Free','—'],['Submit a bid','—','Free'],['Task completed','Task price','Task price minus 10%'],['Dispute raised','Free','Free'],['Refund (dispute)','Full refund','No payout']].map(([a,c,e]) => (
@@ -1393,7 +1543,7 @@ function PricingPage({ onNav, onOpenAuth }) {
           ))}
         </tbody></table>
       </div>
-      <div id="faq"><h2>Frequently Asked Questions</h2><h3>What if a dispute is raised?</h3><p>If resolved in the creator's favour, escrow is cancelled and no charge is made. If resolved in the earner's favour, payment is released as normal minus the 10% platform fee.</p><h3>Are there VAT implications?</h3><p>ReLiv is not currently VAT registered. Earners are responsible for declaring their earnings to SARS as individual income.</p><h3>Can prices be negotiated outside the platform?</h3><p>All transactions must go through ReLiv's escrow system. Off-platform payments are not covered by our trust or dispute protection.</p></div>
+      <div id="faq"><h2>Frequently Asked Questions</h2><h3>What if a dispute is raised?</h3><p>If resolved in the creator's favour, escrow is cancelled and no charge is made. If resolved in the earner's favour, payment is released as normal minus the 10% platform fee.</p><h3>Are there VAT implications?</h3><p>ReLivR is not currently VAT registered. Earners are responsible for declaring their earnings to SARS as individual income.</p><h3>Can prices be negotiated outside the platform?</h3><p>All transactions must go through ReLivR's escrow system. Off-platform payments are not covered by our trust or dispute protection.</p></div>
     </SidebarPage>
   )
 }
@@ -1409,10 +1559,10 @@ function TrustSafetyPage({ onNav }) {
   ]
   return (
     <SidebarPage title="Trust & Safety" subtitle="Product" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>Our Commitment to Safety</h2><p>ReLiv is built on the principle that two students from the same campus should be able to transact with confidence. Every feature exists to make that possible.</p><div className="highlight"><p>🔒 All payments are held in escrow and never leave the platform until both parties are satisfied — or an admin resolves a dispute.</p></div></div>
+      <div id="overview"><h2>Our Commitment to Safety</h2><p>ReLivR is built on the principle that two students from the same campus should be able to transact with confidence. Every feature exists to make that possible.</p><div className="highlight"><p>🔒 All payments are held in escrow and never leave the platform until both parties are satisfied — or an admin resolves a dispute.</p></div></div>
       <div id="trust-scores"><h2>Trust Scores</h2><p>Every user has a visible trust score calculated from verifiable signals: verified identity, completed transactions, earned ratings, and account history. A high trust score is not a guarantee of quality, but it is a meaningful signal that a user has a real, verified identity and a track record on the platform.</p></div>
       <div id="verification"><h2>Identity Verification</h2><p>To reach the highest trust tier, users must link their Rhodes University account (SSO). This verifies that the user is a current or recent Rhodes student and prevents anonymous bad-faith users from accumulating trust.</p></div>
-      <div id="escrow"><h2>Payment Safety</h2><p>ReLiv never holds your money — it is held by Stripe, one of the world's most trusted payment processors (PCI DSS Level 1 certified). Your card details are never stored by ReLiv.</p></div>
+      <div id="escrow"><h2>Payment Safety</h2><p>ReLivR never holds your money — it is held by Stripe, one of the world's most trusted payment processors (PCI DSS Level 1 certified). Your card details are never stored by ReLivR.</p></div>
       <div id="reporting"><h2>Reporting Issues</h2><p>If you encounter a problem:</p><ul><li><strong style={{color:'#3b3548'}}>Raise a dispute</strong> — for unresolved task delivery issues. Freezes escrow immediately.</li><li><strong style={{color:'#3b3548'}}>Report a user</strong> — for conduct violations, harassment, or fraud.</li><li><strong style={{color:'#3b3548'}}>Contact support</strong> — for account issues or technical problems.</li></ul></div>
       <div id="prohibited"><h2>Prohibited Conduct</h2><p>The following result in immediate account suspension:</p><ul><li>Off-platform payment requests or arrangements</li><li>Creating fake reviews or inflating trust scores</li><li>Harassment, threats, or discriminatory language</li><li>Posting tasks or services that are illegal under South African law</li><li>Academic dishonesty services</li></ul></div>
     </SidebarPage>
@@ -1436,13 +1586,13 @@ function TermsPage({ onNav }) {
   return (
     <SidebarPage title="Terms of Service" subtitle="Legal" sections={sections} onNav={onNav}>
       <p style={{ color:'var(--text-muted)', fontFamily:'var(--fm)', fontSize:'.62rem', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:24 }}>Last updated: 1 January 2025</p>
-      <div id="intro"><h2>1. Introduction</h2><p>These Terms of Service govern your access to and use of the ReLiv platform, operated by ReLiv (PTY) Ltd, registered in the Republic of South Africa. By creating an account or using the Platform, you agree to be bound by these Terms.</p></div>
-      <div id="eligibility"><h2>2. Eligibility</h2><p>To use ReLiv you must be at least 18 years of age (or 16 with parental consent), be a current or recently enrolled student, staff member, or affiliate of Rhodes University, and have the legal capacity to enter into binding agreements under South African law.</p></div>
+      <div id="intro"><h2>1. Introduction</h2><p>These Terms of Service govern your access to and use of the ReLivR platform, operated by ReLivR (PTY) Ltd, registered in the Republic of South Africa. By creating an account or using the Platform, you agree to be bound by these Terms.</p></div>
+      <div id="eligibility"><h2>2. Eligibility</h2><p>To use ReLivR you must be at least 18 years of age (or 16 with parental consent), be a current or recently enrolled student, staff member, or affiliate of Rhodes University, and have the legal capacity to enter into binding agreements under South African law.</p></div>
       <div id="accounts"><h2>3. Accounts</h2><p>You are responsible for maintaining the confidentiality of your account credentials. You may only create one account per person. You agree to provide accurate, current, and complete information at registration and to keep this information updated.</p></div>
-      <div id="tasks"><h2>4. Tasks and Bids</h2><p>ReLiv is a technology platform. We do not employ earners, control the quality of services rendered, or are a party to any agreement between a creator and an earner. All transactions must occur through the Platform's escrow system.</p></div>
-      <div id="payments"><h2>5. Payments</h2><p>Payment processing is handled by Stripe. ReLiv charges a 10% platform fee deducted from the earner's payout on each completed transaction. No fees are charged to creators beyond the agreed task price.</p></div>
+      <div id="tasks"><h2>4. Tasks and Bids</h2><p>ReLivR is a technology platform. We do not employ earners, control the quality of services rendered, or are a party to any agreement between a creator and an earner. All transactions must occur through the Platform's escrow system.</p></div>
+      <div id="payments"><h2>5. Payments</h2><p>Payment processing is handled by Stripe. ReLivR charges a 10% platform fee deducted from the earner's payout on each completed transaction. No fees are charged to creators beyond the agreed task price.</p></div>
       <div id="prohibited"><h2>6. Prohibited Use</h2><p>You agree not to use the Platform to post or fulfil services illegal under South African law, facilitate academic dishonesty, harass or threaten any user, create fake reviews, circumvent the escrow system, or impersonate any person.</p></div>
-      <div id="liability"><h2>7. Limitation of Liability</h2><p>ReLiv's liability in connection with any transaction or dispute is limited to the platform fees collected on that specific transaction. We are not liable for the quality of services, losses arising from transactions between users, or technical failures.</p></div>
+      <div id="liability"><h2>7. Limitation of Liability</h2><p>ReLivR's liability in connection with any transaction or dispute is limited to the platform fees collected on that specific transaction. We are not liable for the quality of services, losses arising from transactions between users, or technical failures.</p></div>
       <div id="termination"><h2>8. Termination</h2><p>You may close your account at any time after resolving pending transactions. We reserve the right to suspend or terminate any account for violations of these Terms.</p></div>
       <div id="governing"><h2>9. Governing Law</h2><p>These Terms are governed by the laws of the Republic of South Africa. Any disputes shall be subject to the jurisdiction of the South African courts.</p><div className="highlight"><p>Questions? Email <a href="mailto:legal@reliv.co.za">legal@reliv.co.za</a></p></div></div>
     </SidebarPage>
@@ -1463,7 +1613,7 @@ function PrivacyPage({ onNav }) {
   return (
     <SidebarPage title="Privacy Policy" subtitle="Legal" sections={sections} onNav={onNav}>
       <p style={{ color:'var(--text-muted)', fontFamily:'var(--fm)', fontSize:'.62rem', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:24 }}>Last updated: 1 January 2025</p>
-      <div id="intro"><h2>1. Introduction</h2><p>ReLiv (PTY) Ltd is committed to protecting your personal information in accordance with the Protection of Personal Information Act 4 of 2013 (POPIA) and all other applicable South African law.</p></div>
+      <div id="intro"><h2>1. Introduction</h2><p>ReLivR (PTY) Ltd is committed to protecting your personal information in accordance with the Protection of Personal Information Act 4 of 2013 (POPIA) and all other applicable South African law.</p></div>
       <div id="collect"><h2>2. What We Collect</h2><p>We collect: name and email at registration, profile information (bio, skills, portfolio), task descriptions and messages, identity verification documents (for Stripe), IP address and device info, and transaction history.</p></div>
       <div id="use"><h2>3. How We Use It</h2><p>We use your information to operate the Platform, process transactions, calculate trust scores, send transactional notifications, resolve disputes, comply with legal obligations, and detect fraud. We do not use your information for advertising or sell it to third parties.</p></div>
       <div id="share"><h2>4. Who We Share With</h2><p>We share only with: Stripe (payment processing), Neon.tech (database hosting in EU), Vercel (frontend hosting), and law enforcement where required by law. We do not sell or share your data with advertisers.</p></div>
@@ -1486,7 +1636,7 @@ function CookiesPage({ onNav }) {
     <SidebarPage title="Cookie Policy" subtitle="Legal" sections={sections} onNav={onNav}>
       <p style={{ color:'var(--text-muted)', fontFamily:'var(--fm)', fontSize:'.62rem', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:24 }}>Last updated: 1 January 2025</p>
       <div id="what"><h2>1. What Are Cookies</h2><p>Cookies are small text files stored in your browser when you visit a website. They allow websites to remember information about your visit.</p></div>
-      <div id="use"><h2>2. How We Use Cookies</h2><p>ReLiv uses cookies to keep you logged in between sessions, remember your preferences, ensure security by detecting unusual activity, and understand how you use the Platform. We do not use cookies for advertising.</p></div>
+      <div id="use"><h2>2. How We Use Cookies</h2><p>ReLivR uses cookies to keep you logged in between sessions, remember your preferences, ensure security by detecting unusual activity, and understand how you use the Platform. We do not use cookies for advertising.</p></div>
       <div id="types"><h2>3. Types of Cookies We Use</h2><h3>Strictly Necessary</h3><p>Required for the Platform to function. Includes your authentication token (JWT). You cannot opt out of these.</p><h3>Functional</h3><p>Remember your preferences such as display settings.</p><h3>Analytics</h3><p>Help us understand how users interact with the Platform. Data is aggregated and anonymised.</p></div>
       <div id="control"><h2>4. Your Control</h2><p>You can control and delete cookies through your browser settings. Disabling strictly necessary cookies will prevent you from logging in.</p><div className="highlight"><p>Questions? Email <a href="mailto:privacy@reliv.co.za">privacy@reliv.co.za</a></p></div></div>
     </SidebarPage>
@@ -1505,11 +1655,11 @@ function POPIAPage({ onNav }) {
   return (
     <SidebarPage title="POPIA Compliance" subtitle="Legal" sections={sections} onNav={onNav}>
       <p style={{ color:'var(--text-muted)', fontFamily:'var(--fm)', fontSize:'.62rem', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:24 }}>Last updated: 1 January 2025</p>
-      <div id="overview"><h2>POPIA Compliance Statement</h2><p>ReLiv (PTY) Ltd is committed to compliance with the Protection of Personal Information Act 4 of 2013 (POPIA), South Africa's primary data protection legislation.</p><div className="highlight"><p>POPIA came into full effect on 1 July 2021. It gives South Africans rights over their personal information and places obligations on organisations that process it.</p></div></div>
+      <div id="overview"><h2>POPIA Compliance Statement</h2><p>ReLivR (PTY) Ltd is committed to compliance with the Protection of Personal Information Act 4 of 2013 (POPIA), South Africa's primary data protection legislation.</p><div className="highlight"><p>POPIA came into full effect on 1 July 2021. It gives South Africans rights over their personal information and places obligations on organisations that process it.</p></div></div>
       <div id="lawful"><h2>Lawful Bases for Processing</h2><p>We process personal information on the following lawful bases: contractual necessity (to deliver Platform services), consent (for non-essential communications), legal obligation (financial record-keeping), and legitimate interests (fraud detection and Platform security).</p></div>
-      <div id="officer"><h2>Information Officer</h2><p>ReLiv has designated an Information Officer responsible for overseeing POPIA compliance. Contact: <a href="mailto:privacy@reliv.co.za">privacy@reliv.co.za</a> · Rhodes University, Makhanda, Eastern Cape, 6140.</p></div>
+      <div id="officer"><h2>Information Officer</h2><p>ReLivR has designated an Information Officer responsible for overseeing POPIA compliance. Contact: <a href="mailto:privacy@reliv.co.za">privacy@reliv.co.za</a> · Rhodes University, Makhanda, Eastern Cape, 6140.</p></div>
       <div id="rights"><h2>Data Subject Rights</h2><p>Under POPIA, you have the right to be notified of processing, access your information, request correction or deletion, object to processing, and lodge a complaint with the Information Regulator.</p><div className="highlight"><p>Information Regulator: <a href="https://inforeg.org.za">inforeg.org.za</a> · +27 10 023 5207 · complaints.IR@justice.gov.za</p></div></div>
-      <div id="breaches"><h2>Data Breaches</h2><p>In the event of a security breach, ReLiv will notify the Information Regulator within 72 hours of becoming aware, notify affected data subjects as soon as reasonably possible, document the breach and remedial actions, and cooperate fully with any investigation.</p></div>
+      <div id="breaches"><h2>Data Breaches</h2><p>In the event of a security breach, ReLivR will notify the Information Regulator within 72 hours of becoming aware, notify affected data subjects as soon as reasonably possible, document the breach and remedial actions, and cooperate fully with any investigation.</p></div>
       <div id="transfers"><h2>Cross-Border Data Transfers</h2><p>Some personal information is processed outside South Africa: Stripe (United States — PCI DSS Level 1), Neon.tech (EU Frankfurt — GDPR compliant), Vercel (United States — SOC 2). All transfers are governed by appropriate data processing agreements.</p></div>
     </SidebarPage>
   )
@@ -1533,7 +1683,7 @@ function HelpCentrePage({ onNav }) {
       <div id="earners"><h2>For Earners</h2><h3>How do I write a good pitch?</h3><p>Be specific. Reference the task directly, explain your relevant experience, give a realistic timeline, and be honest about your price. Generic pitches get ignored.</p><h3>How quickly do I get paid?</h3><p>Once the creator releases payment, Stripe processes the transfer. Payout timing is typically 1–3 business days for South African bank accounts.</p></div>
       <div id="payments"><h2>Payments</h2><h3>My payment failed. What do I do?</h3><p>Check your card details are correct and that you have sufficient funds. If the problem persists, try a different card or contact your bank.</p><h3>Can I get a refund if I'm not happy?</h3><p>Refunds are only processed through the dispute resolution system. Do not release payment until you are satisfied — once released we cannot reverse the transfer.</p></div>
       <div id="account"><h2>My Account</h2><h3>How do I change my password?</h3><p>Go to Profile → Security → Change Password. You will need your current password to set a new one.</p><h3>How do I delete my account?</h3><p>Go to Profile → Security → Delete Account. Pending transactions must be resolved before deletion.</p></div>
-      <div id="technical"><h2>Technical Issues</h2><h3>The app doesn't work on my phone.</h3><p>ReLiv is designed to work on all modern mobile browsers. Try Chrome on Android or Safari on iOS. If the problem persists, please report it.</p><div className="highlight"><p>Still stuck? Email <a href="mailto:support@reliv.co.za">support@reliv.co.za</a> — we respond within 24 hours.</p></div></div>
+      <div id="technical"><h2>Technical Issues</h2><h3>The app doesn't work on my phone.</h3><p>ReLivR is designed to work on all modern mobile browsers. Try Chrome on Android or Safari on iOS. If the problem persists, please report it.</p><div className="highlight"><p>Still stuck? Email <a href="mailto:support@reliv.co.za">support@reliv.co.za</a> — we respond within 24 hours.</p></div></div>
     </SidebarPage>
   )
 }
@@ -1614,8 +1764,8 @@ function GuidelinesPage({ onNav }) {
   ]
   return (
     <SidebarPage title="Community Guidelines" subtitle="Support" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>Our Community Standards</h2><p>ReLiv works because students trust each other. These guidelines exist to protect that trust and ensure the platform remains a safe, fair place for everyone on campus.</p></div>
-      <div id="respect"><h2>Respect</h2><p>Every person on ReLiv is a member of the Rhodes community. Treat them accordingly.</p><ul><li>Communicate professionally, even when disagreements arise</li><li>No harassment, threats, hate speech, or discriminatory language</li><li>Respect boundaries — if someone withdraws from a transaction, accept it</li><li>Do not share other users' personal information outside the platform</li></ul></div>
+      <div id="overview"><h2>Our Community Standards</h2><p>ReLivR works because students trust each other. These guidelines exist to protect that trust and ensure the platform remains a safe, fair place for everyone on campus.</p></div>
+      <div id="respect"><h2>Respect</h2><p>Every person on ReLivR is a member of the Rhodes community. Treat them accordingly.</p><ul><li>Communicate professionally, even when disagreements arise</li><li>No harassment, threats, hate speech, or discriminatory language</li><li>Respect boundaries — if someone withdraws from a transaction, accept it</li><li>Do not share other users' personal information outside the platform</li></ul></div>
       <div id="honesty"><h2>Honesty</h2><ul><li>Represent your skills and experience accurately</li><li>Describe tasks accurately — do not misrepresent scope or requirements</li><li>Do not create fake reviews or manipulate trust scores</li><li>Do not impersonate other users or create multiple accounts</li></ul></div>
       <div id="tasks"><h2>Acceptable Tasks</h2><p>Not permitted:</p><ul><li>Anything illegal under South African law</li><li>Academic dishonesty — writing essays for submission as original work</li><li>Adult or sexual content of any kind</li><li>Services designed to harm or harass an individual</li></ul><p>Tutoring, explaining concepts, proofreading with attribution, and study assistance are acceptable.</p></div>
       <div id="payments"><h2>Payment Integrity</h2><ul><li>All payments must go through the escrow system</li><li>Do not release payment if the work is not completed to the agreed standard</li><li>Do not raise frivolous disputes to delay payment</li></ul></div>
@@ -1685,7 +1835,7 @@ function ConsentGate({ onConsented, onDecline, onViewPrivacy }) {
     if (!checked) { toast('Please tick the box to continue', 'error'); return }
     setSaving(true)
     try {
-      const res = await fetch('/auth/consent', {
+      const res = await fetch(API_BASE + '/auth/consent', {
         method: 'POST',
         headers: { Authorization: `Bearer ${localStorage.getItem('rl_token')}` },
       })
@@ -1818,7 +1968,7 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch 
   // wide enough to fit them, so navigation never depends on the mobile bottom bar.
   const isAdmin = user.role === 'admin'
   const navLinks = isAdmin
-    ? [ { id:'dashboard', label:'Dashboard' }, { id:'admin-disputes', label:'Disputes' }, { id:'admin-users', label:'Users' }, { id:'admin-businesses', label:'Businesses' } ]
+    ? [ { id:'dashboard', label:'Dashboard' }, { id:'admin-disputes', label:'Disputes' }, { id:'admin-users', label:'Users' }, { id:'admin-businesses', label:'Businesses' }, { id:'admin-locations', label:'Locations' }, { id:'admin-flags', label:'Flags' } ]
     : [
         { id:'tasks-browse', label:'Browse' },
         { id:'local-browse', label:'Local' },
@@ -1924,7 +2074,7 @@ function DashSidebar({ page, setPage, unreadCount, onGoHome }) {
       <div className="sidebar-logo" style={{ display:'flex', alignItems:'center', gap:10, marginBottom:24 }}>
         <div onClick={onGoHome} style={{ display:'flex', alignItems:'center', gap:9, cursor:'pointer' }}>
           <div style={{ background:'var(--accent)', color:'#fff', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'0.85rem', padding:'4px 8px', borderRadius:'var(--radius-sm)', letterSpacing:'0.06em' }}>R</div>
-          <span style={{ fontFamily:'var(--font-display)', fontSize:'1.05rem', fontWeight:700, letterSpacing:'-0.01em' }}>ReLiv</span>
+          <span style={{ fontFamily:'var(--font-display)', fontSize:'1.05rem', fontWeight:700, letterSpacing:'-0.01em' }}>ReLivR</span>
         </div>
       </div>
       <div className="sidebar-status" style={{ display:'flex', alignItems:'center', gap:6, fontFamily:'var(--font-mono)', fontSize:'0.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:20 }}>
@@ -2075,7 +2225,7 @@ function useCategories() {
   const [cats, setCats] = useState(CATEGORIES)
   useEffect(() => {
     let alive = true
-    fetch('/categories')
+    fetch(API_BASE + '/categories')
       .then(r => (r.ok ? r.json() : Promise.reject(new Error('categories fetch failed'))))
       .then(d => { if (alive && d.categories?.length) setCats(d.categories) })
       .catch(() => { /* keep the fallback */ })
@@ -2113,7 +2263,7 @@ function TaskBrowse({ setPage, setSelectedTask }) {
   async function loadTasks() {
     try {
       // Pull a broad set; filtering/sorting happens client-side below
-      const res = await fetch('/tasks?status=open&limit=100', { headers: { Authorization: `Bearer ${token()}` } })
+      const res = await fetch(API_BASE + '/tasks?status=open&limit=100', { headers: { Authorization: `Bearer ${token()}` } })
       if (!res.ok) throw new Error('failed')
       const data = await res.json()
       // Normalise: ensure skill_tags is always an array
@@ -2248,7 +2398,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
   async function saveEdit() {
     setEditSaving(true)
     try {
-      const res = await fetch(`/tasks/${taskId}`, {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
         body: JSON.stringify({
@@ -2269,7 +2419,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
     if (!window.confirm('Cancel this task? Any pending bids will be declined. This cannot be undone.')) return
     setCancelling(true)
     try {
-      const res = await fetch(`/tasks/${taskId}/cancel`, {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}/cancel`, {
         method: 'PATCH', headers: { Authorization: `Bearer ${token()}` },
       })
       const data = await res.json().catch(() => ({}))
@@ -2281,7 +2431,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
 
   async function loadTask({ silent = false } = {}) {
     try {
-      const res = await fetch(`/tasks/${taskId}`, { headers: { Authorization: `Bearer ${token()}` } })
+      const res = await fetch(`${API_BASE}/tasks/${taskId}`, { headers: { Authorization: `Bearer ${token()}` } })
       if (!res.ok) throw new Error('failed')
       const data = await res.json()
       setTask({ ...data.task, skill_tags: data.task.skill_tags || [] })
@@ -2341,7 +2491,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
     if (Object.keys(errs).length) { setBidErrors(errs); return }
     setBidErrors({}); setBidLoading(true)
     try {
-      const res = await fetch(`/tasks/${taskId}/bids`, {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}/bids`, {
         method:'POST',
         headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
         body: JSON.stringify({ amount: parseFloat(bidAmount), pitch: bidPitch.trim() }),
@@ -2361,7 +2511,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
   async function confirmAccept() {
     setAcceptLoading(true)
     try {
-      const res = await fetch(`/tasks/${taskId}/bids/${acceptModal.bid_id}/accept`, {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}/bids/${acceptModal.bid_id}/accept`, {
         method:'PATCH',
         headers:{ Authorization:`Bearer ${token()}` },
       })
@@ -2389,7 +2539,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
   async function confirmComplete() {
     setReleaseLoading(true)
     try {
-      const res = await fetch(`/tasks/${taskId}/complete`, {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}/complete`, {
         method:'PATCH',
         headers:{ Authorization:`Bearer ${token()}` },
       })
@@ -2408,7 +2558,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
 
   async function submitWork() {
     try {
-      const res = await fetch(`/tasks/${taskId}/submit`, { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
+      const res = await fetch(`${API_BASE}/tasks/${taskId}/submit`, { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.message || 'Could not submit work')
       toast('Work submitted — the creator will review it', 'success')
@@ -2417,7 +2567,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
   }
   async function requestChanges() {
     try {
-      const res = await fetch(`/tasks/${taskId}/request-changes`, { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
+      const res = await fetch(`${API_BASE}/tasks/${taskId}/request-changes`, { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.message || 'Could not request changes')
       toast('Sent back to the earner for changes', 'success')
@@ -2441,7 +2591,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
     if (!reviewRating) { toast('Please select a star rating', 'error'); return }
     setReviewLoading(true)
     try {
-      const res = await fetch('/reviews', {
+      const res = await fetch(API_BASE + '/reviews', {
         method:'POST',
         headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
         body: JSON.stringify({ task_id: taskId, rating: reviewRating, comment: reviewComment.trim() }),
@@ -2575,7 +2725,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
           {currentStatus==='completed'&&!reviewDone&&(isOwner||(alreadyBid&&myBid.status==='accepted'))&&(
             <DCard hover={false} style={{ border:'1px solid var(--accent)', background:'var(--accent-glow)' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
-                <div><div style={{ fontWeight:600, marginBottom:4 }}>Task complete — leave a review</div><p style={{ fontSize:'0.85rem', color:'var(--text-secondary)' }}>Help build trust on ReLiv.</p></div>
+                <div><div style={{ fontWeight:600, marginBottom:4 }}>Task complete — leave a review</div><p style={{ fontSize:'0.85rem', color:'var(--text-secondary)' }}>Help build trust on ReLivR.</p></div>
                 <Btn onClick={() => setReviewModal(true)}>Leave Review</Btn>
               </div>
             </DCard>
@@ -2722,7 +2872,7 @@ function TaskNew({ setPage, setSelectedTask }) {
     setLoading(true)
     const skillTags = tags.split(',').map(s=>s.trim()).filter(Boolean)
     try {
-      const res = await fetch('/tasks', {
+      const res = await fetch(API_BASE + '/tasks', {
         method: 'POST',
         headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
         body: JSON.stringify({
@@ -2823,7 +2973,7 @@ function TemplatesPanel({ setPage, setSelectedTask }) {
 
   async function load() {
     try {
-      const res = await fetch('/templates', { headers:{ Authorization:`Bearer ${token()}` } })
+      const res = await fetch(API_BASE + '/templates', { headers:{ Authorization:`Bearer ${token()}` } })
       if (res.ok) { const d = await res.json(); setTemplates(d.templates || []) }
     } catch { /* offline */ }
   }
@@ -2832,7 +2982,7 @@ function TemplatesPanel({ setPage, setSelectedTask }) {
   async function create() {
     setSaving(true)
     try {
-      const res = await fetch('/templates', {
+      const res = await fetch(API_BASE + '/templates', {
         method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
         body: JSON.stringify({ title:form.title.trim(), description:form.description.trim(), budget:parseFloat(form.budget), deadlineDays:parseInt(form.deadlineDays,10)||7, recurrence:form.recurrence }),
       })
@@ -2843,7 +2993,7 @@ function TemplatesPanel({ setPage, setSelectedTask }) {
   }
   async function use(id) {
     try {
-      const res = await fetch(`/templates/${id}/use`, { method:'POST', headers:{ Authorization:`Bearer ${token()}` } })
+      const res = await fetch(`${API_BASE}/templates/${id}/use`, { method:'POST', headers:{ Authorization:`Bearer ${token()}` } })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(d.message || 'Could not create task')
       toast('Task created from template', 'success'); setSelectedTask(d.task.task_id); setPage('task-detail')
@@ -2851,7 +3001,7 @@ function TemplatesPanel({ setPage, setSelectedTask }) {
   }
   async function remove(id) {
     if (!window.confirm('Delete this template?')) return
-    try { const res = await fetch(`/templates/${id}`, { method:'DELETE', headers:{ Authorization:`Bearer ${token()}` } }); if (res.ok) { toast('Template deleted', 'success'); load() } } catch { /* ignore */ }
+    try { const res = await fetch(`${API_BASE}/templates/${id}`, { method:'DELETE', headers:{ Authorization:`Bearer ${token()}` } }); if (res.ok) { toast('Template deleted', 'success'); load() } } catch { /* ignore */ }
   }
 
   return (
@@ -2913,7 +3063,7 @@ function MyTasks({ setPage, setSelectedTask }) {
 
   async function load() {
     try {
-      const res = await fetch('/tasks/mine', { headers: { Authorization: `Bearer ${token()}` } })
+      const res = await fetch(API_BASE + '/tasks/mine', { headers: { Authorization: `Bearer ${token()}` } })
       if (!res.ok) throw new Error('failed')
       const data = await res.json()
       // Only tasks I created (mine returns created + assigned)
@@ -2981,7 +3131,7 @@ function MyBids({ setPage, setSelectedTask }) {
 
   async function load() {
     try {
-      const res = await fetch('/tasks/bids/mine', { headers: { Authorization: `Bearer ${token()}` } })
+      const res = await fetch(API_BASE + '/tasks/bids/mine', { headers: { Authorization: `Bearer ${token()}` } })
       if (!res.ok) throw new Error('failed')
       const data = await res.json()
       // Map backend shape → what the card expects (task info is flattened on each bid)
@@ -2998,7 +3148,7 @@ function MyBids({ setPage, setSelectedTask }) {
 
   async function withdraw(bidId) {
     try {
-      const res = await fetch(`/tasks/bids/${bidId}/withdraw`, { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
+      const res = await fetch(`${API_BASE}/tasks/bids/${bidId}/withdraw`, { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
       if (!res.ok) throw new Error('failed')
       toast('Bid withdrawn','info')
       load()
@@ -3124,7 +3274,7 @@ function Messages({ target, clearTarget }) {
   // ── Load conversation list ──────────────────────────────────────────────────
   async function loadThreads() {
     try {
-      const res = await fetch('/messages/threads', { headers: { Authorization: `Bearer ${token()}` } })
+      const res = await fetch(API_BASE + '/messages/threads', { headers: { Authorization: `Bearer ${token()}` } })
       if (!res.ok) throw new Error('threads failed')
       const data = await res.json()
       let list = data.threads || []
@@ -3158,7 +3308,7 @@ function Messages({ target, clearTarget }) {
   async function loadThread(otherId, { silent = false } = {}) {
     if (!otherId) return
     try {
-      const res = await fetch(`/messages/${otherId}`, { headers: { Authorization: `Bearer ${token()}` } })
+      const res = await fetch(`${API_BASE}/messages/${otherId}`, { headers: { Authorization: `Bearer ${token()}` } })
       if (!res.ok) throw new Error('thread failed')
       const data = await res.json()
       setMessages(data.messages || [])
@@ -3211,7 +3361,7 @@ function Messages({ target, clearTarget }) {
     setSending(true)
 
     try {
-      const res = await fetch('/messages', {
+      const res = await fetch(API_BASE + '/messages', {
         method: 'POST',
         headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
         body: JSON.stringify({ receiver_id: activeId, content: text }),
@@ -3327,7 +3477,7 @@ function Notifications({ setPage, setSelectedTask }) {
   // Load notifications from backend, fall back to store if offline
   async function load() {
     try {
-      const res = await fetch('/notifications', { headers: { Authorization: `Bearer ${token()}` } })
+      const res = await fetch(API_BASE + '/notifications', { headers: { Authorization: `Bearer ${token()}` } })
       if (!res.ok) throw new Error('failed')
       const data = await res.json()
       setNotifs(data.notifications || [])
@@ -3351,7 +3501,7 @@ function Notifications({ setPage, setSelectedTask }) {
     toast('All notifications marked as read','info')
     if (offline) { dispatch({type:'MARK_ALL_READ'}); return }
     try {
-      await fetch('/notifications/read', { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
+      await fetch(API_BASE + '/notifications/read', { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
     } catch { /* already updated optimistically */ }
   }
 
@@ -3416,7 +3566,7 @@ function useLocations() {
   const [zones, setZones] = useState(CAMPUS_ZONE_LIST)
   useEffect(() => {
     let alive = true
-    fetch('/locations')
+    fetch(API_BASE + '/locations')
       .then(r => (r.ok ? r.json() : Promise.reject(new Error('locations fetch failed'))))
       .then(data => {
         const names = (data.campuses || []).flatMap(c => (c.zones || []).map(z => z.name))
@@ -3462,7 +3612,7 @@ function LocalBrowse({ setPage }) {
     let cancelled = false
     setLoading(true)
     const q = cat === 'all' ? '' : `?category=${encodeURIComponent(cat)}`
-    fetch(`/businesses${q}`)
+    fetch(`${API_BASE}/businesses${q}`)
       .then(r => r.json())
       .then(d => { if (!cancelled) { setBusinesses(d.businesses || []); setLoading(false) } })
       .catch(() => { if (!cancelled) { setBusinesses([]); setLoading(false) } })
@@ -3549,7 +3699,7 @@ function AdminBusinesses() {
 
   function load() {
     setLoading(true)
-    fetch('/businesses/admin/all', { headers:{ Authorization:`Bearer ${token()}` } })
+    fetch(API_BASE + '/businesses/admin/all', { headers:{ Authorization:`Bearer ${token()}` } })
       .then(r => r.json())
       .then(d => { setBusinesses(d.businesses || []); setLoading(false) })
       .catch(() => { setBusinesses([]); setLoading(false) })
@@ -3641,7 +3791,7 @@ function BusinessForm({ business, onDone, onCancel }) {
     if (!confirm('Delete this business listing permanently?')) return
     setSaving(true)
     try {
-      const res = await fetch(`/businesses/${business.business_id}`, { method:'DELETE', headers:{ Authorization:`Bearer ${token()}` } })
+      const res = await fetch(`${API_BASE}/businesses/${business.business_id}`, { method:'DELETE', headers:{ Authorization:`Bearer ${token()}` } })
       if (!res.ok) throw new Error('Delete failed')
       toast('Business deleted', 'success'); onDone()
     } catch (err) { toast(err.message, 'error') }
@@ -3750,7 +3900,7 @@ function SearchResults({ query, setPage, setSelectedTask, openProfile }) {
     if (!query) { setData({ users: [], businesses: [], tasks: [] }); setLoading(false); return }
     let cancelled = false
     setLoading(true); setError(null)
-    fetch(`/search?q=${encodeURIComponent(query)}`)
+    fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`)
       .then(r => { if (!r.ok) throw new Error('Search failed'); return r.json() })
       .then(d => { if (!cancelled) { setData(d); setLoading(false) } })
       .catch(e => { if (!cancelled) { setError(e.message); setLoading(false) } })
@@ -3850,7 +4000,7 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
   useEffect(() => {
     let cancelled = false
     setLoading(true); setError(null)
-    fetch(`/profile/public/${userId}`)
+    fetch(`${API_BASE}/profile/public/${userId}`)
       .then(r => { if (!r.ok) throw new Error('Could not load profile'); return r.json() })
       .then(d => { if (!cancelled) { setData(d); setLoading(false); setTab((d.completed?.length ? 'completed' : 'reviews')) } })
       .catch(e => { if (!cancelled) { setError(e.message); setLoading(false) } })
@@ -3901,7 +4051,12 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
           {avatar
             ? <img src={avatar} alt="" style={{ width:96, height:96, borderRadius:'50%', objectFit:'cover', border:'4px solid var(--bg-surface)', boxShadow:'0 2px 10px rgba(33,28,46,.12)' }} />
             : <div style={{ width:96, height:96, borderRadius:'50%', background:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:800, fontSize:'2.3rem', color:'#fff', border:'4px solid var(--bg-surface)', boxShadow:'0 2px 10px rgba(33,28,46,.12)' }}>{name.charAt(0).toUpperCase()}</div>}
-          <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.7rem', lineHeight:1.1, marginTop:12 }}>{name}</h1>
+          <div style={{ display:'flex', gap:10, alignItems:'center', marginTop:12, flexWrap:'wrap' }}>
+            <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.7rem', lineHeight:1.1 }}>{name}</h1>
+            {profile.beta_founder && (
+              <span title="Joined during the ReLivR beta" style={{ display:'inline-flex', alignItems:'center', gap:5, background:'rgba(91,33,182,.1)', border:'1px solid rgba(91,33,182,.3)', color:'var(--amber)', borderRadius:100, padding:'3px 11px', fontFamily:'var(--font-mono)', fontSize:'.6rem', fontWeight:600, textTransform:'uppercase', letterSpacing:'.08em' }}>★ Founding Member</span>
+            )}
+          </div>
           {profile.headline && <p style={{ color:'var(--text-secondary)', fontSize:'1rem', marginTop:4, marginBottom:0 }}>{profile.headline}</p>}
 
           {/* badges */}
@@ -4070,7 +4225,7 @@ function Profile({ openProfile }) {
     let cancelled = false
     async function load() {
       try {
-        const res = await fetch('/profile', { headers: { Authorization: `Bearer ${token()}` } })
+        const res = await fetch(API_BASE + '/profile', { headers: { Authorization: `Bearer ${token()}` } })
         if (!res.ok) throw new Error('not ok')
         const { profile } = await res.json()
         if (cancelled || !profile) return
@@ -4096,7 +4251,7 @@ function Profile({ openProfile }) {
   async function saveProfile() {
     setSaving(true)
     try {
-      const res = await fetch('/profile', {
+      const res = await fetch(API_BASE + '/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
         body: JSON.stringify({
@@ -4128,7 +4283,7 @@ function Profile({ openProfile }) {
     if (newPw.length < 8) { toast('New password must be at least 8 characters', 'error'); return }
     setSavingPw(true)
     try {
-      const res = await fetch('/profile/password', {
+      const res = await fetch(API_BASE + '/profile/password', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
         body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
@@ -4148,7 +4303,7 @@ function Profile({ openProfile }) {
   async function exportData() {
     setExporting(true)
     try {
-      const res = await fetch('/profile/export', { headers: { Authorization: `Bearer ${token()}` } })
+      const res = await fetch(API_BASE + '/profile/export', { headers: { Authorization: `Bearer ${token()}` } })
       if (!res.ok) throw new Error('Could not export your data')
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -4168,7 +4323,7 @@ function Profile({ openProfile }) {
     const prev = emailFrequency
     setEmailFrequency(freq)
     try {
-      const res = await fetch('/profile', {
+      const res = await fetch(API_BASE + '/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
         body: JSON.stringify({ emailFrequency: freq }),
@@ -4184,7 +4339,7 @@ function Profile({ openProfile }) {
   // ── Sign out of all devices ─────────────────────────────────────────────────
   async function signOutAllDevices() {
     try {
-      await fetch('/auth/logout-all', { method: 'POST', headers: { Authorization: `Bearer ${token()}` } })
+      await fetch(API_BASE + '/auth/logout-all', { method: 'POST', headers: { Authorization: `Bearer ${token()}` } })
     } catch { /* revoked regardless; fall through to local logout */ }
     toast('Signed out of all devices', 'success')
     logout()
@@ -4194,7 +4349,7 @@ function Profile({ openProfile }) {
   async function deleteAccount() {
     setDeleting(true)
     try {
-      const res = await fetch('/profile/account', {
+      const res = await fetch(API_BASE + '/profile/account', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
         body: JSON.stringify({ password: deletePw }),
@@ -4368,19 +4523,46 @@ function Profile({ openProfile }) {
 }
 
 // Admin monitoring overview — real platform stats + recent activity (§7.8).
+// Tiny dependency-free SVG bar chart for an admin time-series.
+function MiniChart({ data, dataKey, label, color='var(--accent)' }) {
+  const w = 520, h = 90, pad = 4
+  const vals = data.map(d => d[dataKey] || 0)
+  const max = Math.max(1, ...vals)
+  const n = data.length || 1
+  const bw = (w - pad * 2) / n
+  const total = vals.reduce((s, v) => s + v, 0)
+  return (
+    <div>
+      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+        <Mono>{label}</Mono><Mono color="var(--text-secondary)">{total} total</Mono>
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} role="img" aria-label={`${label}: ${total} over the period`} style={{ display:'block' }}>
+        {data.map((d, i) => {
+          const bh = Math.round((d[dataKey] || 0) / max * (h - pad * 2))
+          return <rect key={i} x={pad + i * bw + 0.5} y={h - pad - bh} width={Math.max(1, bw - 1.5)} height={bh} rx="1" fill={color} opacity={0.85}>
+            <title>{`${d.day}: ${d[dataKey] || 0}`}</title>
+          </rect>
+        })}
+      </svg>
+    </div>
+  )
+}
+
 function AdminDashboard() {
   const token = () => localStorage.getItem('rl_token')
   const [stats, setStats]   = useState(null)
   const [activity, setActivity] = useState([])
+  const [series, setSeries] = useState([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]   = useState(null)
 
   useEffect(() => {
     let alive = true
     Promise.all([
-      fetch('/admin/stats', { headers:{ Authorization:`Bearer ${token()}` } }).then(r => r.ok ? r.json() : Promise.reject(new Error('stats'))),
-      fetch('/admin/activity?limit=20', { headers:{ Authorization:`Bearer ${token()}` } }).then(r => r.ok ? r.json() : { activity:[] }),
-    ]).then(([s, a]) => { if (alive) { setStats(s); setActivity(a?.activity || []); setLoading(false) } })
+      fetch(API_BASE + '/admin/stats', { headers:{ Authorization:`Bearer ${token()}` } }).then(r => r.ok ? r.json() : Promise.reject(new Error('stats'))),
+      fetch(API_BASE + '/admin/activity?limit=20', { headers:{ Authorization:`Bearer ${token()}` } }).then(r => r.ok ? r.json() : { activity:[] }),
+      fetch(API_BASE + '/admin/analytics?days=30', { headers:{ Authorization:`Bearer ${token()}` } }).then(r => r.ok ? r.json() : { series:[] }),
+    ]).then(([s, a, an]) => { if (alive) { setStats(s); setActivity(a?.activity || []); setSeries(an?.series || []); setLoading(false) } })
       .catch(() => { if (alive) { setError('Could not load admin stats'); setLoading(false) } })
     return () => { alive = false }
   }, [])
@@ -4409,6 +4591,16 @@ function AdminDashboard() {
         <Tile label="Open disputes" value={d.open || 0} accent={!!d.open} />
         <Tile label="Businesses" value={stats.businesses.total} sub={`${stats.businesses.active} active`} />
       </div>
+      {series.length > 0 && (
+        <DCard hover={false} style={{ marginBottom:24 }}>
+          <Mono style={{ display:'block', marginBottom:16 }}>Last 30 days</Mono>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))', gap:20 }}>
+            <MiniChart data={series} dataKey="signups" label="Signups" color="var(--accent)" />
+            <MiniChart data={series} dataKey="tasks_created" label="Tasks posted" color="var(--info)" />
+            <MiniChart data={series} dataKey="tasks_completed" label="Tasks completed" color="var(--success)" />
+          </div>
+        </DCard>
+      )}
       <DCard hover={false}>
         <Mono style={{ display:'block', marginBottom:12 }}>Recent activity</Mono>
         {activity.length === 0 ? <EmptyState icon="◷" message="No activity recorded yet — actions will appear here." /> : (
@@ -4437,7 +4629,7 @@ function AdminDisputes({ setPage, setSelectedDispute }) {
 
   useEffect(() => {
     let alive = true
-    fetch('/disputes', { headers:{ Authorization:`Bearer ${token()}` } })
+    fetch(API_BASE + '/disputes', { headers:{ Authorization:`Bearer ${token()}` } })
       .then(r => (r.ok ? r.json() : { disputes:[] }))
       .then(d => { if (alive) { setDisputes(d.disputes || []); setLoading(false) } })
       .catch(() => { if (alive) setLoading(false) })
@@ -4488,7 +4680,7 @@ function AdminDisputeDetail({ disputeId, setPage }) {
 
   async function load() {
     try {
-      const res = await fetch(`/disputes/${disputeId}`, { headers:{ Authorization:`Bearer ${token()}` } })
+      const res = await fetch(`${API_BASE}/disputes/${disputeId}`, { headers:{ Authorization:`Bearer ${token()}` } })
       if (res.ok) setData(await res.json())
     } catch { /* offline */ } finally { setLoading(false) }
   }
@@ -4503,7 +4695,7 @@ function AdminDisputeDetail({ disputeId, setPage }) {
   async function patchDispute(body, msg) {
     setResolveLoading(true)
     try {
-      const res = await fetch(`/disputes/${disputeId}`, { method:'PATCH', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` }, body: JSON.stringify(body) })
+      const res = await fetch(`${API_BASE}/disputes/${disputeId}`, { method:'PATCH', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` }, body: JSON.stringify(body) })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(d.message || 'Update failed')
       toast(msg, 'success'); setResolveModal(null); setNote(''); load()
@@ -4606,7 +4798,7 @@ function AdminUsers() {
   async function load() {
     setLoading(true)
     try {
-      const res = await fetch('/admin/users?limit=100', { headers:{ Authorization:`Bearer ${token()}` } })
+      const res = await fetch(API_BASE + '/admin/users?limit=100', { headers:{ Authorization:`Bearer ${token()}` } })
       if (res.ok) { const d = await res.json(); setUsers(d.users || []) }
     } catch { /* offline */ } finally { setLoading(false) }
   }
@@ -4622,7 +4814,7 @@ function AdminUsers() {
   async function moderate(u, suspend) {
     setBusy(true)
     try {
-      const res = await fetch(`/admin/users/${u.user_id}`, {
+      const res = await fetch(`${API_BASE}/admin/users/${u.user_id}`, {
         method:'PATCH', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
         body: JSON.stringify({ suspended: suspend }),
       })
@@ -4688,6 +4880,132 @@ function AdminUsers() {
   )
 }
 
+// Public feature-flag map — lets the UI gate features without a deploy (§7.8).
+function useFlags() {
+  const [flags, setFlags] = useState({})
+  useEffect(() => {
+    let alive = true
+    fetch(API_BASE + '/flags').then(r => r.ok ? r.json() : { flags:{} })
+      .then(d => { if (alive) setFlags(d.flags || {}) }).catch(() => {})
+    return () => { alive = false }
+  }, [])
+  return flags
+}
+
+// Admin: add campuses / zones without writing SQL (§7.8).
+function AdminLocations() {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [campuses, setCampuses] = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [form, setForm] = useState({ name:'', kind:'campus', parentId:'' })
+  const [saving, setSaving] = useState(false)
+
+  async function load() {
+    try { const res = await fetch(API_BASE + '/locations'); if (res.ok) { const d = await res.json(); setCampuses(d.campuses || []) } }
+    catch { /* offline */ } finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, []) // eslint-disable-line
+
+  async function add() {
+    if (!form.name.trim()) { toast('Enter a name', 'error'); return }
+    if (form.kind === 'zone' && !form.parentId) { toast('Pick a parent campus for a zone', 'error'); return }
+    setSaving(true)
+    try {
+      const body = { name: form.name.trim(), kind: form.kind }
+      if (form.kind === 'zone') body.parentId = form.parentId
+      const res = await fetch(API_BASE + '/admin/locations', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` }, body: JSON.stringify(body) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.message || 'Could not add location')
+      toast('Location added', 'success'); setForm(f => ({ ...f, name:'' })); load()
+    } catch (err) { toast(err.message, 'error') } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="page-enter">
+      <PageTitle sub="Campuses & zones — expand without writing SQL">Locations</PageTitle>
+      <DCard hover={false} style={{ marginBottom:20 }}>
+        <Mono style={{ display:'block', marginBottom:12 }}>Add a location</Mono>
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'flex-end' }}>
+          <Input label="Name" value={form.name} onChange={e=>setForm(f=>({ ...f, name:e.target.value }))} style={{ width:200 }} />
+          <div>
+            <label>Type</label>
+            <select value={form.kind} onChange={e=>setForm(f=>({ ...f, kind:e.target.value }))}>
+              <option value="campus">Campus</option><option value="zone">Zone</option><option value="region">Region</option>
+            </select>
+          </div>
+          {form.kind==='zone' && (
+            <div>
+              <label>Parent campus</label>
+              <select value={form.parentId} onChange={e=>setForm(f=>({ ...f, parentId:e.target.value }))}>
+                <option value="">—</option>{campuses.map(c => <option key={c.location_id} value={c.location_id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
+          <Btn loading={saving} onClick={add}>Add</Btn>
+        </div>
+      </DCard>
+      {loading ? <div style={{ padding:40, textAlign:'center' }}><Spinner /></div> :
+       campuses.length===0 ? <EmptyState icon="◇" message="No locations yet — add your first campus." /> :
+       campuses.map(c => (
+        <DCard key={c.location_id} hover={false} style={{ marginBottom:12 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:700 }}>{c.name}</div>
+            <Mono>{c.zones?.length || 0} zones</Mono>
+          </div>
+          {c.zones?.length > 0 && <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:10 }}>{c.zones.map(z => <Tag key={z.location_id}>{z.name}</Tag>)}</div>}
+        </DCard>
+      ))}
+    </div>
+  )
+}
+
+// Admin: toggle feature flags (§7.8).
+function AdminFlags() {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [flags, setFlags]   = useState([])
+  const [loading, setLoading] = useState(true)
+
+  async function load() {
+    try { const res = await fetch(API_BASE + '/admin/flags', { headers:{ Authorization:`Bearer ${token()}` } }); if (res.ok) { const d = await res.json(); setFlags(d.flags || []) } }
+    catch { /* offline */ } finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, []) // eslint-disable-line
+
+  async function toggle(f) {
+    try {
+      const res = await fetch(`${API_BASE}/admin/flags/${f.flag_key}`, { method:'PATCH', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` }, body: JSON.stringify({ enabled: !f.enabled }) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.message || 'Could not update flag')
+      setFlags(fs => fs.map(x => x.flag_key===f.flag_key ? { ...x, enabled: !x.enabled } : x))
+      toast(`${f.flag_key} turned ${!f.enabled ? 'on' : 'off'}`, 'success')
+    } catch (err) { toast(err.message, 'error') }
+  }
+
+  return (
+    <div className="page-enter">
+      <PageTitle sub="Toggle features without a deploy">Feature Flags</PageTitle>
+      {loading ? <div style={{ padding:40, textAlign:'center' }}><Spinner /></div> :
+       flags.length===0 ? <EmptyState icon="⚑" message="No feature flags defined." /> : (
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          {flags.map(f => (
+            <DCard key={f.flag_key} hover={false}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontWeight:600, fontFamily:'var(--font-mono)', fontSize:'0.88rem' }}>{f.flag_key}</div>
+                  {f.description && <div style={{ fontSize:'0.8rem', color:'var(--text-muted)' }}>{f.description}</div>}
+                </div>
+                <Btn variant={f.enabled ? 'success' : 'secondary'} size="sm" onClick={() => toggle(f)}>{f.enabled ? 'On' : 'Off'}</Btn>
+              </div>
+            </DCard>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ROOT APP — UNIFIED ROUTER
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -4708,6 +5026,8 @@ const DASH_ROUTES = {
   '/profile':         'profile',
   '/local':           'local-browse',
   '/admin/disputes':  'admin-disputes',
+  '/admin/locations': 'admin-locations',
+  '/admin/flags':     'admin-flags',
   '/admin/users':     'admin-users',
   '/admin/businesses':'admin-businesses',
 }
@@ -4776,7 +5096,7 @@ export default function App() {
     let stop = false
     async function pollUnread() {
       try {
-        const res = await fetch('/notifications?unread_only=true', {
+        const res = await fetch(API_BASE + '/notifications?unread_only=true', {
           headers: { Authorization: `Bearer ${localStorage.getItem('rl_token')}` },
         })
         if (!res.ok) throw new Error()
@@ -4818,7 +5138,7 @@ export default function App() {
         }
 
         // Fetch fresh user profile from backend
-        const res = await fetch('/auth/me', {
+        const res = await fetch(API_BASE + '/auth/me', {
           headers: { Authorization: `Bearer ${token}` },
         })
 
@@ -4832,10 +5152,15 @@ export default function App() {
             displayName: u.display_name || u.email?.split('@')[0] || 'User',
             avatarUrl:   u.avatar_url   || u.google_avatar_url || null,
             provider:    u.google_id ? 'google' : 'email',
-            popia_consent: u.popia_consent !== false,   // gate shows only when explicitly false
+            popia_consent: u.popia_consent !== false,
           })
-          // The URL (parsed at startup) already determines the view — leave it.
-          // If they deep-linked to a dashboard page, they stay there.
+          // Logged-in users must not see the landing page — redirect to app.
+          const loc = parseLocation()
+          if (loc.view === 'landing') {
+            const home = u.role === 'admin' ? 'dashboard' : 'tasks-browse'
+            setView('dashboard')
+            setDashPage(home)
+          }
         } else {
           // Token rejected by server — clear it
           localStorage.removeItem('rl_token')
@@ -4893,7 +5218,7 @@ export default function App() {
     localStorage.setItem('rl_token', rawUser.token || '')
     saveUser(u)
     setView('dashboard')
-    setDashPage('tasks-browse')
+    setDashPage(u.role === 'admin' ? 'dashboard' : 'tasks-browse')
     setAuthModal(null)
   }
 
@@ -4914,7 +5239,7 @@ export default function App() {
       saveUser({ userId, email, role, displayName, avatarUrl, provider: 'google',
                  popia_consent: !needsConsent })
       setView('dashboard')
-      setDashPage('tasks-browse')
+      setDashPage(role === 'admin' ? 'dashboard' : 'tasks-browse')
       setAuthModal(null)
       return true
     } catch {
@@ -4927,7 +5252,7 @@ export default function App() {
     // Tell auth service to destroy the session (non-blocking)
     const token = localStorage.getItem('rl_token')
     if (token) {
-      fetch('/auth/logout', {
+      fetch(API_BASE + '/auth/logout', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       }).catch(() => {})
@@ -4978,7 +5303,7 @@ export default function App() {
   }
 
   function navigate(target) {
-    if (target==='home')      { setView('landing'); window.scrollTo({top:0,behavior:'smooth'}); return }
+    if (target==='home')      { if (user) { goAppHome(); return } setView('landing'); window.scrollTo({top:0,behavior:'smooth'}); return }
     if (target==='dashboard') { if (user) setView('dashboard'); else setAuthModal('login'); return }
     if (INFO_PAGES.includes(target)) { setView(target); window.scrollTo({top:0,behavior:'smooth'}); return }
     setView('landing')
@@ -4999,7 +5324,7 @@ export default function App() {
       case 'contact':           return <ContactPage         {...props} />
       case 'report':            return <ReportPage          {...props} />
       case 'guidelines':        return <GuidelinesPage      {...props} />
-      case 'about-page':        return <ComingSoonPage title="About ReLiv" subtitle="Company" onNav={navigate} />
+      case 'about-page':        return <ComingSoonPage title="About ReLivR" subtitle="Company" onNav={navigate} />
       case 'blog':              return <ComingSoonPage title="Blog"             subtitle="Company" onNav={navigate} />
       case 'careers':           return <ComingSoonPage title="Careers"          subtitle="Company" onNav={navigate} />
       default:                  return null
@@ -5024,6 +5349,8 @@ export default function App() {
       case 'admin-disputes':       return <AdminDisputes setPage={setDashPage} setSelectedDispute={setSelectedDispute} />
       case 'admin-dispute-detail': return <AdminDisputeDetail disputeId={selectedDispute} setPage={setDashPage} />
       case 'admin-users':          return <AdminUsers />
+      case 'admin-locations':      return <AdminLocations />
+      case 'admin-flags':          return <AdminFlags />
       case 'local-browse':         return <LocalBrowse setPage={setDashPage} />
       case 'admin-businesses':     return <AdminBusinesses />
       default:                     return <Dashboard setPage={setDashPage} setSelectedTask={setSelectedTask} />
@@ -5055,6 +5382,7 @@ export default function App() {
             <div>
               <LandingNavbar onOpenAuth={openAuth} onNav={navigate} user={user} onEnterApp={goAppHome} />
               <Hero         onOpenAuth={openAuth} />
+              <LaunchSection />
               <StatsBar />
               <CampusStrip />
               <HowItWorks />
@@ -5063,6 +5391,7 @@ export default function App() {
               <Pricing      onOpenAuth={openAuth} />
               <Testimonials />
               <LandingAbout />
+              <FeedbackSection />
               <LandingCTA   onOpenAuth={openAuth} />
               <LandingFooter onNav={navigate} />
             </div>
@@ -5078,7 +5407,12 @@ export default function App() {
           )}
 
           {/* ── DASHBOARD ────────────────────────────────────── */}
-          {view==='dashboard' && user && (
+          {/* Pre-launch lock: only admins reach the real app. Everyone else who
+              signs in/up lands on the founding-member holding screen instead. */}
+          {view==='dashboard' && user && isAppLocked(user) && (
+            <LaunchGate user={user} onLogout={logout} onViewLanding={() => navigate('landing')} />
+          )}
+          {view==='dashboard' && user && !isAppLocked(user) && (
             <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column', background:'var(--bg-base)' }}>
               <TopBar page={dashPage} setPage={setDashPage} unreadCount={unreadCount} onGoHome={goAppHome} onViewLanding={() => navigate('landing')} onSearch={(q) => { setSearchQuery(q); setDashPage('search') }} />
               {/* DashSidebar is mobile-only now — CSS turns it into the bottom tab bar */}
@@ -5090,8 +5424,9 @@ export default function App() {
           )}
 
           {/* POPIA consent gate — blocks the app until consent is explicitly given
-              (chiefly the Google path, which can't capture consent at OAuth) */}
-          {user && user.popia_consent === false && (
+              (chiefly the Google path, which can't capture consent at OAuth).
+              Suppressed while the launch gate is up — they'll consent at launch. */}
+          {user && user.popia_consent === false && !isAppLocked(user) && (
             <ConsentGate
               onConsented={() => setUser(u => ({ ...u, popia_consent: true }))}
               onDecline={logout}

@@ -134,4 +134,128 @@ router.patch('/users/:id',
   }
 )
 
+// GET /admin/analytics?days=N — daily time-series for simple charts.
+router.get('/analytics',
+  [query('days').optional().isInt({ min: 1, max: 90 })],
+  check,
+  async (req, res) => {
+    const days = parseInt(req.query.days, 10) || 30
+    try {
+      const { rows } = await pool.query(
+        `WITH d AS (
+           SELECT generate_series(date_trunc('day', NOW()) - (($1 - 1) || ' days')::interval,
+                                  date_trunc('day', NOW()), '1 day')::date AS day
+         )
+         SELECT d.day,
+           (SELECT COUNT(*) FROM users u  WHERE u.created_at::date = d.day)::int AS signups,
+           (SELECT COUNT(*) FROM tasks t  WHERE t.created_at::date = d.day)::int AS tasks_created,
+           (SELECT COUNT(*) FROM tasks t  WHERE t.status = 'completed' AND t.updated_at::date = d.day)::int AS tasks_completed
+         FROM d ORDER BY d.day`, [days])
+      return res.status(200).json({ days, series: rows })
+    } catch (err) {
+      log.error('admin.analytics_failed', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// POST /admin/locations — add a campus / zone / region (no SQL needed).
+router.post('/locations',
+  [
+    body('name').trim().isLength({ min: 1, max: 120 }),
+    body('kind').isIn(['region', 'campus', 'zone']),
+    body('parentId').optional({ nullable: true }).isUUID(),
+  ],
+  check,
+  async (req, res) => {
+    const { name, kind, parentId = null } = req.body
+    try {
+      const { rows } = await pool.query(
+        `INSERT INTO locations (name, kind, parent_id) VALUES ($1, $2, $3) RETURNING *`,
+        [name, kind, parentId])
+      return res.status(201).json({ location: rows[0] })
+    } catch (err) {
+      if (err.code === '23505') return res.status(409).json({ message: 'That location already exists under this parent.' })
+      log.error('admin.location_create_failed', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// PATCH /admin/locations/:id — rename or (de)activate.
+router.patch('/locations/:id',
+  [param('id').isUUID(), body('name').optional().trim().isLength({ min: 1, max: 120 }), body('isActive').optional().isBoolean()],
+  check,
+  async (req, res) => {
+    const { name, isActive } = req.body
+    const sets = []; const vals = [req.params.id]; let i = 2
+    if (name !== undefined)     { sets.push(`name = $${i++}`); vals.push(name) }
+    if (isActive !== undefined) { sets.push(`is_active = $${i++}`); vals.push(isActive) }
+    if (sets.length === 0) return res.status(400).json({ message: 'Nothing to update.' })
+    try {
+      const { rows } = await pool.query(
+        `UPDATE locations SET ${sets.join(', ')} WHERE location_id = $1 RETURNING *`, vals)
+      if (rows.length === 0) return res.status(404).json({ message: 'Location not found.' })
+      return res.status(200).json({ location: rows[0] })
+    } catch (err) {
+      log.error('admin.location_update_failed', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// GET /admin/feedback — recent beta feedback.
+router.get('/feedback', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT feedback_id, name, email, message, user_id, created_at FROM feedback ORDER BY created_at DESC LIMIT 100')
+    return res.status(200).json({ feedback: rows })
+  } catch (err) {
+    log.error('admin.feedback_failed', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
+
+// GET /admin/waitlist — launch-reminder signups.
+router.get('/waitlist', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT email, want_reminder, created_at FROM waitlist ORDER BY created_at DESC LIMIT 500')
+    return res.status(200).json({ count: rows.length, waitlist: rows })
+  } catch (err) {
+    log.error('admin.waitlist_failed', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
+
+// GET /admin/flags — all feature flags.
+router.get('/flags', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT flag_key, enabled, description, updated_at FROM feature_flags ORDER BY flag_key')
+    return res.status(200).json({ flags: rows })
+  } catch (err) {
+    log.error('admin.flags_failed', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
+
+// PATCH /admin/flags/:key — toggle a flag.
+router.patch('/flags/:key',
+  [param('key').trim().isLength({ min: 1, max: 60 }), body('enabled').isBoolean()],
+  check,
+  async (req, res) => {
+    try {
+      const { rows } = await pool.query(
+        'UPDATE feature_flags SET enabled = $1, updated_at = NOW() WHERE flag_key = $2 RETURNING *',
+        [req.body.enabled, req.params.key])
+      if (rows.length === 0) return res.status(404).json({ message: 'Flag not found.' })
+      log.info('admin.flag_toggled', { reqId: req.id, key: req.params.key, enabled: req.body.enabled })
+      return res.status(200).json({ flag: rows[0] })
+    } catch (err) {
+      log.error('admin.flag_update_failed', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
 export default router

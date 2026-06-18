@@ -9,7 +9,7 @@ export default defineConfig({
     port: Number(process.env.PORT) || 3000,
     historyApiFallback: true,
     proxy: {
-      '/auth':          { target: 'http://localhost:3001', changeOrigin: true },
+      '/auth':          { target: 'http://localhost:3001', changeOrigin: true, proxyTimeout: 4000, timeout: 4000 },
       '/tasks':         { target: 'http://localhost:3001', changeOrigin: true },
       '/messages':      { target: 'http://localhost:3001', changeOrigin: true },
       '/notifications': { target: 'http://localhost:3001', changeOrigin: true },
@@ -22,6 +22,9 @@ export default defineConfig({
       '/categories':    { target: 'http://localhost:3001', changeOrigin: true },
       '/templates':     { target: 'http://localhost:3001', changeOrigin: true },
       '/admin':         { target: 'http://localhost:3001', changeOrigin: true },
+      '/flags':         { target: 'http://localhost:3001', changeOrigin: true },
+      '/feedback':      { target: 'http://localhost:3001', changeOrigin: true },
+      '/waitlist':      { target: 'http://localhost:3001', changeOrigin: true },
       '/health':        { target: 'http://localhost:3001', changeOrigin: true },
     },
   },

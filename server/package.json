@@ -8,7 +8,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "migrate": "node scripts/migrate.mjs",
-    "make-admin": "node scripts/make-admin.mjs"
+    "make-admin": "node scripts/make-admin.mjs",
+    "seed-admin": "node scripts/seed-admin.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

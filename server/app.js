@@ -25,10 +25,33 @@ import searchRouter from './routes/search.js'
 import categoriesRouter from './routes/categories.js'
 import templatesRouter from './routes/templates.js'
 import adminRouter from './routes/admin.js'
+import flagsRouter from './routes/flags.js'
+import betaRouter from './routes/beta.js'
+import jwt from 'jsonwebtoken'
 import { pool } from './db.js'
 
 const app = express()
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'
+
+// ── Pre-launch gate ───────────────────────────────────────────────────────────
+// Mirrors the client-side isAppLocked() check so the API is equally protected.
+// Routes needed before launch (auth handshake, health, public read-only) bypass
+// the gate. Admin tokens bypass unconditionally.
+const LAUNCH_AT_MS = new Date('2026-07-07T00:00:00').getTime()
+const PRE_LAUNCH_OPEN = ['/auth', '/health', '/flags', '/feedback', '/waitlist']
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'test') return next()  // gate off in test env
+  if (Date.now() >= LAUNCH_AT_MS) return next()
+  if (PRE_LAUNCH_OPEN.some(p => req.path === p || req.path.startsWith(p + '/'))) return next()
+  const auth = req.headers.authorization
+  if (auth?.startsWith('Bearer ')) {
+    try {
+      const payload = jwt.verify(auth.slice(7), process.env.JWT_SECRET)
+      if (payload.role === 'admin') return next()
+    } catch { /* fall through — invalid token → blocked */ }
+  }
+  res.status(503).json({ message: 'ReLivR launches on 7 July 2026. The app will open automatically.' })
+})
 
 // Railway/Vercel sit behind a proxy — needed for secure cookies + correct req.ip
 app.set('trust proxy', 1)
@@ -79,6 +102,10 @@ app.use('/auth/forgot-password', rateLimit({
   windowMs: 60 * 60 * 1000, max: 5,
   message: { message: 'Too many reset requests. Try again later.' },
 }))
+app.use(['/feedback', '/waitlist'], rateLimit({
+  windowMs: 60 * 60 * 1000, max: 15,
+  message: { message: 'Too many submissions. Please try again later.' },
+}))
 app.use(rateLimit({
   windowMs: 60 * 1000, max: 120, // general API ceiling
 }))
@@ -110,6 +137,8 @@ app.use('/search', searchRouter)
 app.use('/categories', categoriesRouter)
 app.use('/templates', templatesRouter)
 app.use('/admin', adminRouter)
+app.use('/flags', flagsRouter)
+app.use('/', betaRouter)   // /feedback + /waitlist
 
 // 404 + error handlers
 app.use((req, res) => res.status(404).json({ message: 'Not found.' }))

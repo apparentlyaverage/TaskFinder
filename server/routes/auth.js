@@ -346,7 +346,7 @@ router.get('/me', async (req, res) => {
     const payload = jwt.verify(token, process.env.JWT_SECRET)
     const { rows } = await pool.query(
       `SELECT u.user_id, u.email, u.role, u.google_id, u.google_avatar_url,
-              u.popia_consent, u.token_version,
+              u.popia_consent, u.token_version, u.beta_founder,
               up.display_name, up.avg_rating, up.avatar_url, up.skills, up.bio
        FROM users u LEFT JOIN user_profiles up ON u.user_id = up.user_id
        WHERE u.user_id = $1`, [payload.userId])

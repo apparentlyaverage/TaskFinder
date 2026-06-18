@@ -62,6 +62,50 @@ describe('GET /admin/users', () => {
   })
 })
 
+describe('GET /admin/analytics', () => {
+  it('returns a daily time-series (200)', async () => {
+    mockDb(pool, sql => /generate_series/.test(sql) ? { rows: [{ day: '2026-06-01', signups: 2, tasks_created: 5, tasks_completed: 1 }] } : undefined)
+    const res = await request(app).get('/admin/analytics?days=7').set('Authorization', `Bearer ${adminToken}`)
+    expect(res.status).toBe(200)
+    expect(res.body.series[0].signups).toBe(2)
+  })
+})
+
+describe('admin locations', () => {
+  it('creates a campus (201)', async () => {
+    mockDb(pool, sql => /INSERT INTO locations/.test(sql) ? { rows: [{ location_id: 'l1', name: 'UCT', kind: 'campus' }] } : undefined)
+    const res = await request(app).post('/admin/locations').set('Authorization', `Bearer ${adminToken}`).send({ name: 'UCT', kind: 'campus' })
+    expect(res.status).toBe(201)
+    expect(res.body.location.name).toBe('UCT')
+  })
+  it('rejects a non-admin (403)', async () => {
+    mockDb(pool)
+    const res = await request(app).post('/admin/locations').set('Authorization', `Bearer ${memberToken}`).send({ name: 'x', kind: 'campus' })
+    expect(res.status).toBe(403)
+  })
+})
+
+describe('feature flags', () => {
+  it('lists flags for an admin (200)', async () => {
+    mockDb(pool, sql => /FROM feature_flags/.test(sql) ? { rows: [{ flag_key: 'recurring_tasks', enabled: true }] } : undefined)
+    const res = await request(app).get('/admin/flags').set('Authorization', `Bearer ${adminToken}`)
+    expect(res.status).toBe(200)
+    expect(res.body.flags[0].flag_key).toBe('recurring_tasks')
+  })
+  it('toggles a flag (200)', async () => {
+    mockDb(pool, sql => /UPDATE feature_flags/.test(sql) ? { rows: [{ flag_key: 'recurring_tasks', enabled: false }] } : undefined)
+    const res = await request(app).patch('/admin/flags/recurring_tasks').set('Authorization', `Bearer ${adminToken}`).send({ enabled: false })
+    expect(res.status).toBe(200)
+    expect(res.body.flag.enabled).toBe(false)
+  })
+  it('exposes enabled flags publicly at GET /flags', async () => {
+    mockDb(pool, sql => /SELECT flag_key, enabled FROM feature_flags/.test(sql) ? { rows: [{ flag_key: 'recurring_tasks', enabled: true }] } : undefined)
+    const res = await request(app).get('/flags')
+    expect(res.status).toBe(200)
+    expect(res.body.flags.recurring_tasks).toBe(true)
+  })
+})
+
 describe('PATCH /admin/users/:id (moderation)', () => {
   const TARGET = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
   it('requires admin (403 for member)', async () => {
