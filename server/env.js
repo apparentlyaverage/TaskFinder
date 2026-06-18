@@ -14,6 +14,15 @@ const HINTS = {
   JWT_SECRET: 'must be set and at least 32 characters',
 }
 
+// Optional at launch, required once a feature goes live. Missing values are
+// warned about (not fatal) so the server still boots — e.g. payments are
+// planned for Month 2, so PAYSTACK_SECRET_KEY is not required on day one.
+const OPTIONAL = {
+  PAYSTACK_SECRET_KEY: 'required before enabling payments (live Month 2). Without it, /payments/* will fail.',
+  RESEND_API_KEY:      'required to send real email. Without it, emails are stubbed/logged only.',
+  SENTRY_DSN:          'recommended for error tracking in production.',
+}
+
 export function assertEnv(env = process.env) {
   const problems = []
   for (const [key, isValid] of Object.entries(REQUIRED)) {
@@ -26,6 +35,14 @@ export function assertEnv(env = process.env) {
       `Invalid environment — refusing to start:\n${problems.join('\n')}\n` +
       `Set these in server/.env (see .env.example).`
     )
+  }
+
+  // Non-fatal: surface missing optional keys so deploys are deliberate.
+  // Skipped under test to keep the suite output clean.
+  if (process.env.NODE_ENV !== 'test') {
+    for (const [key, hint] of Object.entries(OPTIONAL)) {
+      if (!env[key]) console.warn(`[env] ${key} is not set — ${hint}`)
+    }
   }
 }
 

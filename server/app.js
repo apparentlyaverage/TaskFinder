@@ -27,6 +27,7 @@ import templatesRouter from './routes/templates.js'
 import adminRouter from './routes/admin.js'
 import flagsRouter from './routes/flags.js'
 import betaRouter from './routes/beta.js'
+import paymentsRouter from './routes/payments.js'
 import jwt from 'jsonwebtoken'
 import { pool } from './db.js'
 
@@ -87,6 +88,10 @@ app.use(cors({
   credentials: true,
 }))
 
+// Paystack webhook needs the raw request body for HMAC-SHA512 verification.
+// Capture it before express.json() parses and discards the buffer.
+app.use('/payments/webhook', express.raw({ type: 'application/json' }))
+
 app.use(express.json({ limit: '100kb' }))
 
 // ── Rate limits ───────────────────────────────────────────────────────────────
@@ -138,6 +143,7 @@ app.use('/categories', categoriesRouter)
 app.use('/templates', templatesRouter)
 app.use('/admin', adminRouter)
 app.use('/flags', flagsRouter)
+app.use('/payments', paymentsRouter)
 app.use('/', betaRouter)   // /feedback + /waitlist
 
 // 404 + error handlers

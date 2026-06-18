@@ -353,6 +353,14 @@ router.patch('/:taskId/complete',
           body: `"${task.title}" was marked complete. You can now review each other.`,
           referenceId: taskId,
         })
+        // Reliability Score signal (playbook Phase 0 / M12): record the positive
+        // behavioural event for the earner. Fire-and-forget — a logging failure
+        // must never block task completion.
+        pool.query(
+          `INSERT INTO score_events (user_id, event_type, weight, reference_id)
+           VALUES ($1, 'task_completed', 5.0, $2)`,
+          [task.assigned_to, taskId]
+        ).catch(err => log.error('score_event task_completed', { reqId: req.id, msg: err.message }))
       }
       return res.status(200).json({ task })
     } catch (err) {
