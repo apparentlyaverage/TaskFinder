@@ -6,12 +6,31 @@
 
 import React, {
   useState, useEffect, useRef, useCallback,
-  createContext, useContext, useReducer,
+  createContext, useContext, useReducer, useId,
 } from 'react'
 import {
   MOCK_TASKS, MOCK_BIDS, MOCK_NOTIFICATIONS,
   MOCK_MESSAGES, MOCK_DISPUTES, MOCK_SUGGESTIONS,
 } from './api/mock'
+
+// ─── LAUNCH GATE ─────────────────────────────────────────────────────────────
+// The full app is locked to the public until the launch timer ends. Until then
+// only admins can enter; everyone else (creators/earners) can sign up and join
+// the waitlist, but lands on a "founding member" holding screen instead of the
+// app. The gate auto-opens the moment this date passes — no code change needed.
+// This date is the single source of truth for both the countdown and the gate.
+// All API calls go through this prefix so the deployed frontend (Vercel) can
+// talk to the separate backend (Railway). Set VITE_API_URL in Vercel env vars
+// to your Railway service URL, e.g. https://relivr-server.up.railway.app
+// In development Vite proxies relative paths so this evaluates to ''.
+const API_BASE = import.meta.env.VITE_API_URL ?? ''
+
+export const LAUNCH_AT = '2026-07-07T00:00:00'
+const launchMs = () => new Date(LAUNCH_AT).getTime()
+const hasLaunched = () => Date.now() >= launchMs()
+// A signed-in user is locked out of the app when it hasn't launched and they
+// aren't an admin. Admins always get in (they run the show pre-launch).
+const isAppLocked = (user) => !!user && user.role !== 'admin' && !hasLaunched()
 
 // ─── FONTS & GLOBAL STYLES ───────────────────────────────────────────────────
 const _fl = document.createElement('link')
@@ -71,6 +90,10 @@ body {
 ::selection { background: var(--amber); color: #fff; }
 a { color: inherit; text-decoration: none; }
 button { cursor: pointer; font-family: var(--font-body); border: none; }
+/* Visible keyboard focus for a11y (mouse clicks don't trigger :focus-visible) */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+a:focus-visible, button:focus-visible, [role="button"]:focus-visible,
+input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 input, textarea, select { font-family: var(--font-body); font-size: inherit; }
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: var(--bg-base); }
@@ -177,15 +200,33 @@ button:active { transform: scale(.97); }
 }
 
 /* Top-bar nav: links + search are desktop-only; bottom bar handles mobile nav */
-.topbar-nav, .topbar-search { display: none; }
+/* Top-bar nav links are desktop-only; the search bar shows on every size
+   (on phones the hidden nav links free up the room for it). */
+.topbar-nav { display: none; }
 @media (min-width:769px) {
-  .topbar-nav    { display: flex !important; }
-  .topbar-search { display: block !important; }
+  .topbar-nav { display: flex !important; }
 }
 /* The Post button stays visible on all sizes, but compresses to just '＋' on phones */
 @media (max-width:520px) {
   .topbar-post { font-size: 0 !important; padding: 9px 12px !important; }
   .topbar-post::before { content: '＋'; font-size: 1.05rem; }
+}
+
+/* ── Mobile layout fixes ──────────────────────────────────────────────────── */
+@media (max-width:768px) {
+  /* Unclassed inline grids (e.g. content + fixed sidebar) collapse to one column.
+     !important is required to beat the inline grid-template-columns. */
+  .stack-mobile { grid-template-columns: 1fr !important; }
+  /* The hero is full-height with a hidden visual column on phones — drop the
+     100vh so it doesn't leave a screen of empty space below the copy. */
+  .hero-section { min-height: auto !important; padding-top: 124px !important; padding-bottom: 48px !important; }
+  /* Messages: master-detail → one pane at a time on phones. Show the full-width
+     conversation list, and swap to the full-width thread once one is opened
+     (the in-thread ← button clears the selection to return to the list). */
+  .msg-shell .msg-list            { width: 100% !important; border-right: none !important; }
+  .msg-shell .msg-thread          { display: none !important; }
+  .msg-shell.has-active .msg-list { display: none !important; }
+  .msg-shell.has-active .msg-thread { display: flex !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -287,7 +328,7 @@ function Logo({ onClick }) {
   return (
     <div onClick={onClick} style={{ display:'flex', alignItems:'center', gap:9, cursor:'pointer', flexShrink:0 }}>
       <div style={{ background:'var(--amber)', color:'#fff', fontFamily:'var(--fd)', fontWeight:800, fontSize:'.88rem', padding:'4px 8px', borderRadius:8, letterSpacing:'.02em' }}>R</div>
-      <span style={{ fontFamily:'var(--fd)', fontSize:'1.15rem', fontWeight:800, letterSpacing:'.02em' }}>ReLiv</span>
+      <span style={{ fontFamily:'var(--fd)', fontSize:'1.15rem', fontWeight:800, letterSpacing:'.02em' }}>ReLivR</span>
     </div>
   )
 }
@@ -317,13 +358,16 @@ function Btn({ children, variant='primary', size='md', loading=false, fullWidth=
 
 function Input({ label, error, hint, style={}, ...p }) {
   const [focused, setFocused] = useState(false)
+  const id = useId()
+  const hintId = hint || error ? `${id}-desc` : undefined
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-      {label && <label style={{ fontSize:'0.7rem', fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:'var(--text-secondary)' }}>{label}</label>}
-      <input style={{ background:'var(--bg-surface)', border:`1px solid ${error?'var(--danger)':focused?'var(--accent)':'var(--border)'}`, borderRadius:'var(--radius-sm)', color:'var(--text-primary)', padding:'9px 13px', outline:'none', width:'100%', fontSize:'0.9rem', boxShadow:focused?'0 0 0 3px var(--accent-glow)':'none', transition:'all 150ms ease', ...style }}
+      {label && <label htmlFor={id} style={{ fontSize:'0.7rem', fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:'var(--text-secondary)' }}>{label}</label>}
+      <input id={id} aria-invalid={error ? 'true' : undefined} aria-describedby={hintId}
+        style={{ background:'var(--bg-surface)', border:`1px solid ${error?'var(--danger)':focused?'var(--accent)':'var(--border)'}`, borderRadius:'var(--radius-sm)', color:'var(--text-primary)', padding:'9px 13px', outline:'none', width:'100%', fontSize:'0.9rem', boxShadow:focused?'0 0 0 3px var(--accent-glow)':'none', transition:'all 150ms ease', ...style }}
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} {...p} />
-      {error && <span style={{ fontSize:'0.78rem', color:'var(--danger)' }}>{error}</span>}
-      {hint && !error && <span style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>{hint}</span>}
+      {error && <span id={hintId} style={{ fontSize:'0.78rem', color:'var(--danger)' }}>{error}</span>}
+      {hint && !error && <span id={hintId} style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>{hint}</span>}
     </div>
   )
 }
@@ -434,14 +478,26 @@ function StatCard({ label, value, accent=false }) {
 }
 
 function Modal({ open, onClose, title, children, maxWidth=480 }) {
+  const dialogRef = useRef(null)
+  const titleId = useId()
   useEffect(() => { if (open) document.body.style.overflow='hidden'; else document.body.style.overflow=''; return () => { document.body.style.overflow='' } }, [open])
+  // a11y: close on Escape, and move focus into the dialog when it opens.
+  useEffect(() => {
+    if (!open) return
+    const onKey = e => { if (e.key === 'Escape') onClose?.() }
+    document.addEventListener('keydown', onKey)
+    const prev = document.activeElement
+    dialogRef.current?.focus()
+    return () => { document.removeEventListener('keydown', onKey); prev?.focus?.() }
+  }, [open, onClose])
   if (!open) return null
   return (
     <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(33,28,46,.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:20, backdropFilter:'blur(4px)', animation:'fadeIn 0.2s ease' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background:'var(--bg-surface)', border:'1px solid var(--border-strong)', borderRadius:'var(--radius-lg)', width:'100%', maxWidth, animation:'slideUp 0.2s ease both', overflow:'hidden' }}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
+        onClick={e => e.stopPropagation()} style={{ background:'var(--bg-surface)', border:'1px solid var(--border-strong)', borderRadius:'var(--radius-lg)', width:'100%', maxWidth, animation:'slideUp 0.2s ease both', overflow:'hidden', outline:'none' }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'16px 20px', borderBottom:'1px solid var(--border)' }}>
-          <span style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:'1.1rem', letterSpacing:'-0.01em' }}>{title}</span>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'1.2rem', cursor:'pointer', lineHeight:1, padding:'2px 6px', borderRadius:'var(--radius-sm)' }}>✕</button>
+          <span id={titleId} style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:'1.1rem', letterSpacing:'-0.01em' }}>{title}</span>
+          <button onClick={onClose} aria-label="Close dialog" style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'1.2rem', cursor:'pointer', lineHeight:1, padding:'2px 6px', borderRadius:'var(--radius-sm)' }}>✕</button>
         </div>
         <div style={{ padding:24 }}>{children}</div>
       </div>
@@ -511,8 +567,12 @@ function LandingNavbar({ onOpenAuth, onNav, user, onEnterApp }) {
 
   return (
     <>
-      <nav style={{ position:'fixed', top:0, left:0, right:0, zIndex:100, background:scrolled?'rgba(250,249,246,.92)':'transparent', borderBottom:scrolled?'1px solid var(--border-strong)':'1px solid transparent', backdropFilter:scrolled?'blur(14px)':'none', transition:'all 300ms ease', padding:'0 24px' }}>
-        <div style={{ maxWidth:1200, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', height:66 }}>
+      <div style={{ position:'fixed', top:0, left:0, right:0, zIndex:100 }}>
+      <div style={{ background:'var(--amber)', color:'#fff', textAlign:'center', padding:'7px 16px', fontSize:'.8rem', fontFamily:'var(--fb)', fontWeight:600, lineHeight:1.45 }}>
+        🚀 ReLivR is in <strong>beta</strong> — full launch 7 July 2026.<span className="hide-m"> Your feedback shapes what we build.</span> Secure escrow payments coming soon.
+      </div>
+      <nav style={{ background:scrolled?'rgba(250,249,246,.92)':'rgba(250,249,246,.72)', borderBottom:scrolled?'1px solid var(--border-strong)':'1px solid transparent', backdropFilter:'blur(14px)', transition:'all 300ms ease', padding:'0 24px' }}>
+        <div style={{ maxWidth:1200, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', height:64 }}>
           <Logo onClick={() => onNav('home')} />
           <div className="hide-m" style={{ display:'flex', alignItems:'center', gap:32 }}>
             {navItems.map(item => <a key={item.label} href={item.href} className="nav-link">{item.label}</a>)}
@@ -527,10 +587,11 @@ function LandingNavbar({ onOpenAuth, onNav, user, onEnterApp }) {
               </>
             )}
           </div>
-          <button className="show-m" onClick={() => setDrawerOpen(true)}
-            style={{ background:'none', border:'none', color:'var(--text-primary)', cursor:'pointer', fontSize:'1.4rem', padding:8 }}>☰</button>
+          <button className="show-m" onClick={() => setDrawerOpen(true)} aria-label="Open menu" aria-haspopup="menu"
+            style={{ background:'none', border:'none', color:'var(--text-primary)', cursor:'pointer', fontSize:'1.4rem', padding:8 }}><span aria-hidden="true">☰</span></button>
         </div>
       </nav>
+      </div>
 
       <div className={`doverlay ${drawerOpen?'open':''}`} onClick={() => setDrawerOpen(false)} />
       <div className={`drawer ${drawerOpen?'open':''}`}>
@@ -615,7 +676,7 @@ function LandingFooter({ onNav }) {
         </div>
         <Divider style={{ marginBottom:20 }} />
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10 }}>
-          <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em' }}>© 2026 ReLiv (PTY) Ltd · All rights reserved</span>
+          <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em' }}>© 2026 ReLivR (PTY) Ltd · All rights reserved</span>
           <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em' }}>Registered in South Africa · POPIA Compliant</span>
         </div>
       </div>
@@ -627,6 +688,11 @@ function LandingFooter({ onNav }) {
 
 function AuthModal({ mode, onClose, onSwitch, onLogin }) {
   const { loginWithGoogle } = useAuth()
+  useEffect(() => {
+    const onKey = e => { if (e.key === 'Escape') onClose?.() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [name, setName]         = useState('')
@@ -642,16 +708,10 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
   const [skills, setSkills]     = useState('')
   const [bio, setBio]           = useState('')
 
-  const CAMPUS_ZONES = ['Drostdy', 'Eden Grove', 'Botha House', 'Founders Hall', 'Kimberley Hall', 'Oriel', 'College', 'Off-campus (town)', 'Other']
+  const CAMPUS_ZONES = useLocations()
 
   // Reset to step 1 whenever the modal mode flips (login ⇄ register)
   useEffect(() => { setStep(1); setError('') }, [mode])
-
-  const presets = [
-    { label:'Creator', role:'creator', email:'creator@demo.com' },
-    { label:'Earner',  role:'earner',  email:'earner@demo.com' },
-    { label:'Admin',   role:'admin',   email:'admin@demo.com' },
-  ]
 
   function validateStep1() {
     if (mode==='register' && !name.trim()) return 'Please enter your name'
@@ -691,13 +751,18 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
             campusZone:  campus || null,
             skills:      skills || null,
             bio:         bio || null,
+            popiaConsent: consent,
           }
 
+      const ctrl = new AbortController()
+      const tid  = setTimeout(() => ctrl.abort(), 5000)
       const res  = await fetch(endpoint, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(body),
+        signal:  ctrl.signal,
       })
+      clearTimeout(tid)
       const data = await res.json()
 
       if (!res.ok) {
@@ -739,15 +804,15 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
 
   return (
     <div className="moverlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label={mode==='login' ? 'Sign in' : 'Create your account'} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div style={{ padding:'18px 22px 14px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div>
             <div style={{ fontFamily:'var(--fd)', fontSize:'1.25rem', fontWeight:800 }}>{mode==='login'?'Welcome back':(step===1?'Create your account':'Set up your profile')}</div>
-            <div style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em', marginTop:2 }}>{mode==='register' ? `ReLiv · Step ${step} of 2` : 'ReLiv · Rhodes Campus'}</div>
+            <div style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em', marginTop:2 }}>{mode==='register' ? `ReLivR · Step ${step} of 2` : 'ReLivR · Rhodes Campus'}</div>
           </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'var(--text-muted)', cursor:'pointer', fontSize:'1.1rem', padding:'4px 8px' }}>✕</button>
+          <button onClick={onClose} aria-label="Close dialog" style={{ background:'none', border:'none', color:'var(--text-muted)', cursor:'pointer', fontSize:'1.1rem', padding:'4px 8px' }}>✕</button>
         </div>
 
         <div style={{ padding:22, display:'flex', flexDirection:'column', gap:13 }}>
@@ -792,17 +857,8 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
             {/* ===== LOGIN ===== */}
             {mode==='login' && (
               <>
-                <div><label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@ru.ac.za" required /></div>
-                <div><label>Password</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
-                <div>
-                  <Mono style={{ display:'block', marginBottom:8 }}>Quick demo login</Mono>
-                  <div style={{ display:'flex', gap:6 }}>
-                    {presets.map(p => (
-                      <button key={p.role} type="button" onClick={() => { setRole(p.role); setEmail(p.email) }}
-                        style={{ flex:1, padding:'6px 8px', background:role===p.role?'var(--accent-glow)':'var(--bg-elevated)', border:`1px solid ${role===p.role?'var(--accent)':'var(--border)'}`, color:role===p.role?'var(--accent)':'var(--text-muted)', borderRadius:'var(--radius-sm)', fontSize:'0.72rem', fontFamily:'var(--font-mono)', cursor:'pointer', transition:'all 150ms ease' }}>{p.label}</button>
-                    ))}
-                  </div>
-                </div>
+                <div><label>Email</label><input type="email" aria-label="Email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@ru.ac.za" required /></div>
+                <div><label>Password</label><input type="password" aria-label="Password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
               </>
             )}
 
@@ -810,17 +866,17 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
             {mode==='register' && step===1 && (
               <>
                 <div><label>Full name</label><input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Thabo Mkhize" required /></div>
-                <div><label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@ru.ac.za" required /></div>
-                <div><label>Password <span style={{ color:'var(--text-muted)' }}>(min 8 chars)</span></label><input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
+                <div><label>Email</label><input type="email" aria-label="Email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@ru.ac.za" required /></div>
+                <div><label>Password <span style={{ color:'var(--text-muted)' }}>(min 8 chars)</span></label><input type="password" aria-label="Password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
                 <div style={{ background:'var(--accent-glow)', border:'1px solid var(--accent-dim)', borderRadius:12, padding:'12px 14px', display:'flex', gap:10, alignItems:'flex-start' }}>
                   <span style={{ fontSize:'1.1rem' }}>✨</span>
                   <div style={{ fontSize:'.8rem', color:'var(--text-secondary)', lineHeight:1.5 }}>
-                    With one ReLiv account you can <strong style={{ color:'var(--text-primary)' }}>post tasks</strong> when you need help and <strong style={{ color:'var(--text-primary)' }}>bid on tasks</strong> to earn — switch anytime.
+                    With one ReLivR account you can <strong style={{ color:'var(--text-primary)' }}>post tasks</strong> when you need help and <strong style={{ color:'var(--text-primary)' }}>bid on tasks</strong> to earn — switch anytime.
                   </div>
                 </div>
                 <label style={{ display:'flex', gap:8, alignItems:'flex-start', cursor:'pointer' }}>
                   <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} style={{ width:'auto', marginTop:3, flexShrink:0, accentColor:'var(--accent)' }} />
-                  <span style={{ fontSize:'.76rem', color:'var(--text-secondary)', lineHeight:1.5 }}>I agree to the <span style={{ color:'var(--accent)', fontWeight:600 }}>Terms of Service</span> and <span style={{ color:'var(--accent)', fontWeight:600 }}>Privacy Policy</span>, and consent to ReLiv processing my data under POPIA.</span>
+                  <span style={{ fontSize:'.76rem', color:'var(--text-secondary)', lineHeight:1.5 }}>I agree to the <span style={{ color:'var(--accent)', fontWeight:600 }}>Terms of Service</span> and <span style={{ color:'var(--accent)', fontWeight:600 }}>Privacy Policy</span>, and consent to ReLivR processing my data under POPIA.</span>
                 </label>
               </>
             )}
@@ -908,20 +964,20 @@ const FEATURES_DATA = [
 const STEPS_DATA = [
   { n:'01', role:'Creator', color:'var(--amber)', title:'Post Your Task',      desc:'Describe what you need, set a budget, add skill tags. Your task goes live immediately.' },
   { n:'02', role:'Earner',  color:'var(--green)', title:'Submit a Bid',        desc:'Browse tasks matching your skills. Write a pitch, name your price, and submit.' },
-  { n:'03', role:'Creator', color:'var(--amber)', title:'Accept & Lock Funds', desc:'Review bids, pick the best fit, and fund escrow. Your money is protected until delivery.' },
+  { n:'03', role:'Creator', color:'var(--amber)', title:'Accept a Bid', desc:'Review bids and pick the best fit. Secure escrow payments are coming soon — for now, arrange payment with your earner directly.' },
   { n:'04', role:'Both',    color:'var(--purple)',title:'Work & Release',      desc:'Communicate through the platform. When done, release payment. Both sides win.' },
 ]
 
 const STATS_DATA = [
   { v:'R0',   l:'Cost to Start' },
-  { v:'10%',  l:'Fee on Completion Only' },
+  { v:'Beta', l:'Free While in Beta' },
   { v:'24h',  l:'Avg First Bid Time' },
-  { v:'100%', l:'Escrow Protected' },
+  { v:'Soon', l:'Secure Escrow Coming' },
 ]
 
 const TESTIMONIALS_DATA = [
-  { name:'Sipho M.',   role:'3rd Year CS · Earner',       rating:5, text:'I made R2400 in my first two weeks just fixing bugs and building small scripts for other students. ReLiv is the side hustle I didn\'t know I needed.' },
-  { name:'Anika V.',   role:'PostGrad Law · Creator',      rating:5, text:'Got my thesis transcribed, my room cleaned, and my laptop fixed all through ReLiv. The escrow system means I never worried about paying upfront.' },
+  { name:'Sipho M.',   role:'3rd Year CS · Earner',       rating:5, text:'I made R2400 in my first two weeks just fixing bugs and building small scripts for other students. ReLivR is the side hustle I didn\'t know I needed.' },
+  { name:'Anika V.',   role:'PostGrad Law · Creator',      rating:5, text:'Got my thesis transcribed, my room cleaned, and my laptop fixed all through ReLivR. The escrow system means I never worried about paying upfront.' },
   { name:'Lethabo K.', role:'2nd Year Commerce · Earner',  rating:5, text:'The trust score system is what makes it different. People know I\'m a real Rhodes student, not some random from the internet.' },
 ]
 
@@ -952,7 +1008,7 @@ function CampusStrip() {
 
 function Hero({ onOpenAuth }) {
   return (
-    <section style={{ minHeight:'100vh', display:'flex', alignItems:'center', padding:'110px 24px 72px', position:'relative', overflow:'hidden' }}>
+    <section className="hero-section" style={{ minHeight:'100vh', display:'flex', alignItems:'center', padding:'128px 24px 72px', position:'relative', overflow:'hidden' }}>
       <div style={{ position:'absolute', inset:0, zIndex:0, backgroundImage:'linear-gradient(rgba(33,28,46,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(33,28,46,.05) 1px,transparent 1px)', backgroundSize:'56px 56px' }} />
       <div style={{ position:'absolute', top:'15%', right:'8%', width:500, height:500, background:'radial-gradient(circle,rgba(91,33,182,.07) 0%,transparent 70%)', zIndex:0 }} />
       <div style={{ maxWidth:1200, margin:'0 auto', width:'100%', position:'relative', zIndex:1 }}>
@@ -960,13 +1016,13 @@ function Hero({ onOpenAuth }) {
           <div style={{ flex:1 }}>
             <div style={{ display:'inline-flex', alignItems:'center', gap:8, background:'rgba(91,33,182,.1)', border:'1px solid rgba(91,33,182,.25)', borderRadius:100, padding:'5px 14px', marginBottom:28, animation:'fadeUp .6s ease both' }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--amber)', animation:'pulse 2s infinite', flexShrink:0 }} />
-              <span style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', letterSpacing:'.1em', textTransform:'uppercase' }}>Now live on Rhodes Campus</span>
+              <span style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', letterSpacing:'.1em', textTransform:'uppercase' }}>Now in beta on Rhodes Campus</span>
             </div>
             <h1 style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(2.8rem,6.5vw,5.2rem)', lineHeight:1.0, letterSpacing:'-.02em', marginBottom:24, animation:'fadeUp .6s .1s ease both', opacity:0, animationFillMode:'forwards' }}>
               Live more.<br /><span style={{ background:'linear-gradient(100deg, transparent 0%, var(--highlight) 6%, var(--highlight) 94%, transparent 100%)', padding:'0 0.18em', borderRadius:12, WebkitBoxDecorationBreak:'clone', boxDecorationBreak:'clone' }}>stress less.</span>
             </h1>
             <p style={{ fontSize:'clamp(.95rem,1.8vw,1.2rem)', color:'#5f5970', lineHeight:1.75, maxWidth:520, marginBottom:36, animation:'fadeUp .6s .2s ease both', opacity:0, animationFillMode:'forwards' }}>
-              ReLiv connects Rhodes University students. Post a task, earn money, or get things done — all with escrow-protected payments and verified student trust scores.
+              ReLivR connects students. Post a task, earn money, or get things done — with verified student trust scores. Secure escrow payments (recurring, split &amp; more) are coming soon.
             </p>
             <div style={{ display:'flex', gap:12, flexWrap:'wrap', animation:'fadeUp .6s .3s ease both', opacity:0, animationFillMode:'forwards' }}>
               <button className="btn-p" style={{ fontSize:'.95rem', padding:'14px 30px' }} onClick={() => onOpenAuth('register')}>Post a Task Free →</button>
@@ -1115,7 +1171,7 @@ function Pricing({ onOpenAuth }) {
             <div style={{ fontFamily:'var(--fd)', fontSize:'3rem', fontWeight:800, lineHeight:1, marginBottom:5 }}>Free</div>
             <p style={{ color:'#6d6678', fontSize:'.875rem', marginBottom:24 }}>to post a task</p>
             <Divider style={{ marginBottom:20 }} />
-            {['Post unlimited tasks','Receive unlimited bids','Built-in messaging','Escrow payment protection','Dispute resolution support'].map(item => (
+            {['Post unlimited tasks','Receive unlimited bids','Built-in messaging','Escrow payments — coming soon','Dispute resolution support'].map(item => (
               <div key={item} style={{ display:'flex', gap:9, alignItems:'center', marginBottom:10 }}>
                 <span style={{ color:'var(--green)', fontSize:'.875rem', flexShrink:0 }}>✓</span>
                 <span style={{ fontSize:'.875rem', color:'#454050' }}>{item}</span>
@@ -1127,12 +1183,12 @@ function Pricing({ onOpenAuth }) {
             <div style={{ position:'absolute', top:-11, left:'50%', transform:'translateX(-50%)', background:'var(--amber)', color:'#fff', fontFamily:'var(--fm)', fontSize:'.58rem', fontWeight:500, textTransform:'uppercase', letterSpacing:'.1em', padding:'3px 12px', borderRadius:100 }}>Most Popular</div>
             <div style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:16 }}>For Earners</div>
             <div style={{ display:'flex', alignItems:'baseline', gap:5, marginBottom:5 }}>
-              <span style={{ fontFamily:'var(--fd)', fontSize:'3rem', fontWeight:800, lineHeight:1 }}>10%</span>
-              <span style={{ color:'#6d6678', fontSize:'.875rem' }}>per completed task</span>
+              <span style={{ fontFamily:'var(--fd)', fontSize:'3rem', fontWeight:800, lineHeight:1 }}>Free</span>
+              <span style={{ color:'#6d6678', fontSize:'.875rem' }}>during beta</span>
             </div>
-            <p style={{ color:'#6d6678', fontSize:'.875rem', marginBottom:24 }}>only when you get paid</p>
+            <p style={{ color:'#6d6678', fontSize:'.875rem', marginBottom:24 }}>secure payouts coming soon</p>
             <Divider style={{ marginBottom:20 }} />
-            {['Bid on any open task','Verified student trust score','Stripe-powered instant payouts','Build a campus reputation','Zero upfront cost'].map(item => (
+            {['Bid on any open task','Verified student trust score','Instant escrow payouts — coming soon','Build a campus reputation','Zero upfront cost'].map(item => (
               <div key={item} style={{ display:'flex', gap:9, alignItems:'center', marginBottom:10 }}>
                 <span style={{ color:'var(--amber)', fontSize:'.875rem', flexShrink:0 }}>✓</span>
                 <span style={{ fontSize:'.875rem', color:'#454050' }}>{item}</span>
@@ -1180,9 +1236,9 @@ function LandingAbout() {
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
         <div className="about-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:72, alignItems:'center' }}>
           <div>
-            <div className="slabel" style={{ marginBottom:18 }}>About ReLiv</div>
+            <div className="slabel" style={{ marginBottom:18 }}>About ReLivR</div>
             <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.6rem)', fontWeight:800, lineHeight:1.1, marginBottom:22 }}>Built for students,<br />by students.</h2>
-            <p style={{ color:'#665f72', lineHeight:1.8, marginBottom:18, fontSize:'.9rem' }}>ReLiv started with a simple observation: Rhodes University has thousands of talented students who need extra income, and thousands more who need help getting things done. We built the infrastructure to connect them safely.</p>
+            <p style={{ color:'#665f72', lineHeight:1.8, marginBottom:18, fontSize:'.9rem' }}>ReLivR started with a simple observation: Rhodes University has thousands of talented students who need extra income, and thousands more who need help getting things done. We built the infrastructure to connect them safely.</p>
             <p style={{ color:'#665f72', lineHeight:1.8, fontSize:'.9rem' }}>Every feature — from the escrow payment system to the trust score engine — was designed with one campus in mind. No bloat. Just a fast, safe marketplace that works.</p>
           </div>
           <div style={{ background:'var(--bg-base)', border:'1px solid var(--border)', borderRadius:14, padding:26, fontFamily:'var(--fm)', fontSize:'.78rem', lineHeight:2, color:'#7c7585' }}>
@@ -1203,6 +1259,143 @@ function LandingAbout() {
         </div>
       </div>
     </section>
+  )
+}
+
+// Beta strip shown above the landing nav.
+// Live countdown to the full launch.
+function Countdown({ target, onComplete }) {
+  const [left, setLeft] = useState(() => Math.max(0, new Date(target) - Date.now()))
+  useEffect(() => {
+    const id = setInterval(() => {
+      const ms = Math.max(0, new Date(target) - Date.now())
+      setLeft(ms)
+      if (ms === 0 && onComplete) { clearInterval(id); onComplete() }
+    }, 1000)
+    return () => clearInterval(id)
+  }, [target, onComplete])
+  const d = Math.floor(left / 86400000), h = Math.floor(left / 3600000) % 24
+  const m = Math.floor(left / 60000) % 60, s = Math.floor(left / 1000) % 60
+  const Cell = ({ n, l }) => (
+    <div style={{ textAlign:'center', minWidth:74, padding:'16px 12px', borderRadius:16, background:'var(--bg-elevated)', border:'1px solid var(--border)', boxShadow:'0 4px 16px rgba(20,18,30,.05)' }}>
+      <div style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(1.9rem,6vw,2.6rem)', lineHeight:1, color:'var(--amber)', fontVariantNumeric:'tabular-nums' }}>{String(n).padStart(2, '0')}</div>
+      <div style={{ fontFamily:'var(--fm)', fontSize:'.58rem', textTransform:'uppercase', letterSpacing:'.14em', color:'var(--text-muted)', marginTop:8 }}>{l}</div>
+    </div>
+  )
+  return (
+    <div style={{ display:'flex', gap:14, justifyContent:'center', flexWrap:'wrap' }} role="timer" aria-label={`${d} days until launch`}>
+      <Cell n={d} l="days" /><Cell n={h} l="hours" /><Cell n={m} l="mins" /><Cell n={s} l="secs" />
+    </div>
+  )
+}
+
+// Launch countdown + reminder waitlist.
+function LaunchSection() {
+  const [email, setEmail]     = useState('')
+  const [done, setDone]       = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [err, setErr]         = useState('')
+  async function submit(e) {
+    e.preventDefault()
+    if (!/.+@.+\..+/.test(email)) { setErr('Enter a valid email'); return }
+    setLoading(true); setErr('')
+    try {
+      const res = await fetch(API_BASE + '/waitlist', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ email }) })
+      if (!res.ok) throw new Error()
+      setDone(true)
+    } catch { setErr('Something went wrong — please try again') } finally { setLoading(false) }
+  }
+  return (
+    <section style={{ padding:'56px 24px', textAlign:'center', background:'var(--bg-surface)', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)' }}>
+      <div style={{ maxWidth:680, margin:'0 auto' }}>
+        <div className="slabel" style={{ justifyContent:'center', marginBottom:14 }}>Full launch · 7 July 2026</div>
+        <h2 style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(1.6rem,4vw,2.4rem)', marginBottom:22 }}>The countdown is on</h2>
+        <div style={{ marginBottom:26 }}><Countdown target={LAUNCH_AT} /></div>
+        <p style={{ color:'#5f5970', marginBottom:20, lineHeight:1.7 }}>
+          We're in <strong>beta</strong> now — sign up to use ReLivR today as a founding member, or drop your email and we'll remind you the moment we fully launch.
+        </p>
+        {done ? (
+          <div style={{ color:'var(--green)', fontWeight:600 }}>✓ You're on the list — we'll email you when ReLivR launches.</div>
+        ) : (
+          <form onSubmit={submit} style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'center' }}>
+            <input type="email" value={email} onChange={e=>{ setEmail(e.target.value); setErr('') }} placeholder="you@email.com" aria-label="Email for launch reminder"
+              style={{ maxWidth:280, padding:'12px 16px', borderRadius:10, border:'1px solid var(--border-strong)', background:'var(--bg-elevated)' }} />
+            <button type="submit" className="btn-p" disabled={loading}>{loading ? '…' : 'Remind me at launch'}</button>
+            {err && <div style={{ width:'100%', color:'var(--red)', fontSize:'.8rem' }}>{err}</div>}
+          </form>
+        )}
+      </div>
+    </section>
+  )
+}
+
+// Beta feedback channel.
+function FeedbackSection() {
+  const [msg, setMsg]     = useState('')
+  const [email, setEmail] = useState('')
+  const [done, setDone]   = useState(false)
+  const [loading, setLoading] = useState(false)
+  async function submit(e) {
+    e.preventDefault()
+    if (msg.trim().length < 3) return
+    setLoading(true)
+    try {
+      const res = await fetch(API_BASE + '/feedback', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ message: msg.trim(), email: email.trim() || undefined }) })
+      if (res.ok) setDone(true)
+    } catch { /* ignore */ } finally { setLoading(false) }
+  }
+  return (
+    <section id="feedback" style={{ padding:'64px 24px' }}>
+      <div style={{ maxWidth:560, margin:'0 auto', textAlign:'center' }}>
+        <div className="slabel" style={{ justifyContent:'center', marginBottom:14 }}>Beta feedback</div>
+        <h2 style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(1.6rem,4vw,2.4rem)', marginBottom:12 }}>Help us shape ReLivR</h2>
+        <p style={{ color:'#5f5970', marginBottom:24, lineHeight:1.7 }}>
+          We're building in the open during our beta, and <strong>any and all feedback is greatly appreciated</strong>. Found a bug, have an idea, or just want to say hi? Tell us.
+        </p>
+        {done ? (
+          <div style={{ color:'var(--green)', fontWeight:600 }}>✓ Thank you — your feedback means a lot during our beta.</div>
+        ) : (
+          <form onSubmit={submit} style={{ display:'flex', flexDirection:'column', gap:12, textAlign:'left' }}>
+            <textarea value={msg} onChange={e=>setMsg(e.target.value)} placeholder="Your feedback…" required aria-label="Your feedback"
+              style={{ minHeight:120, padding:'12px 14px', borderRadius:10, border:'1px solid var(--border-strong)', background:'var(--bg-elevated)' }} />
+            <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email (optional — if you'd like a reply)" aria-label="Your email, optional"
+              style={{ padding:'12px 14px', borderRadius:10, border:'1px solid var(--border-strong)', background:'var(--bg-elevated)' }} />
+            <button type="submit" className="btn-p" disabled={loading} style={{ alignSelf:'center' }}>{loading ? 'Sending…' : 'Send feedback'}</button>
+          </form>
+        )}
+      </div>
+    </section>
+  )
+}
+
+// Holding screen shown to signed-in non-admin users before the launch date.
+// The app itself is locked until the countdown ends; this confirms their spot
+// as a founding member and auto-reloads into the app the moment we launch.
+function LaunchGate({ user, onLogout, onViewLanding }) {
+  return (
+    <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', textAlign:'center', padding:'48px 24px', background:'var(--bg-base)', position:'relative', overflow:'hidden' }}>
+      <div style={{ position:'absolute', top:'-10%', left:'50%', transform:'translateX(-50%)', width:760, height:420, background:'radial-gradient(ellipse,rgba(245,158,11,.10) 0%,transparent 70%)', pointerEvents:'none' }} />
+      <div style={{ position:'relative', zIndex:1, maxWidth:620, width:'100%' }}>
+        <div style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'6px 14px', borderRadius:999, background:'var(--amber)', color:'#fff', fontFamily:'var(--fm)', fontSize:'.62rem', textTransform:'uppercase', letterSpacing:'.14em', fontWeight:700, marginBottom:26 }}>
+          ★ Founding Member
+        </div>
+        <h1 style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(2rem,5vw,3.2rem)', lineHeight:1.05, letterSpacing:'-.02em', marginBottom:16 }}>
+          You're in, {user.displayName?.split(' ')[0] || 'friend'}.
+        </h1>
+        <p style={{ color:'#5f5970', fontSize:'1.05rem', lineHeight:1.7, marginBottom:34, maxWidth:520, marginLeft:'auto', marginRight:'auto' }}>
+          ReLivR opens to everyone on <strong>7 July 2026</strong>. Your account is reserved
+          and you'll wear the <strong>★ Founding Member</strong> badge for being here from day one.
+          We'll email you the moment the doors open — this page unlocks into the app automatically.
+        </p>
+        <div style={{ marginBottom:36 }}>
+          <Countdown target={LAUNCH_AT} onComplete={() => window.location.reload()} />
+        </div>
+        <div style={{ display:'flex', gap:10, justifyContent:'center', flexWrap:'wrap' }}>
+          <button className="btn-s" onClick={onViewLanding}>← Back to site</button>
+          <button className="btn-g" onClick={onLogout}>Sign out</button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -1298,11 +1491,11 @@ function HowItWorksPage({ onNav }) {
     { id:'disputes',  label:'Disputes' },
   ]
   return (
-    <SidebarPage title="How ReLiv Works" subtitle="Product" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>Overview</h2><p>ReLiv is a peer-to-peer service marketplace designed exclusively for Rhodes University students. It connects people who need tasks done (Creators) with people who have the skills to do them (Earners).</p><div className="highlight"><p>🎓 ReLiv is a Rhodes-first platform. Linking your university SSO boosts your trust score significantly.</p></div></div>
+    <SidebarPage title="How ReLivR Works" subtitle="Product" sections={sections} onNav={onNav}>
+      <div id="overview"><h2>Overview</h2><p>ReLivR is a peer-to-peer service marketplace designed exclusively for Rhodes University students. It connects people who need tasks done (Creators) with people who have the skills to do them (Earners).</p><div className="highlight"><p>🎓 ReLivR is a Rhodes-first platform. Linking your university SSO boosts your trust score significantly.</p></div></div>
       <div id="creators"><h2>For Creators</h2><h3>Posting a Task</h3><p>Creating a task takes less than 60 seconds. Provide a title, description, budget, deadline, and skill tags. Once posted, your task is immediately visible and earners with matching skills are notified automatically.</p><h3>Reviewing Bids</h3><p>Earners submit bids with a proposed price and pitch. You can review all bids, message earners directly, and take as long as you need before accepting.</p><h3>Accepting a Bid</h3><p>When you accept a bid, all other bids are automatically declined and the winning earner is notified. You are then prompted to fund the escrow — this secures the payment without charging you yet.</p><h3>Releasing Payment</h3><p>Once the task is complete to your satisfaction, you release the payment. Funds transfer immediately to the earner's account. You are then prompted to leave a review.</p></div>
       <div id="earners"><h2>For Earners</h2><h3>Finding Tasks</h3><p>Browse the task feed by skill, keyword, or campus zone. The Suggestions tab surfaces tasks specifically matched to your skill profile using our Jaccard similarity algorithm.</p><h3>Submitting a Bid</h3><p>Write a pitch explaining why you're the right person for the task and propose your price. You can bid on multiple tasks simultaneously and withdraw a bid at any time before it's accepted.</p><h3>Getting Paid</h3><p>Payments are processed via Stripe Connect and deposited directly to your linked bank account. The platform retains a 10% fee from your payout on each completed task.</p></div>
-      <div id="payments"><h2>Payments & Escrow</h2><p>ReLiv uses an escrow model to protect both parties:</p><ul><li>Creator funds escrow → Stripe holds the money (no transfer yet)</li><li>Work is completed → Creator releases payment</li><li>Stripe captures the payment → Transfers to earner minus 10% platform fee</li><li>If disputed → Escrow is frozen until admin resolves it</li></ul><div className="highlight"><p>Your card is authorised but not charged until you release payment. If you raise a dispute before releasing, no charge is made.</p></div></div>
+      <div id="payments"><h2>Payments & Escrow</h2><p>ReLivR uses an escrow model to protect both parties:</p><ul><li>Creator funds escrow → Stripe holds the money (no transfer yet)</li><li>Work is completed → Creator releases payment</li><li>Stripe captures the payment → Transfers to earner minus 10% platform fee</li><li>If disputed → Escrow is frozen until admin resolves it</li></ul><div className="highlight"><p>Your card is authorised but not charged until you release payment. If you raise a dispute before releasing, no charge is made.</p></div></div>
       <div id="messaging"><h2>Messaging</h2><p>Every task has a built-in messaging thread between the creator and the accepted earner. Messages are stored and visible to admin in the event of a dispute — so keep communication professional and on-platform.</p></div>
       <div id="disputes"><h2>Disputes</h2><p>If something goes wrong, either party can raise a dispute. This immediately freezes the escrow and notifies our admin team. The admin reviews all messages, task requirements, and evidence submitted, then decides to either refund the creator or release payment to the earner.</p></div>
     </SidebarPage>
@@ -1320,11 +1513,11 @@ function FeaturesPage({ onNav }) {
   ]
   return (
     <SidebarPage title="Platform Features" subtitle="Product" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>All Features</h2><p>ReLiv is built with a focused feature set designed around the realities of campus life. Everything was chosen because it solves a real problem for students.</p></div>
+      <div id="overview"><h2>All Features</h2><p>ReLivR is built with a focused feature set designed around the realities of campus life. Everything was chosen because it solves a real problem for students.</p></div>
       <div id="matching"><h2>Smart Matching Engine</h2><p>When a task is posted, our matching engine automatically identifies earners whose skill profiles overlap with the task's skill tags using Jaccard similarity scoring. Earners are ranked by skill overlap score, average rating bonus (up to +20% for 5-star earners), and account longevity.</p></div>
       <div id="trust"><h2>Trust Score System</h2><p>Every user has a trust score between 0 and 100, calculated from:</p><ul><li><strong style={{color:'#3b3548'}}>Identity (40pts)</strong> — Rhodes SSO link (30pts) + verified email (10pts)</li><li><strong style={{color:'#3b3548'}}>Track record (40pts)</strong> — completed tasks (up to 20pts) + average rating (up to 20pts)</li><li><strong style={{color:'#3b3548'}}>Longevity (20pts)</strong> — 5 points per month, capped at 20</li><li><strong style={{color:'#3b3548'}}>Dispute penalty</strong> — -10pts per dispute raised against you</li></ul><div className="highlight"><p>Levels: Unverified (0–19) · New (20–49) · Established (50–79) · Verified (80–100)</p></div></div>
       <div id="escrow"><h2>Escrow System</h2><p>Our escrow is built on Stripe's PaymentIntent API with manual capture. Funds are authorised on the creator's card when escrow is funded, but no actual charge occurs until the creator releases payment. The 10% platform fee is deducted from the earner's payout, not added to the creator's charge.</p></div>
-      <div id="messaging"><h2>Messaging</h2><p>Built-in real-time messaging via Socket.io. Features include task-scoped threads, pre-bid inquiry messages, read receipts, and message history preserved for dispute evidence.</p></div>
+      <div id="messaging"><h2>Messaging</h2><p>Built-in direct messaging with task-scoped threads, pre-bid inquiry messages, read receipts, and message history preserved for dispute evidence. New messages reach you by email (instantly or in a daily digest — your choice in Profile → Security).</p></div>
       <div id="admin"><h2>Admin Tools</h2><p>The admin dashboard provides a full dispute queue with FIFO ordering, complete message logs for any task, escrow state visibility, user management, audit timelines, and one-click refund or release from the dispute detail view.</p></div>
     </SidebarPage>
   )
@@ -1340,9 +1533,9 @@ function PricingPage({ onNav, onOpenAuth }) {
   ]
   return (
     <SidebarPage title="Pricing" subtitle="Product" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>Pricing Overview</h2><p>ReLiv uses a simple success-based pricing model. We make money only when transactions succeed — aligning our incentives with yours.</p><div className="highlight"><p>No monthly fees. No posting fees. No signup fees. 10% is deducted from the earner's payout on each completed task.</p></div></div>
+      <div id="overview"><h2>Pricing Overview</h2><p>ReLivR uses a simple success-based pricing model. We make money only when transactions succeed — aligning our incentives with yours.</p><div className="highlight"><p>No monthly fees. No posting fees. No signup fees. 10% is deducted from the earner's payout on each completed task.</p></div></div>
       <div id="creators"><h2>For Creators</h2><p>Posting tasks is completely free. You only pay the agreed task price when you release payment after the work is complete. There are no additional fees charged to creators beyond the agreed task price.</p></div>
-      <div id="earners"><h2>For Earners</h2><p>Bidding and winning tasks is free. When a task is completed and payment is released, ReLiv retains 10% of the task value as a platform fee. Example: You win a R500 task. When the creator releases payment, you receive R450. ReLiv retains R50.</p></div>
+      <div id="earners"><h2>For Earners</h2><p>Bidding and winning tasks is free. When a task is completed and payment is released, ReLivR retains 10% of the task value as a platform fee. Example: You win a R500 task. When the creator releases payment, you receive R450. ReLivR retains R50.</p></div>
       <div id="fees"><h2>Fee Breakdown</h2>
         <table><thead><tr><th>Action</th><th>Creator</th><th>Earner</th></tr></thead><tbody>
           {[['Post a task','Free','—'],['Submit a bid','—','Free'],['Task completed','Task price','Task price minus 10%'],['Dispute raised','Free','Free'],['Refund (dispute)','Full refund','No payout']].map(([a,c,e]) => (
@@ -1350,7 +1543,7 @@ function PricingPage({ onNav, onOpenAuth }) {
           ))}
         </tbody></table>
       </div>
-      <div id="faq"><h2>Frequently Asked Questions</h2><h3>What if a dispute is raised?</h3><p>If resolved in the creator's favour, escrow is cancelled and no charge is made. If resolved in the earner's favour, payment is released as normal minus the 10% platform fee.</p><h3>Are there VAT implications?</h3><p>ReLiv is not currently VAT registered. Earners are responsible for declaring their earnings to SARS as individual income.</p><h3>Can prices be negotiated outside the platform?</h3><p>All transactions must go through ReLiv's escrow system. Off-platform payments are not covered by our trust or dispute protection.</p></div>
+      <div id="faq"><h2>Frequently Asked Questions</h2><h3>What if a dispute is raised?</h3><p>If resolved in the creator's favour, escrow is cancelled and no charge is made. If resolved in the earner's favour, payment is released as normal minus the 10% platform fee.</p><h3>Are there VAT implications?</h3><p>ReLivR is not currently VAT registered. Earners are responsible for declaring their earnings to SARS as individual income.</p><h3>Can prices be negotiated outside the platform?</h3><p>All transactions must go through ReLivR's escrow system. Off-platform payments are not covered by our trust or dispute protection.</p></div>
     </SidebarPage>
   )
 }
@@ -1366,10 +1559,10 @@ function TrustSafetyPage({ onNav }) {
   ]
   return (
     <SidebarPage title="Trust & Safety" subtitle="Product" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>Our Commitment to Safety</h2><p>ReLiv is built on the principle that two students from the same campus should be able to transact with confidence. Every feature exists to make that possible.</p><div className="highlight"><p>🔒 All payments are held in escrow and never leave the platform until both parties are satisfied — or an admin resolves a dispute.</p></div></div>
+      <div id="overview"><h2>Our Commitment to Safety</h2><p>ReLivR is built on the principle that two students from the same campus should be able to transact with confidence. Every feature exists to make that possible.</p><div className="highlight"><p>🔒 All payments are held in escrow and never leave the platform until both parties are satisfied — or an admin resolves a dispute.</p></div></div>
       <div id="trust-scores"><h2>Trust Scores</h2><p>Every user has a visible trust score calculated from verifiable signals: verified identity, completed transactions, earned ratings, and account history. A high trust score is not a guarantee of quality, but it is a meaningful signal that a user has a real, verified identity and a track record on the platform.</p></div>
       <div id="verification"><h2>Identity Verification</h2><p>To reach the highest trust tier, users must link their Rhodes University account (SSO). This verifies that the user is a current or recent Rhodes student and prevents anonymous bad-faith users from accumulating trust.</p></div>
-      <div id="escrow"><h2>Payment Safety</h2><p>ReLiv never holds your money — it is held by Stripe, one of the world's most trusted payment processors (PCI DSS Level 1 certified). Your card details are never stored by ReLiv.</p></div>
+      <div id="escrow"><h2>Payment Safety</h2><p>ReLivR never holds your money — it is held by Stripe, one of the world's most trusted payment processors (PCI DSS Level 1 certified). Your card details are never stored by ReLivR.</p></div>
       <div id="reporting"><h2>Reporting Issues</h2><p>If you encounter a problem:</p><ul><li><strong style={{color:'#3b3548'}}>Raise a dispute</strong> — for unresolved task delivery issues. Freezes escrow immediately.</li><li><strong style={{color:'#3b3548'}}>Report a user</strong> — for conduct violations, harassment, or fraud.</li><li><strong style={{color:'#3b3548'}}>Contact support</strong> — for account issues or technical problems.</li></ul></div>
       <div id="prohibited"><h2>Prohibited Conduct</h2><p>The following result in immediate account suspension:</p><ul><li>Off-platform payment requests or arrangements</li><li>Creating fake reviews or inflating trust scores</li><li>Harassment, threats, or discriminatory language</li><li>Posting tasks or services that are illegal under South African law</li><li>Academic dishonesty services</li></ul></div>
     </SidebarPage>
@@ -1393,13 +1586,13 @@ function TermsPage({ onNav }) {
   return (
     <SidebarPage title="Terms of Service" subtitle="Legal" sections={sections} onNav={onNav}>
       <p style={{ color:'var(--text-muted)', fontFamily:'var(--fm)', fontSize:'.62rem', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:24 }}>Last updated: 1 January 2025</p>
-      <div id="intro"><h2>1. Introduction</h2><p>These Terms of Service govern your access to and use of the ReLiv platform, operated by ReLiv (PTY) Ltd, registered in the Republic of South Africa. By creating an account or using the Platform, you agree to be bound by these Terms.</p></div>
-      <div id="eligibility"><h2>2. Eligibility</h2><p>To use ReLiv you must be at least 18 years of age (or 16 with parental consent), be a current or recently enrolled student, staff member, or affiliate of Rhodes University, and have the legal capacity to enter into binding agreements under South African law.</p></div>
+      <div id="intro"><h2>1. Introduction</h2><p>These Terms of Service govern your access to and use of the ReLivR platform, operated by ReLivR (PTY) Ltd, registered in the Republic of South Africa. By creating an account or using the Platform, you agree to be bound by these Terms.</p></div>
+      <div id="eligibility"><h2>2. Eligibility</h2><p>To use ReLivR you must be at least 18 years of age (or 16 with parental consent), be a current or recently enrolled student, staff member, or affiliate of Rhodes University, and have the legal capacity to enter into binding agreements under South African law.</p></div>
       <div id="accounts"><h2>3. Accounts</h2><p>You are responsible for maintaining the confidentiality of your account credentials. You may only create one account per person. You agree to provide accurate, current, and complete information at registration and to keep this information updated.</p></div>
-      <div id="tasks"><h2>4. Tasks and Bids</h2><p>ReLiv is a technology platform. We do not employ earners, control the quality of services rendered, or are a party to any agreement between a creator and an earner. All transactions must occur through the Platform's escrow system.</p></div>
-      <div id="payments"><h2>5. Payments</h2><p>Payment processing is handled by Stripe. ReLiv charges a 10% platform fee deducted from the earner's payout on each completed transaction. No fees are charged to creators beyond the agreed task price.</p></div>
+      <div id="tasks"><h2>4. Tasks and Bids</h2><p>ReLivR is a technology platform. We do not employ earners, control the quality of services rendered, or are a party to any agreement between a creator and an earner. All transactions must occur through the Platform's escrow system.</p></div>
+      <div id="payments"><h2>5. Payments</h2><p>Payment processing is handled by Stripe. ReLivR charges a 10% platform fee deducted from the earner's payout on each completed transaction. No fees are charged to creators beyond the agreed task price.</p></div>
       <div id="prohibited"><h2>6. Prohibited Use</h2><p>You agree not to use the Platform to post or fulfil services illegal under South African law, facilitate academic dishonesty, harass or threaten any user, create fake reviews, circumvent the escrow system, or impersonate any person.</p></div>
-      <div id="liability"><h2>7. Limitation of Liability</h2><p>ReLiv's liability in connection with any transaction or dispute is limited to the platform fees collected on that specific transaction. We are not liable for the quality of services, losses arising from transactions between users, or technical failures.</p></div>
+      <div id="liability"><h2>7. Limitation of Liability</h2><p>ReLivR's liability in connection with any transaction or dispute is limited to the platform fees collected on that specific transaction. We are not liable for the quality of services, losses arising from transactions between users, or technical failures.</p></div>
       <div id="termination"><h2>8. Termination</h2><p>You may close your account at any time after resolving pending transactions. We reserve the right to suspend or terminate any account for violations of these Terms.</p></div>
       <div id="governing"><h2>9. Governing Law</h2><p>These Terms are governed by the laws of the Republic of South Africa. Any disputes shall be subject to the jurisdiction of the South African courts.</p><div className="highlight"><p>Questions? Email <a href="mailto:legal@reliv.co.za">legal@reliv.co.za</a></p></div></div>
     </SidebarPage>
@@ -1420,7 +1613,7 @@ function PrivacyPage({ onNav }) {
   return (
     <SidebarPage title="Privacy Policy" subtitle="Legal" sections={sections} onNav={onNav}>
       <p style={{ color:'var(--text-muted)', fontFamily:'var(--fm)', fontSize:'.62rem', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:24 }}>Last updated: 1 January 2025</p>
-      <div id="intro"><h2>1. Introduction</h2><p>ReLiv (PTY) Ltd is committed to protecting your personal information in accordance with the Protection of Personal Information Act 4 of 2013 (POPIA) and all other applicable South African law.</p></div>
+      <div id="intro"><h2>1. Introduction</h2><p>ReLivR (PTY) Ltd is committed to protecting your personal information in accordance with the Protection of Personal Information Act 4 of 2013 (POPIA) and all other applicable South African law.</p></div>
       <div id="collect"><h2>2. What We Collect</h2><p>We collect: name and email at registration, profile information (bio, skills, portfolio), task descriptions and messages, identity verification documents (for Stripe), IP address and device info, and transaction history.</p></div>
       <div id="use"><h2>3. How We Use It</h2><p>We use your information to operate the Platform, process transactions, calculate trust scores, send transactional notifications, resolve disputes, comply with legal obligations, and detect fraud. We do not use your information for advertising or sell it to third parties.</p></div>
       <div id="share"><h2>4. Who We Share With</h2><p>We share only with: Stripe (payment processing), Neon.tech (database hosting in EU), Vercel (frontend hosting), and law enforcement where required by law. We do not sell or share your data with advertisers.</p></div>
@@ -1443,7 +1636,7 @@ function CookiesPage({ onNav }) {
     <SidebarPage title="Cookie Policy" subtitle="Legal" sections={sections} onNav={onNav}>
       <p style={{ color:'var(--text-muted)', fontFamily:'var(--fm)', fontSize:'.62rem', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:24 }}>Last updated: 1 January 2025</p>
       <div id="what"><h2>1. What Are Cookies</h2><p>Cookies are small text files stored in your browser when you visit a website. They allow websites to remember information about your visit.</p></div>
-      <div id="use"><h2>2. How We Use Cookies</h2><p>ReLiv uses cookies to keep you logged in between sessions, remember your preferences, ensure security by detecting unusual activity, and understand how you use the Platform. We do not use cookies for advertising.</p></div>
+      <div id="use"><h2>2. How We Use Cookies</h2><p>ReLivR uses cookies to keep you logged in between sessions, remember your preferences, ensure security by detecting unusual activity, and understand how you use the Platform. We do not use cookies for advertising.</p></div>
       <div id="types"><h2>3. Types of Cookies We Use</h2><h3>Strictly Necessary</h3><p>Required for the Platform to function. Includes your authentication token (JWT). You cannot opt out of these.</p><h3>Functional</h3><p>Remember your preferences such as display settings.</p><h3>Analytics</h3><p>Help us understand how users interact with the Platform. Data is aggregated and anonymised.</p></div>
       <div id="control"><h2>4. Your Control</h2><p>You can control and delete cookies through your browser settings. Disabling strictly necessary cookies will prevent you from logging in.</p><div className="highlight"><p>Questions? Email <a href="mailto:privacy@reliv.co.za">privacy@reliv.co.za</a></p></div></div>
     </SidebarPage>
@@ -1462,11 +1655,11 @@ function POPIAPage({ onNav }) {
   return (
     <SidebarPage title="POPIA Compliance" subtitle="Legal" sections={sections} onNav={onNav}>
       <p style={{ color:'var(--text-muted)', fontFamily:'var(--fm)', fontSize:'.62rem', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:24 }}>Last updated: 1 January 2025</p>
-      <div id="overview"><h2>POPIA Compliance Statement</h2><p>ReLiv (PTY) Ltd is committed to compliance with the Protection of Personal Information Act 4 of 2013 (POPIA), South Africa's primary data protection legislation.</p><div className="highlight"><p>POPIA came into full effect on 1 July 2021. It gives South Africans rights over their personal information and places obligations on organisations that process it.</p></div></div>
+      <div id="overview"><h2>POPIA Compliance Statement</h2><p>ReLivR (PTY) Ltd is committed to compliance with the Protection of Personal Information Act 4 of 2013 (POPIA), South Africa's primary data protection legislation.</p><div className="highlight"><p>POPIA came into full effect on 1 July 2021. It gives South Africans rights over their personal information and places obligations on organisations that process it.</p></div></div>
       <div id="lawful"><h2>Lawful Bases for Processing</h2><p>We process personal information on the following lawful bases: contractual necessity (to deliver Platform services), consent (for non-essential communications), legal obligation (financial record-keeping), and legitimate interests (fraud detection and Platform security).</p></div>
-      <div id="officer"><h2>Information Officer</h2><p>ReLiv has designated an Information Officer responsible for overseeing POPIA compliance. Contact: <a href="mailto:privacy@reliv.co.za">privacy@reliv.co.za</a> · Rhodes University, Makhanda, Eastern Cape, 6140.</p></div>
+      <div id="officer"><h2>Information Officer</h2><p>ReLivR has designated an Information Officer responsible for overseeing POPIA compliance. Contact: <a href="mailto:privacy@reliv.co.za">privacy@reliv.co.za</a> · Rhodes University, Makhanda, Eastern Cape, 6140.</p></div>
       <div id="rights"><h2>Data Subject Rights</h2><p>Under POPIA, you have the right to be notified of processing, access your information, request correction or deletion, object to processing, and lodge a complaint with the Information Regulator.</p><div className="highlight"><p>Information Regulator: <a href="https://inforeg.org.za">inforeg.org.za</a> · +27 10 023 5207 · complaints.IR@justice.gov.za</p></div></div>
-      <div id="breaches"><h2>Data Breaches</h2><p>In the event of a security breach, ReLiv will notify the Information Regulator within 72 hours of becoming aware, notify affected data subjects as soon as reasonably possible, document the breach and remedial actions, and cooperate fully with any investigation.</p></div>
+      <div id="breaches"><h2>Data Breaches</h2><p>In the event of a security breach, ReLivR will notify the Information Regulator within 72 hours of becoming aware, notify affected data subjects as soon as reasonably possible, document the breach and remedial actions, and cooperate fully with any investigation.</p></div>
       <div id="transfers"><h2>Cross-Border Data Transfers</h2><p>Some personal information is processed outside South Africa: Stripe (United States — PCI DSS Level 1), Neon.tech (EU Frankfurt — GDPR compliant), Vercel (United States — SOC 2). All transfers are governed by appropriate data processing agreements.</p></div>
     </SidebarPage>
   )
@@ -1490,7 +1683,7 @@ function HelpCentrePage({ onNav }) {
       <div id="earners"><h2>For Earners</h2><h3>How do I write a good pitch?</h3><p>Be specific. Reference the task directly, explain your relevant experience, give a realistic timeline, and be honest about your price. Generic pitches get ignored.</p><h3>How quickly do I get paid?</h3><p>Once the creator releases payment, Stripe processes the transfer. Payout timing is typically 1–3 business days for South African bank accounts.</p></div>
       <div id="payments"><h2>Payments</h2><h3>My payment failed. What do I do?</h3><p>Check your card details are correct and that you have sufficient funds. If the problem persists, try a different card or contact your bank.</p><h3>Can I get a refund if I'm not happy?</h3><p>Refunds are only processed through the dispute resolution system. Do not release payment until you are satisfied — once released we cannot reverse the transfer.</p></div>
       <div id="account"><h2>My Account</h2><h3>How do I change my password?</h3><p>Go to Profile → Security → Change Password. You will need your current password to set a new one.</p><h3>How do I delete my account?</h3><p>Go to Profile → Security → Delete Account. Pending transactions must be resolved before deletion.</p></div>
-      <div id="technical"><h2>Technical Issues</h2><h3>The app doesn't work on my phone.</h3><p>ReLiv is designed to work on all modern mobile browsers. Try Chrome on Android or Safari on iOS. If the problem persists, please report it.</p><div className="highlight"><p>Still stuck? Email <a href="mailto:support@reliv.co.za">support@reliv.co.za</a> — we respond within 24 hours.</p></div></div>
+      <div id="technical"><h2>Technical Issues</h2><h3>The app doesn't work on my phone.</h3><p>ReLivR is designed to work on all modern mobile browsers. Try Chrome on Android or Safari on iOS. If the problem persists, please report it.</p><div className="highlight"><p>Still stuck? Email <a href="mailto:support@reliv.co.za">support@reliv.co.za</a> — we respond within 24 hours.</p></div></div>
     </SidebarPage>
   )
 }
@@ -1571,8 +1764,8 @@ function GuidelinesPage({ onNav }) {
   ]
   return (
     <SidebarPage title="Community Guidelines" subtitle="Support" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>Our Community Standards</h2><p>ReLiv works because students trust each other. These guidelines exist to protect that trust and ensure the platform remains a safe, fair place for everyone on campus.</p></div>
-      <div id="respect"><h2>Respect</h2><p>Every person on ReLiv is a member of the Rhodes community. Treat them accordingly.</p><ul><li>Communicate professionally, even when disagreements arise</li><li>No harassment, threats, hate speech, or discriminatory language</li><li>Respect boundaries — if someone withdraws from a transaction, accept it</li><li>Do not share other users' personal information outside the platform</li></ul></div>
+      <div id="overview"><h2>Our Community Standards</h2><p>ReLivR works because students trust each other. These guidelines exist to protect that trust and ensure the platform remains a safe, fair place for everyone on campus.</p></div>
+      <div id="respect"><h2>Respect</h2><p>Every person on ReLivR is a member of the Rhodes community. Treat them accordingly.</p><ul><li>Communicate professionally, even when disagreements arise</li><li>No harassment, threats, hate speech, or discriminatory language</li><li>Respect boundaries — if someone withdraws from a transaction, accept it</li><li>Do not share other users' personal information outside the platform</li></ul></div>
       <div id="honesty"><h2>Honesty</h2><ul><li>Represent your skills and experience accurately</li><li>Describe tasks accurately — do not misrepresent scope or requirements</li><li>Do not create fake reviews or manipulate trust scores</li><li>Do not impersonate other users or create multiple accounts</li></ul></div>
       <div id="tasks"><h2>Acceptable Tasks</h2><p>Not permitted:</p><ul><li>Anything illegal under South African law</li><li>Academic dishonesty — writing essays for submission as original work</li><li>Adult or sexual content of any kind</li><li>Services designed to harm or harass an individual</li></ul><p>Tutoring, explaining concepts, proofreading with attribution, and study assistance are acceptable.</p></div>
       <div id="payments"><h2>Payment Integrity</h2><ul><li>All payments must go through the escrow system</li><li>Do not release payment if the work is not completed to the agreed standard</li><li>Do not raise frivolous disputes to delay payment</li></ul></div>
@@ -1629,6 +1822,59 @@ function ReportPage({ onNav }) {
 }
 
 // ─── OAUTH CALLBACK PAGE ─────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONSENT GATE — blocks app use until POPIA consent is explicitly given.
+// Fires mainly for new Google users (OAuth can't capture consent at sign-in).
+// ═══════════════════════════════════════════════════════════════════════════════
+function ConsentGate({ onConsented, onDecline, onViewPrivacy }) {
+  const toast = useToast()
+  const [checked, setChecked] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  async function accept() {
+    if (!checked) { toast('Please tick the box to continue', 'error'); return }
+    setSaving(true)
+    try {
+      const res = await fetch(API_BASE + '/auth/consent', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('rl_token')}` },
+      })
+      if (!res.ok) throw new Error('Could not record consent')
+      onConsented()
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(20,16,30,.72)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+      <div style={{ background:'var(--bg-surface)', borderRadius:'var(--radius-md)', maxWidth:460, width:'100%', padding:28, boxShadow:'0 20px 60px rgba(0,0,0,.3)' }}>
+        <div style={{ fontSize:'1.8rem', marginBottom:10 }}>🔒</div>
+        <h2 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.35rem', marginBottom:10 }}>One quick thing before you start</h2>
+        <p style={{ color:'var(--text-secondary)', lineHeight:1.6, fontSize:'.92rem', marginBottom:18 }}>
+          To use ReLivR we need your agreement to how we handle your personal information, in line with South Africa’s POPIA. We collect only what’s needed to run the marketplace, and never sell your data.
+        </p>
+        <label style={{ display:'flex', gap:10, alignItems:'flex-start', cursor:'pointer', marginBottom:20, padding:'12px 14px', background:'var(--bg-elevated)', borderRadius:'var(--radius-sm)', border:`1px solid ${checked?'var(--accent)':'var(--border)'}` }}>
+          <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} style={{ marginTop:3, width:16, height:16, cursor:'pointer', accentColor:'var(--accent)' }} />
+          <span style={{ fontSize:'.86rem', color:'var(--text-secondary)', lineHeight:1.5 }}>
+            I agree to ReLivR’s processing of my personal information and have read the{' '}
+            <button type="button" onClick={onViewPrivacy} style={{ background:'none', border:'none', color:'var(--accent)', cursor:'pointer', padding:0, fontSize:'.86rem', textDecoration:'underline' }}>Privacy Policy</button>.
+          </span>
+        </label>
+        <div style={{ display:'flex', gap:10 }}>
+          <Btn loading={saving} onClick={accept} style={{ flex:1 }}>Agree & continue</Btn>
+          <Btn variant="ghost" onClick={onDecline}>Cancel</Btn>
+        </div>
+        <p style={{ fontSize:'.72rem', color:'var(--text-muted)', marginTop:14, textAlign:'center' }}>
+          Declining will sign you out — we can’t create your account without this consent.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 // Google redirects back to http://localhost:3000/oauth-callback?token=xxx&...
 // Vite serves index.html, React reads the query params and completes login.
 
@@ -1713,15 +1959,16 @@ const NAV = {
   ],
 }
 
-function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding }) {
+function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch }) {
   const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [searchText, setSearchText] = useState('')
   const isCreator = user.role === 'creator'
   // Desktop nav links — role-aware. These render in the top bar on every screen
   // wide enough to fit them, so navigation never depends on the mobile bottom bar.
   const isAdmin = user.role === 'admin'
   const navLinks = isAdmin
-    ? [ { id:'admin-disputes', label:'Disputes' }, { id:'admin-users', label:'Users' }, { id:'admin-businesses', label:'Businesses' } ]
+    ? [ { id:'dashboard', label:'Dashboard' }, { id:'admin-disputes', label:'Disputes' }, { id:'admin-users', label:'Users' }, { id:'admin-businesses', label:'Businesses' }, { id:'admin-locations', label:'Locations' }, { id:'admin-flags', label:'Flags' } ]
     : [
         { id:'tasks-browse', label:'Browse' },
         { id:'local-browse', label:'Local' },
@@ -1735,7 +1982,7 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding }) {
         <Logo onClick={onViewLanding || onGoHome} />
 
         {/* Desktop nav links — hidden on narrow screens (bottom bar takes over there) */}
-        <nav className="topbar-nav" style={{ display:'flex', alignItems:'center', gap:2, marginLeft:6 }}>
+        <nav className="topbar-nav" style={{ alignItems:'center', gap:2, marginLeft:6 }}>
           <button onClick={onGoHome}
             style={{ padding:'7px 12px', borderRadius:9, border:'none', background:'transparent', color:'var(--text-secondary)', fontSize:'.875rem', fontWeight:600, fontFamily:'var(--font-body)', cursor:'pointer', transition:'all 120ms ease' }}
             onMouseEnter={e=>e.currentTarget.style.background='var(--bg-hover)'}
@@ -1751,29 +1998,34 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding }) {
           })}
         </nav>
 
-        {/* Search — desktop only; tapping it lands on the feed where real search lives */}
-        <div className="topbar-search" style={{ flex:1, maxWidth:360, margin:'0 12px' }}>
-          <button onClick={() => { setPage('tasks-browse'); setTimeout(() => document.getElementById('feed-search')?.focus(), 100) }}
-            style={{ width:'100%', textAlign:'left', padding:'9px 16px', borderRadius:100, border:'1px solid var(--border)', background:'var(--bg-elevated)', color:'var(--text-muted)', fontSize:'.875rem', cursor:'pointer' }}>
-            ⌕ Search tasks…
-          </button>
-        </div>
+        {/* Universal search — people, businesses, and tasks. Submit → results page. */}
+        <form className="topbar-search" role="search" style={{ flex:1, maxWidth:380, margin:'0 12px' }}
+          onSubmit={e => { e.preventDefault(); const q = searchText.trim(); if (q) onSearch?.(q) }}>
+          <div style={{ position:'relative' }}>
+            <span aria-hidden="true" style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', fontSize:'.95rem', pointerEvents:'none' }}>⌕</span>
+            <input value={searchText} onChange={e => setSearchText(e.target.value)}
+              aria-label="Search people, businesses, and tasks"
+              placeholder="Search people, businesses, tasks…"
+              style={{ width:'100%', padding:'9px 16px 9px 34px', borderRadius:100, border:'1px solid var(--border)', background:'var(--bg-elevated)', color:'var(--text-primary)', fontSize:'.875rem' }} />
+          </div>
+        </form>
 
         <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6 }}>
           <button className="btn-p topbar-post" style={{ padding:'9px 18px', fontSize:'.85rem' }} onClick={() => setPage('tasks-new')}>＋ Post a Task</button>
-          <button onClick={() => setPage('messages')} title="Messages"
-            style={{ width:38, height:38, borderRadius:'50%', border:'none', background:page==='messages'?'var(--accent-glow)':'transparent', color:page==='messages'?'var(--accent)':'var(--text-secondary)', fontSize:'1.05rem', cursor:'pointer' }}>◎</button>
+          <button onClick={() => setPage('messages')} aria-label="Messages" title="Messages"
+            style={{ width:38, height:38, borderRadius:'50%', border:'none', background:page==='messages'?'var(--accent-glow)':'transparent', color:page==='messages'?'var(--accent)':'var(--text-secondary)', fontSize:'1.05rem', cursor:'pointer' }}><span aria-hidden="true">◎</span></button>
           <button onClick={() => setPage('notifications')} title="Alerts"
+            aria-label={unreadCount > 0 ? `Alerts, ${unreadCount} unread` : 'Alerts'}
             style={{ position:'relative', width:38, height:38, borderRadius:'50%', border:'none', background:page==='notifications'?'var(--accent-glow)':'transparent', color:page==='notifications'?'var(--accent)':'var(--text-secondary)', fontSize:'1.05rem', cursor:'pointer' }}>
-            ◉{unreadCount>0 && <span style={{ position:'absolute', top:4, right:4, background:'var(--danger)', color:'#fff', fontFamily:'var(--font-mono)', fontSize:'.55rem', fontWeight:700, minWidth:15, height:15, lineHeight:'15px', borderRadius:8, textAlign:'center', padding:'0 3px' }}>{unreadCount}</span>}
+            <span aria-hidden="true">◉</span>{unreadCount>0 && <span style={{ position:'absolute', top:4, right:4, background:'var(--danger)', color:'#fff', fontFamily:'var(--font-mono)', fontSize:'.55rem', fontWeight:700, minWidth:15, height:15, lineHeight:'15px', borderRadius:8, textAlign:'center', padding:'0 3px' }}>{unreadCount}</span>}
           </button>
 
           {/* Avatar menu */}
           <div style={{ position:'relative' }}>
-            <button onClick={() => setMenuOpen(o => !o)} style={{ background:'none', border:'none', padding:2, cursor:'pointer', display:'flex' }}>
+            <button onClick={() => setMenuOpen(o => !o)} aria-label="Account menu" aria-haspopup="menu" aria-expanded={menuOpen} style={{ background:'none', border:'none', padding:2, cursor:'pointer', display:'flex' }}>
               {user.avatarUrl
                 ? <img src={user.avatarUrl} alt="" style={{ width:34, height:34, borderRadius:'50%', objectFit:'cover', border:'2px solid var(--accent-dim)' }} />
-                : <span style={{ width:34, height:34, borderRadius:'50%', background:'var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:800, fontSize:'.9rem', color:'var(--accent)' }}>{(user.displayName||user.email||'?').charAt(0).toUpperCase()}</span>}
+                : <span aria-hidden="true" style={{ width:34, height:34, borderRadius:'50%', background:'var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:800, fontSize:'.9rem', color:'var(--accent)' }}>{(user.displayName||user.email||'?').charAt(0).toUpperCase()}</span>}
             </button>
             {menuOpen && (
               <>
@@ -1822,7 +2074,7 @@ function DashSidebar({ page, setPage, unreadCount, onGoHome }) {
       <div className="sidebar-logo" style={{ display:'flex', alignItems:'center', gap:10, marginBottom:24 }}>
         <div onClick={onGoHome} style={{ display:'flex', alignItems:'center', gap:9, cursor:'pointer' }}>
           <div style={{ background:'var(--accent)', color:'#fff', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'0.85rem', padding:'4px 8px', borderRadius:'var(--radius-sm)', letterSpacing:'0.06em' }}>R</div>
-          <span style={{ fontFamily:'var(--font-display)', fontSize:'1.05rem', fontWeight:700, letterSpacing:'-0.01em' }}>ReLiv</span>
+          <span style={{ fontFamily:'var(--font-display)', fontSize:'1.05rem', fontWeight:700, letterSpacing:'-0.01em' }}>ReLivR</span>
         </div>
       </div>
       <div className="sidebar-status" style={{ display:'flex', alignItems:'center', gap:6, fontFamily:'var(--font-mono)', fontSize:'0.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:20 }}>
@@ -1967,6 +2219,21 @@ function categoryFor(task) {
   return CATEGORIES.find(c => c.kw.some(k => hay.includes(k))) || CATEGORIES[CATEGORIES.length - 1]
 }
 
+// Data-driven category list for the filter rail — fetched from GET /categories
+// (so a new category is a DB insert, not a deploy), falling back to the constant.
+function useCategories() {
+  const [cats, setCats] = useState(CATEGORIES)
+  useEffect(() => {
+    let alive = true
+    fetch(API_BASE + '/categories')
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error('categories fetch failed'))))
+      .then(d => { if (alive && d.categories?.length) setCats(d.categories) })
+      .catch(() => { /* keep the fallback */ })
+    return () => { alive = false }
+  }, [])
+  return cats
+}
+
 function CardCover({ task, height = 108 }) {
   const c = categoryFor(task)
   return (
@@ -1984,6 +2251,7 @@ function TaskBrowse({ setPage, setSelectedTask }) {
   const { state } = useStore()
   const [skill, setSkill]   = useState('')
   const [cat, setCat]       = useState(null)
+  const cats = useCategories()
   const [status, setStatus] = useState('all')
   const [sort, setSort]     = useState('newest')
   const [tasks, setTasks]   = useState([])
@@ -1995,7 +2263,7 @@ function TaskBrowse({ setPage, setSelectedTask }) {
   async function loadTasks() {
     try {
       // Pull a broad set; filtering/sorting happens client-side below
-      const res = await fetch('/tasks?status=open&limit=100', { headers: { Authorization: `Bearer ${token()}` } })
+      const res = await fetch(API_BASE + '/tasks?status=open&limit=100', { headers: { Authorization: `Bearer ${token()}` } })
       if (!res.ok) throw new Error('failed')
       const data = await res.json()
       // Normalise: ensure skill_tags is always an array
@@ -2049,7 +2317,7 @@ function TaskBrowse({ setPage, setSelectedTask }) {
 
       {/* Illustrated category rail */}
       <div className="feed-scroll" style={{ display:'flex', gap:8, overflowX:'auto', marginBottom:18, paddingBottom:4 }}>
-        {CATEGORIES.map(c => {
+        {cats.map(c => {
           const active = cat === c.name
           return (
             <button key={c.name} onClick={() => setCat(active ? null : c.name)}
@@ -2113,10 +2381,57 @@ function TaskDetail({ taskId, setPage, openChat }) {
   const [bids, setBids]   = useState(state.bids.filter(b => b.task_id===taskId&&b.status!=='withdrawn'))
   const [loadingTask, setLoadingTask] = useState(true)
   const escrow = state.escrows[taskId]
+  const [editOpen, setEditOpen]   = useState(false)
+  const [editForm, setEditForm]   = useState({ title:'', description:'', budget:'', deadline:'' })
+  const [editSaving, setEditSaving] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+
+  function openEdit() {
+    setEditForm({
+      title: task.title || '',
+      description: task.description || '',
+      budget: String(task.budget || ''),
+      deadline: task.deadline ? new Date(task.deadline).toISOString().slice(0, 10) : '',
+    })
+    setEditOpen(true)
+  }
+  async function saveEdit() {
+    setEditSaving(true)
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({
+          title: editForm.title.trim(),
+          description: editForm.description.trim(),
+          budget: parseFloat(editForm.budget),
+          deadline: new Date(editForm.deadline).toISOString(),
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || 'Could not save changes')
+      setTask({ ...data.task, skill_tags: data.task.skill_tags || [] })
+      setEditOpen(false)
+      toast('Task updated', 'success')
+    } catch (err) { toast(err.message, 'error') } finally { setEditSaving(false) }
+  }
+  async function cancelTask() {
+    if (!window.confirm('Cancel this task? Any pending bids will be declined. This cannot be undone.')) return
+    setCancelling(true)
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}/cancel`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${token()}` },
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || 'Could not cancel task')
+      toast('Task cancelled', 'success')
+      setPage('tasks-mine')
+    } catch (err) { toast(err.message, 'error') } finally { setCancelling(false) }
+  }
 
   async function loadTask({ silent = false } = {}) {
     try {
-      const res = await fetch(`/tasks/${taskId}`, { headers: { Authorization: `Bearer ${token()}` } })
+      const res = await fetch(`${API_BASE}/tasks/${taskId}`, { headers: { Authorization: `Bearer ${token()}` } })
       if (!res.ok) throw new Error('failed')
       const data = await res.json()
       setTask({ ...data.task, skill_tags: data.task.skill_tags || [] })
@@ -2176,7 +2491,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
     if (Object.keys(errs).length) { setBidErrors(errs); return }
     setBidErrors({}); setBidLoading(true)
     try {
-      const res = await fetch(`/tasks/${taskId}/bids`, {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}/bids`, {
         method:'POST',
         headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
         body: JSON.stringify({ amount: parseFloat(bidAmount), pitch: bidPitch.trim() }),
@@ -2196,7 +2511,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
   async function confirmAccept() {
     setAcceptLoading(true)
     try {
-      const res = await fetch(`/tasks/${taskId}/bids/${acceptModal.bid_id}/accept`, {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}/bids/${acceptModal.bid_id}/accept`, {
         method:'PATCH',
         headers:{ Authorization:`Bearer ${token()}` },
       })
@@ -2224,7 +2539,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
   async function confirmComplete() {
     setReleaseLoading(true)
     try {
-      const res = await fetch(`/tasks/${taskId}/complete`, {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}/complete`, {
         method:'PATCH',
         headers:{ Authorization:`Bearer ${token()}` },
       })
@@ -2239,6 +2554,25 @@ function TaskDetail({ taskId, setPage, openChat }) {
     } finally {
       setReleaseLoading(false)
     }
+  }
+
+  async function submitWork() {
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}/submit`, { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || 'Could not submit work')
+      toast('Work submitted — the creator will review it', 'success')
+      await loadTask({ silent:true })
+    } catch (err) { toast(err.message, 'error') }
+  }
+  async function requestChanges() {
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}/request-changes`, { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || 'Could not request changes')
+      toast('Sent back to the earner for changes', 'success')
+      await loadTask({ silent:true })
+    } catch (err) { toast(err.message, 'error') }
   }
 
   function confirmDispute() {
@@ -2257,7 +2591,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
     if (!reviewRating) { toast('Please select a star rating', 'error'); return }
     setReviewLoading(true)
     try {
-      const res = await fetch('/reviews', {
+      const res = await fetch(API_BASE + '/reviews', {
         method:'POST',
         headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
         body: JSON.stringify({ task_id: taskId, rating: reviewRating, comment: reviewComment.trim() }),
@@ -2296,6 +2630,14 @@ function TaskDetail({ taskId, setPage, openChat }) {
         </div>
       </div>
 
+      {/* Creator controls — only while the task is still open */}
+      {task.creator_id === user?.userId && task.status === 'open' && (
+        <div style={{ display:'flex', gap:8, marginBottom:20, flexWrap:'wrap' }}>
+          <Btn variant="secondary" size="sm" onClick={openEdit}>Edit task</Btn>
+          <Btn variant="danger" size="sm" loading={cancelling} onClick={cancelTask}>Cancel task</Btn>
+        </div>
+      )}
+
       {escrow&&isCreator&&(
         <div style={{ marginBottom:20, padding:'14px 18px', borderRadius:'var(--radius-md)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap', ...(escrow.status==='funded'?{background:'rgba(16,185,129,0.1)',border:'1px solid rgba(16,185,129,0.3)'}:escrow.status==='released'?{background:'rgba(91,33,182,0.1)',border:'1px solid rgba(91,33,182,0.3)'}:escrow.status==='disputed'?{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)'}:{background:'rgba(59,130,246,0.1)',border:'1px solid rgba(59,130,246,0.3)'}) }}>
           <div style={{ display:'flex', gap:10, alignItems:'center' }}>
@@ -2309,7 +2651,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
         </div>
       )}
 
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 320px', gap:20 }}>
+      <div className="stack-mobile" style={{ display:'grid', gridTemplateColumns:'1fr 320px', gap:20 }}>
         <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
           <DCard hover={false}><Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:10 }}>Description</Mono><p style={{ color:'var(--text-secondary)', lineHeight:1.75 }}>{task.description}</p></DCard>
           <DCard hover={false}><Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:10 }}>Required Skills</Mono><div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>{task.skill_tags.map(t => <Tag key={t}>{t}</Tag>)}</div></DCard>
@@ -2344,19 +2686,46 @@ function TaskDetail({ taskId, setPage, openChat }) {
             )}
           </DCard>
 
-          {/* Owner marks the task complete once work is done (escrow deferred) */}
-          {isOwner&&currentStatus==='in_progress'&&(
+          {/* ── Completion handshake ── */}
+          {/* Earner submits finished work */}
+          {task.assigned_to===user?.userId&&currentStatus==='in_progress'&&(
             <DCard hover={false} style={{ border:'1px solid var(--accent)', background:'var(--accent-glow)' }}>
+              <div style={{ fontWeight:600, marginBottom:4 }}>Finished the work?</div>
+              <p style={{ fontSize:'0.84rem', color:'var(--text-secondary)', marginBottom:14, lineHeight:1.5 }}>Submit it for the creator to review and confirm.</p>
+              <Btn variant="success" fullWidth onClick={submitWork}>Submit work for review</Btn>
+            </DCard>
+          )}
+          {/* Creator at in_progress can still complete directly */}
+          {isOwner&&currentStatus==='in_progress'&&(
+            <DCard hover={false} style={{ border:'1px solid var(--border-strong)' }}>
               <div style={{ fontWeight:600, marginBottom:4 }}>Work finished?</div>
-              <p style={{ fontSize:'0.84rem', color:'var(--text-secondary)', marginBottom:14, lineHeight:1.5 }}>Mark this task complete once {acceptedBid?.display_name || 'the earner'} has delivered. You'll both be able to leave a review.</p>
+              <p style={{ fontSize:'0.84rem', color:'var(--text-secondary)', marginBottom:14, lineHeight:1.5 }}>Waiting for {acceptedBid?.display_name || 'the earner'} to submit — or mark it complete yourself.</p>
               <Btn variant="success" fullWidth onClick={() => setReleaseModal(true)}>✓ Mark Task Complete</Btn>
+            </DCard>
+          )}
+          {/* Creator reviews submitted work: confirm or send back */}
+          {isOwner&&currentStatus==='submitted'&&(
+            <DCard hover={false} style={{ border:'1px solid var(--accent)', background:'var(--accent-glow)' }}>
+              <div style={{ fontWeight:600, marginBottom:4 }}>Work submitted for review</div>
+              <p style={{ fontSize:'0.84rem', color:'var(--text-secondary)', marginBottom:14, lineHeight:1.5 }}>{acceptedBid?.display_name || 'The earner'} marked this done. Confirm completion, or send it back for changes.</p>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                <Btn variant="success" onClick={() => setReleaseModal(true)}>✓ Confirm completion</Btn>
+                <Btn variant="secondary" onClick={requestChanges}>Request changes</Btn>
+              </div>
+            </DCard>
+          )}
+          {/* Earner waiting on the creator */}
+          {task.assigned_to===user?.userId&&currentStatus==='submitted'&&(
+            <DCard hover={false} style={{ border:'1px solid var(--border-strong)' }}>
+              <div style={{ fontWeight:600, marginBottom:4 }}>Submitted — awaiting confirmation</div>
+              <p style={{ fontSize:'0.84rem', color:'var(--text-secondary)', lineHeight:1.5 }}>The creator is reviewing your work. You'll be notified when they confirm.</p>
             </DCard>
           )}
           {/* After completion, either participant can leave one review */}
           {currentStatus==='completed'&&!reviewDone&&(isOwner||(alreadyBid&&myBid.status==='accepted'))&&(
             <DCard hover={false} style={{ border:'1px solid var(--accent)', background:'var(--accent-glow)' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
-                <div><div style={{ fontWeight:600, marginBottom:4 }}>Task complete — leave a review</div><p style={{ fontSize:'0.85rem', color:'var(--text-secondary)' }}>Help build trust on ReLiv.</p></div>
+                <div><div style={{ fontWeight:600, marginBottom:4 }}>Task complete — leave a review</div><p style={{ fontSize:'0.85rem', color:'var(--text-secondary)' }}>Help build trust on ReLivR.</p></div>
                 <Btn onClick={() => setReviewModal(true)}>Leave Review</Btn>
               </div>
             </DCard>
@@ -2415,6 +2784,22 @@ function TaskDetail({ taskId, setPage, openChat }) {
       </div>
 
       <ConfirmModal open={!!acceptModal} onClose={() => setAcceptModal(null)} onConfirm={confirmAccept} loading={acceptLoading} title="Accept This Bid" confirmLabel="Accept & Move to Escrow" confirmVariant="primary" message={acceptModal?`Accept ${acceptModal.display_name}'s bid of R${acceptModal.amount}? All other bids will be rejected.`:''} />
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit task" maxWidth={480}>
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          <Input label="Title" value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title:e.target.value }))} />
+          <div>
+            <label>Description</label>
+            <textarea value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description:e.target.value }))} style={{ minHeight:120 }} />
+          </div>
+          <Input label="Budget (R)" type="number" value={editForm.budget} onChange={e => setEditForm(f => ({ ...f, budget:e.target.value }))} />
+          <Input label="Deadline" type="date" value={editForm.deadline} onChange={e => setEditForm(f => ({ ...f, deadline:e.target.value }))} />
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+            <Btn variant="ghost" onClick={() => setEditOpen(false)} disabled={editSaving}>Cancel</Btn>
+            <Btn variant="primary" loading={editSaving} onClick={saveEdit}>Save changes</Btn>
+          </div>
+        </div>
+      </Modal>
+
       <Modal open={fundModal} onClose={() => setFundModal(false)} title="Fund Escrow" maxWidth={440}>
         <p style={{ color:'var(--text-secondary)', lineHeight:1.65, marginBottom:16 }}>Fund escrow for <strong style={{ color:'var(--text-primary)' }}>{task.title}</strong>.</p>
         <div style={{ background:'var(--bg-elevated)', borderRadius:'var(--radius-md)', padding:'14px 16px', marginBottom:20 }}>
@@ -2487,7 +2872,7 @@ function TaskNew({ setPage, setSelectedTask }) {
     setLoading(true)
     const skillTags = tags.split(',').map(s=>s.trim()).filter(Boolean)
     try {
-      const res = await fetch('/tasks', {
+      const res = await fetch(API_BASE + '/tasks', {
         method: 'POST',
         headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
         body: JSON.stringify({
@@ -2575,6 +2960,100 @@ function TaskNew({ setPage, setSelectedTask }) {
   )
 }
 
+// Reusable + recurring task templates manager (shown on My Tasks).
+function TemplatesPanel({ setPage, setSelectedTask }) {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [templates, setTemplates] = useState([])
+  const [show, setShow]   = useState(false)
+  const [open, setOpen]   = useState(false)
+  const [saving, setSaving] = useState(false)
+  const blank = { title:'', description:'', budget:'', deadlineDays:'7', recurrence:'none' }
+  const [form, setForm]   = useState(blank)
+
+  async function load() {
+    try {
+      const res = await fetch(API_BASE + '/templates', { headers:{ Authorization:`Bearer ${token()}` } })
+      if (res.ok) { const d = await res.json(); setTemplates(d.templates || []) }
+    } catch { /* offline */ }
+  }
+  useEffect(() => { load() }, []) // eslint-disable-line
+
+  async function create() {
+    setSaving(true)
+    try {
+      const res = await fetch(API_BASE + '/templates', {
+        method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
+        body: JSON.stringify({ title:form.title.trim(), description:form.description.trim(), budget:parseFloat(form.budget), deadlineDays:parseInt(form.deadlineDays,10)||7, recurrence:form.recurrence }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.message || 'Could not save template')
+      setOpen(false); setForm(blank); setShow(true); toast('Template saved', 'success'); load()
+    } catch (err) { toast(err.message, 'error') } finally { setSaving(false) }
+  }
+  async function use(id) {
+    try {
+      const res = await fetch(`${API_BASE}/templates/${id}/use`, { method:'POST', headers:{ Authorization:`Bearer ${token()}` } })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.message || 'Could not create task')
+      toast('Task created from template', 'success'); setSelectedTask(d.task.task_id); setPage('task-detail')
+    } catch (err) { toast(err.message, 'error') }
+  }
+  async function remove(id) {
+    if (!window.confirm('Delete this template?')) return
+    try { const res = await fetch(`${API_BASE}/templates/${id}`, { method:'DELETE', headers:{ Authorization:`Bearer ${token()}` } }); if (res.ok) { toast('Template deleted', 'success'); load() } } catch { /* ignore */ }
+  }
+
+  return (
+    <DCard hover={false} style={{ marginBottom:20 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+        <Mono>Templates{templates.length > 0 ? ` · ${templates.length}` : ''}</Mono>
+        <div style={{ display:'flex', gap:8 }}>
+          <Btn variant="secondary" size="sm" onClick={() => setOpen(true)}>+ New template</Btn>
+          {templates.length > 0 && <Btn variant="ghost" size="sm" onClick={() => setShow(s => !s)}>{show ? 'Hide' : 'Show'}</Btn>}
+        </div>
+      </div>
+      {show && templates.length > 0 && (
+        <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:12 }}>
+          {templates.map(t => (
+            <div key={t.template_id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, padding:'10px 12px', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)' }}>
+              <div style={{ minWidth:0 }}>
+                <div style={{ fontWeight:600, fontSize:'0.9rem', display:'flex', gap:8, alignItems:'center' }}>{t.title}{t.recurrence !== 'none' && <Tag>{t.recurrence}</Tag>}</div>
+                <Mono>R{t.budget} · due in {t.deadline_days}d</Mono>
+              </div>
+              <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+                <Btn size="sm" onClick={() => use(t.template_id)}>Use</Btn>
+                <Btn variant="ghost" size="sm" onClick={() => remove(t.template_id)}>✕</Btn>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <Modal open={open} onClose={() => setOpen(false)} title="New task template" maxWidth={480}>
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          <Input label="Title" value={form.title} onChange={e => setForm(f => ({ ...f, title:e.target.value }))} />
+          <div><label>Description</label><textarea value={form.description} onChange={e => setForm(f => ({ ...f, description:e.target.value }))} style={{ minHeight:100 }} /></div>
+          <Input label="Budget (R)" type="number" value={form.budget} onChange={e => setForm(f => ({ ...f, budget:e.target.value }))} />
+          <Input label="Deadline (days from posting)" type="number" value={form.deadlineDays} onChange={e => setForm(f => ({ ...f, deadlineDays:e.target.value }))} />
+          <div>
+            <label>Recurrence</label>
+            <select value={form.recurrence} onChange={e => setForm(f => ({ ...f, recurrence:e.target.value }))}>
+              <option value="none">One-off</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+            <Btn variant="ghost" onClick={() => setOpen(false)} disabled={saving}>Cancel</Btn>
+            <Btn variant="primary" loading={saving} onClick={create}>Save template</Btn>
+          </div>
+        </div>
+      </Modal>
+    </DCard>
+  )
+}
+
 function MyTasks({ setPage, setSelectedTask }) {
   const { state } = useStore()
   const { user } = useAuth()
@@ -2584,7 +3063,7 @@ function MyTasks({ setPage, setSelectedTask }) {
 
   async function load() {
     try {
-      const res = await fetch('/tasks/mine', { headers: { Authorization: `Bearer ${token()}` } })
+      const res = await fetch(API_BASE + '/tasks/mine', { headers: { Authorization: `Bearer ${token()}` } })
       if (!res.ok) throw new Error('failed')
       const data = await res.json()
       // Only tasks I created (mine returns created + assigned)
@@ -2603,6 +3082,7 @@ function MyTasks({ setPage, setSelectedTask }) {
         <PageTitle sub={`${myTasks.length} tasks posted`}>My Tasks</PageTitle>
         <Btn onClick={() => setPage('tasks-new')}>+ New Task</Btn>
       </div>
+      <TemplatesPanel setPage={setPage} setSelectedTask={setSelectedTask} />
       <div className="feed-scroll" style={{ display:'flex', gap:2, marginBottom:20, background:'var(--bg-elevated)', borderRadius:12, padding:3, overflowX:'auto', maxWidth:'fit-content' }}>
         {['all','open','in_progress','completed','disputed','expired'].map(s => (
           <button key={s} onClick={() => setFilter(s)}
@@ -2651,7 +3131,7 @@ function MyBids({ setPage, setSelectedTask }) {
 
   async function load() {
     try {
-      const res = await fetch('/tasks/bids/mine', { headers: { Authorization: `Bearer ${token()}` } })
+      const res = await fetch(API_BASE + '/tasks/bids/mine', { headers: { Authorization: `Bearer ${token()}` } })
       if (!res.ok) throw new Error('failed')
       const data = await res.json()
       // Map backend shape → what the card expects (task info is flattened on each bid)
@@ -2668,7 +3148,7 @@ function MyBids({ setPage, setSelectedTask }) {
 
   async function withdraw(bidId) {
     try {
-      const res = await fetch(`/tasks/bids/${bidId}/withdraw`, { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
+      const res = await fetch(`${API_BASE}/tasks/bids/${bidId}/withdraw`, { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
       if (!res.ok) throw new Error('failed')
       toast('Bid withdrawn','info')
       load()
@@ -2794,7 +3274,7 @@ function Messages({ target, clearTarget }) {
   // ── Load conversation list ──────────────────────────────────────────────────
   async function loadThreads() {
     try {
-      const res = await fetch('/messages/threads', { headers: { Authorization: `Bearer ${token()}` } })
+      const res = await fetch(API_BASE + '/messages/threads', { headers: { Authorization: `Bearer ${token()}` } })
       if (!res.ok) throw new Error('threads failed')
       const data = await res.json()
       let list = data.threads || []
@@ -2828,7 +3308,7 @@ function Messages({ target, clearTarget }) {
   async function loadThread(otherId, { silent = false } = {}) {
     if (!otherId) return
     try {
-      const res = await fetch(`/messages/${otherId}`, { headers: { Authorization: `Bearer ${token()}` } })
+      const res = await fetch(`${API_BASE}/messages/${otherId}`, { headers: { Authorization: `Bearer ${token()}` } })
       if (!res.ok) throw new Error('thread failed')
       const data = await res.json()
       setMessages(data.messages || [])
@@ -2881,7 +3361,7 @@ function Messages({ target, clearTarget }) {
     setSending(true)
 
     try {
-      const res = await fetch('/messages', {
+      const res = await fetch(API_BASE + '/messages', {
         method: 'POST',
         headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
         body: JSON.stringify({ receiver_id: activeId, content: text }),
@@ -2905,10 +3385,10 @@ function Messages({ target, clearTarget }) {
     <div className="page-enter" style={{ maxWidth:900 }}>
       <PageTitle sub="Direct messages">Messages</PageTitle>
       {offline && <div style={{ background:'rgba(180,83,9,.08)', border:'1px solid rgba(180,83,9,.25)', borderRadius:8, padding:'8px 13px', marginBottom:14, fontSize:'.8rem', color:'var(--warning)' }}>Showing demo messages — start the backend to send real ones.</div>}
-      <DCard hover={false} className="msg-shell" style={{ display:'flex', height:580, padding:0, overflow:'hidden' }}>
+      <DCard hover={false} className={`msg-shell ${activeId ? 'has-active' : ''}`} style={{ display:'flex', height:580, padding:0, overflow:'hidden' }}>
 
         {/* Conversation list */}
-        <div style={{ width:220, borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', flexShrink:0 }}>
+        <div className="msg-list" style={{ width:220, borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', flexShrink:0 }}>
           <div style={{ padding:'12px 14px', borderBottom:'1px solid var(--border)' }}><Mono size="0.65rem">Conversations</Mono></div>
           <div style={{ flex:1, overflowY:'auto' }}>
             {loading && <div style={{ padding:20, textAlign:'center' }}><Spinner size={18} /></div>}
@@ -2936,7 +3416,7 @@ function Messages({ target, clearTarget }) {
         </div>
 
         {/* Active conversation */}
-        <div style={{ flex:1, display:'flex', flexDirection:'column' }}>
+        <div className="msg-thread" style={{ flex:1, display:'flex', flexDirection:'column' }}>
           {!activeId ? (
             <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center' }}>
               <EmptyState icon="◎" message="Select a conversation" />
@@ -2944,6 +3424,9 @@ function Messages({ target, clearTarget }) {
           ) : (
             <>
               <div style={{ padding:'12px 18px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:12, background:'var(--bg-elevated)' }}>
+                {/* Mobile-only: back to conversation list */}
+                <button className="show-m" onClick={() => setActiveId(null)} aria-label="Back to conversations"
+                  style={{ background:'none', border:'none', color:'var(--text-secondary)', fontSize:'1.2rem', cursor:'pointer', padding:0, marginRight:2, lineHeight:1 }}>←</button>
                 <div style={{ width:34, height:34, borderRadius:'50%', background:'var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'0.78rem', color:'var(--accent)', flexShrink:0 }}>{initials(activeThread?.display_name)}</div>
                 <div>
                   <div style={{ fontWeight:600, fontSize:'0.9rem' }}>{activeThread?.display_name || 'User'}</div>
@@ -2994,7 +3477,7 @@ function Notifications({ setPage, setSelectedTask }) {
   // Load notifications from backend, fall back to store if offline
   async function load() {
     try {
-      const res = await fetch('/notifications', { headers: { Authorization: `Bearer ${token()}` } })
+      const res = await fetch(API_BASE + '/notifications', { headers: { Authorization: `Bearer ${token()}` } })
       if (!res.ok) throw new Error('failed')
       const data = await res.json()
       setNotifs(data.notifications || [])
@@ -3018,7 +3501,7 @@ function Notifications({ setPage, setSelectedTask }) {
     toast('All notifications marked as read','info')
     if (offline) { dispatch({type:'MARK_ALL_READ'}); return }
     try {
-      await fetch('/notifications/read', { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
+      await fetch(API_BASE + '/notifications/read', { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
     } catch { /* already updated optimistically */ }
   }
 
@@ -3065,6 +3548,36 @@ const BIZ_CATEGORIES = [
   'Clothing', 'Tech & repairs', 'Services', 'Entertainment', 'Other',
 ]
 
+// Campus zones — MUST stay identical to the server whitelist in auth.js / profile.js,
+// or valid signups get rejected. Single source of truth for the dropdown.
+// Fallback list — used only if GET /locations is unreachable (TD-11). The live
+// source of truth is the data-driven `locations` table, so adding a campus is a
+// DB insert, not a frontend deploy.
+const CAMPUS_ZONE_LIST = [
+  'West Campus', 'East Campus', 'Drostdy', 'Allan Webb', 'Founders',
+  'Goldfields', 'Hobson', 'Kimberley', 'Botha', 'Dingane',
+  'Adamson', 'Cory', 'Jan Smuts', 'Oriel', 'Prince Alfred',
+  'Off-campus / Town', 'Other',
+]
+
+// Fetch the campus/zone picker options from the backend, flattened to names.
+// Falls back to CAMPUS_ZONE_LIST so signup still works fully offline.
+function useLocations() {
+  const [zones, setZones] = useState(CAMPUS_ZONE_LIST)
+  useEffect(() => {
+    let alive = true
+    fetch(API_BASE + '/locations')
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error('locations fetch failed'))))
+      .then(data => {
+        const names = (data.campuses || []).flatMap(c => (c.zones || []).map(z => z.name))
+        if (alive && names.length) setZones(names)
+      })
+      .catch(() => { /* keep the fallback list */ })
+    return () => { alive = false }
+  }, [])
+  return zones
+}
+
 // Small image gallery used on business cards/detail
 function BizGallery({ images = [], height = 160 }) {
   const [idx, setIdx] = useState(0)
@@ -3099,7 +3612,7 @@ function LocalBrowse({ setPage }) {
     let cancelled = false
     setLoading(true)
     const q = cat === 'all' ? '' : `?category=${encodeURIComponent(cat)}`
-    fetch(`/businesses${q}`)
+    fetch(`${API_BASE}/businesses${q}`)
       .then(r => r.json())
       .then(d => { if (!cancelled) { setBusinesses(d.businesses || []); setLoading(false) } })
       .catch(() => { if (!cancelled) { setBusinesses([]); setLoading(false) } })
@@ -3186,7 +3699,7 @@ function AdminBusinesses() {
 
   function load() {
     setLoading(true)
-    fetch('/businesses/admin/all', { headers:{ Authorization:`Bearer ${token()}` } })
+    fetch(API_BASE + '/businesses/admin/all', { headers:{ Authorization:`Bearer ${token()}` } })
       .then(r => r.json())
       .then(d => { setBusinesses(d.businesses || []); setLoading(false) })
       .catch(() => { setBusinesses([]); setLoading(false) })
@@ -3278,7 +3791,7 @@ function BusinessForm({ business, onDone, onCancel }) {
     if (!confirm('Delete this business listing permanently?')) return
     setSaving(true)
     try {
-      const res = await fetch(`/businesses/${business.business_id}`, { method:'DELETE', headers:{ Authorization:`Bearer ${token()}` } })
+      const res = await fetch(`${API_BASE}/businesses/${business.business_id}`, { method:'DELETE', headers:{ Authorization:`Bearer ${token()}` } })
       if (!res.ok) throw new Error('Delete failed')
       toast('Business deleted', 'success'); onDone()
     } catch (err) { toast(err.message, 'error') }
@@ -3361,7 +3874,7 @@ function BusinessForm({ business, onDone, onCancel }) {
 // Trust/verification badge definitions — rendered on public profiles
 const BADGE_DEFS = {
   ru_student:    { icon:'🎓', label:'Rhodes student',  color:'#5b21b6', desc:'Verified @ru.ac.za email' },
-  email_verified:{ icon:'✓',  label:'Verified',        color:'#15803d', desc:'Email address confirmed' },
+  email_verified:{ icon:'✓',  label:'Verified',        color:'#15803d', desc:'Email verified via Google' },
   google_linked: { icon:'🔗', label:'Google-linked',   color:'#1d4ed8', desc:'Signed in with Google' },
   top_rated:     { icon:'⭐', label:'Top rated',        color:'#d97706', desc:'4.5+ stars across 5+ reviews' },
   established:   { icon:'🏅', label:'Established',      color:'#b45309', desc:'10+ tasks completed' },
@@ -3377,6 +3890,105 @@ function Badge2({ id }) {
   )
 }
 
+// Universal search results — people, businesses, and tasks for one query.
+function SearchResults({ query, setPage, setSelectedTask, openProfile }) {
+  const [data, setData]       = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState(null)
+
+  useEffect(() => {
+    if (!query) { setData({ users: [], businesses: [], tasks: [] }); setLoading(false); return }
+    let cancelled = false
+    setLoading(true); setError(null)
+    fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`)
+      .then(r => { if (!r.ok) throw new Error('Search failed'); return r.json() })
+      .then(d => { if (!cancelled) { setData(d); setLoading(false) } })
+      .catch(e => { if (!cancelled) { setError(e.message); setLoading(false) } })
+    return () => { cancelled = true }
+  }, [query])
+
+  const { users = [], businesses = [], tasks = [] } = data || {}
+  const total = users.length + businesses.length + tasks.length
+
+  const initialsOf = name => (name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+  const avatar = (url, name) => url
+    ? <img src={url} alt="" style={{ width:40, height:40, borderRadius:'50%', objectFit:'cover', flexShrink:0 }} />
+    : <div style={{ width:40, height:40, borderRadius:'50%', background:'var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'.85rem', color:'var(--accent)', flexShrink:0 }}>{initialsOf(name)}</div>
+
+  return (
+    <>
+      <PageTitle sub={query ? `Results for “${query}”` : 'Type in the search bar above'}>Search</PageTitle>
+
+      {loading && <div style={{ padding:48, textAlign:'center' }}><Spinner /></div>}
+      {!loading && error && <EmptyState icon="◷" message={error} />}
+      {!loading && !error && total === 0 && (
+        <EmptyState icon="◻" message={query ? `No people, businesses, or tasks match “${query}”.` : 'Search for people, businesses, or tasks.'} />
+      )}
+
+      {!loading && !error && total > 0 && (
+        <div style={{ display:'flex', flexDirection:'column', gap:28 }}>
+          {users.length > 0 && (
+            <section>
+              <Mono style={{ display:'block', marginBottom:12 }}>People · {users.length}</Mono>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {users.map(u => (
+                  <DCard key={u.user_id} onClick={() => openProfile(u.user_id)}
+                    style={{ display:'flex', alignItems:'center', gap:14, padding:'12px 16px', cursor:'pointer' }}>
+                    {avatar(u.avatar_url, u.display_name)}
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontWeight:600, fontSize:'.92rem' }}>{u.display_name || 'ReLivR member'}</div>
+                      <div style={{ fontSize:'.78rem', color:'var(--text-muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                        {u.headline || u.campus_zone || 'Member'}
+                      </div>
+                    </div>
+                    {u.rating_count > 0 && <Mono>★ {Number(u.avg_rating).toFixed(1)}</Mono>}
+                  </DCard>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {businesses.length > 0 && (
+            <section>
+              <Mono style={{ display:'block', marginBottom:12 }}>Businesses · {businesses.length}</Mono>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {businesses.map(b => (
+                  <DCard key={b.business_id} onClick={() => setPage('local-browse')}
+                    style={{ padding:'12px 16px', cursor:'pointer' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', gap:10 }}>
+                      <span style={{ fontWeight:600, fontSize:'.92rem' }}>{b.name}</span>
+                      {b.category && <Tag>{b.category}</Tag>}
+                    </div>
+                    {b.description && <div style={{ fontSize:'.8rem', color:'var(--text-secondary)', marginTop:4, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{b.description}</div>}
+                  </DCard>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {tasks.length > 0 && (
+            <section>
+              <Mono style={{ display:'block', marginBottom:12 }}>Tasks · {tasks.length}</Mono>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {tasks.map(t => (
+                  <DCard key={t.task_id} onClick={() => { setSelectedTask(t.task_id); setPage('task-detail') }}
+                    style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, padding:'12px 16px', cursor:'pointer' }}>
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontWeight:600, fontSize:'.92rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.title}</div>
+                      {t.creator_name && <div style={{ fontSize:'.76rem', color:'var(--text-muted)' }}>by {t.creator_name}</div>}
+                    </div>
+                    <Mono style={{ flexShrink:0 }}>R{t.budget}</Mono>
+                  </DCard>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+    </>
+  )
+}
+
 function PublicProfile({ userId, setPage, openChat, openProfile }) {
   const { user } = useAuth()
   const toast = useToast()
@@ -3388,7 +4000,7 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
   useEffect(() => {
     let cancelled = false
     setLoading(true); setError(null)
-    fetch(`/profile/public/${userId}`)
+    fetch(`${API_BASE}/profile/public/${userId}`)
       .then(r => { if (!r.ok) throw new Error('Could not load profile'); return r.json() })
       .then(d => { if (!cancelled) { setData(d); setLoading(false); setTab((d.completed?.length ? 'completed' : 'reviews')) } })
       .catch(e => { if (!cancelled) { setError(e.message); setLoading(false) } })
@@ -3439,7 +4051,12 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
           {avatar
             ? <img src={avatar} alt="" style={{ width:96, height:96, borderRadius:'50%', objectFit:'cover', border:'4px solid var(--bg-surface)', boxShadow:'0 2px 10px rgba(33,28,46,.12)' }} />
             : <div style={{ width:96, height:96, borderRadius:'50%', background:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:800, fontSize:'2.3rem', color:'#fff', border:'4px solid var(--bg-surface)', boxShadow:'0 2px 10px rgba(33,28,46,.12)' }}>{name.charAt(0).toUpperCase()}</div>}
-          <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.7rem', lineHeight:1.1, marginTop:12 }}>{name}</h1>
+          <div style={{ display:'flex', gap:10, alignItems:'center', marginTop:12, flexWrap:'wrap' }}>
+            <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.7rem', lineHeight:1.1 }}>{name}</h1>
+            {profile.beta_founder && (
+              <span title="Joined during the ReLivR beta" style={{ display:'inline-flex', alignItems:'center', gap:5, background:'rgba(91,33,182,.1)', border:'1px solid rgba(91,33,182,.3)', color:'var(--amber)', borderRadius:100, padding:'3px 11px', fontFamily:'var(--font-mono)', fontSize:'.6rem', fontWeight:600, textTransform:'uppercase', letterSpacing:'.08em' }}>★ Founding Member</span>
+            )}
+          </div>
           {profile.headline && <p style={{ color:'var(--text-secondary)', fontSize:'1rem', marginTop:4, marginBottom:0 }}>{profile.headline}</p>}
 
           {/* badges */}
@@ -3577,7 +4194,7 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
 }
 
 function Profile({ openProfile }) {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const { state } = useStore()
   const toast = useToast()
   const [tab, setTab] = useState('profile')
@@ -3592,6 +4209,11 @@ function Profile({ openProfile }) {
   const [newPw, setNewPw]         = useState('')
   const [saving, setSaving]       = useState(false)
   const [savingPw, setSavingPw]   = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [emailFrequency, setEmailFrequency] = useState('instant')
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deletePw, setDeletePw]   = useState('')
+  const [deleting, setDeleting]   = useState(false)
   const [loadingProfile, setLoadingProfile] = useState(true)
   const myReviews = state.reviews.filter(r=>r.reviewee_id==='u1'||r.reviewer_id==='u1')
   const avgRating = myReviews.length?(myReviews.reduce((s,r)=>s+r.rating,0)/myReviews.length).toFixed(1):null
@@ -3603,7 +4225,7 @@ function Profile({ openProfile }) {
     let cancelled = false
     async function load() {
       try {
-        const res = await fetch('/profile', { headers: { Authorization: `Bearer ${token()}` } })
+        const res = await fetch(API_BASE + '/profile', { headers: { Authorization: `Bearer ${token()}` } })
         if (!res.ok) throw new Error('not ok')
         const { profile } = await res.json()
         if (cancelled || !profile) return
@@ -3614,6 +4236,7 @@ function Profile({ openProfile }) {
         setHeadline(profile.headline || '')
         setServices(profile.services_offered || '')
         setEmail(profile.email || user.email || '')
+        setEmailFrequency(profile.email_frequency || 'instant')
       } catch {
         // Backend unreachable — keep whatever we have from context (demo mode)
       } finally {
@@ -3628,7 +4251,7 @@ function Profile({ openProfile }) {
   async function saveProfile() {
     setSaving(true)
     try {
-      const res = await fetch('/profile', {
+      const res = await fetch(API_BASE + '/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
         body: JSON.stringify({
@@ -3660,7 +4283,7 @@ function Profile({ openProfile }) {
     if (newPw.length < 8) { toast('New password must be at least 8 characters', 'error'); return }
     setSavingPw(true)
     try {
-      const res = await fetch('/profile/password', {
+      const res = await fetch(API_BASE + '/profile/password', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
         body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
@@ -3668,11 +4291,77 @@ function Profile({ openProfile }) {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.message || 'Could not change password')
       setCurrentPw(''); setNewPw('')
-      toast('Password changed', 'success')
+      toast('Password changed — please sign in again', 'success')
     } catch (err) {
       toast(err.message, 'error')
     } finally {
       setSavingPw(false)
+    }
+  }
+
+  // ── Download my data (POPIA) ────────────────────────────────────────────────
+  async function exportData() {
+    setExporting(true)
+    try {
+      const res = await fetch(API_BASE + '/profile/export', { headers: { Authorization: `Bearer ${token()}` } })
+      if (!res.ok) throw new Error('Could not export your data')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = 'relivr-data.json'; a.click()
+      URL.revokeObjectURL(url)
+      toast('Your data is downloading', 'success')
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // ── Email cadence (optimistic) ──────────────────────────────────────────────
+  async function saveEmailFrequency(freq) {
+    const prev = emailFrequency
+    setEmailFrequency(freq)
+    try {
+      const res = await fetch(API_BASE + '/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({ emailFrequency: freq }),
+      })
+      if (!res.ok) throw new Error()
+      toast('Email preference saved', 'success')
+    } catch {
+      setEmailFrequency(prev)
+      toast('Could not update email preference', 'error')
+    }
+  }
+
+  // ── Sign out of all devices ─────────────────────────────────────────────────
+  async function signOutAllDevices() {
+    try {
+      await fetch(API_BASE + '/auth/logout-all', { method: 'POST', headers: { Authorization: `Bearer ${token()}` } })
+    } catch { /* revoked regardless; fall through to local logout */ }
+    toast('Signed out of all devices', 'success')
+    logout()
+  }
+
+  // ── Delete account (POPIA erasure) ──────────────────────────────────────────
+  async function deleteAccount() {
+    setDeleting(true)
+    try {
+      const res = await fetch(API_BASE + '/profile/account', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({ password: deletePw }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || 'Could not delete account')
+      toast('Your account has been deleted', 'success')
+      logout()
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -3763,9 +4452,56 @@ function Profile({ openProfile }) {
             <Input label="New Password" type="password" value={newPw} onChange={e=>setNewPw(e.target.value)} hint="Minimum 8 characters" />
             <Btn loading={savingPw} onClick={changePassword} style={{ alignSelf:'flex-start' }}>Update Password</Btn>
           </div>
-          <Divider style={{ margin:'24px 0' }} />
-          <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:12 }}>Danger Zone</Mono>
-          <Btn variant="danger" size="sm" onClick={() => toast('Account deletion is disabled in demo mode','warning')}>Delete Account</Btn>
+        </DCard>
+      )}
+      {tab==='security'&&(
+        <DCard hover={false} style={{ marginTop:16 }}>
+          <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:14 }}>Your Data & Account</Mono>
+
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+            <div style={{ fontSize:'0.85rem', color:'var(--text-secondary)', maxWidth:380 }}>
+              Activity emails (new bids, messages, reviews, disputes). Security emails always send.
+            </div>
+            <select value={emailFrequency} onChange={e => saveEmailFrequency(e.target.value)} style={{ width:'auto', minWidth:150 }}>
+              <option value="instant">Email me instantly</option>
+              <option value="daily">Daily digest</option>
+              <option value="off">Don't email me</option>
+            </select>
+          </div>
+
+          <Divider style={{ margin:'18px 0' }} />
+
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+            <div style={{ fontSize:'0.85rem', color:'var(--text-secondary)' }}>Download a copy of your ReLivR data.</div>
+            <Btn variant="secondary" size="sm" loading={exporting} onClick={exportData}>Download my data</Btn>
+          </div>
+
+          <Divider style={{ margin:'18px 0' }} />
+
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+            <div style={{ fontSize:'0.85rem', color:'var(--text-secondary)' }}>Signed in elsewhere? Sign out everywhere.</div>
+            <Btn variant="secondary" size="sm" onClick={signOutAllDevices}>Sign out of all devices</Btn>
+          </div>
+
+          <Divider style={{ margin:'18px 0' }} />
+
+          <Mono size="0.68rem" color="var(--danger)" style={{ display:'block', marginBottom:8 }}>Danger Zone</Mono>
+          <p style={{ fontSize:'0.85rem', color:'var(--text-secondary)', lineHeight:1.6, marginBottom:12 }}>
+            Deleting your account removes your personal information and signs you out everywhere. This can't be undone.
+          </p>
+          {!confirmingDelete ? (
+            <Btn variant="danger" size="sm" onClick={() => setConfirmingDelete(true)}>Delete account</Btn>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:10, maxWidth:320 }}>
+              {user.provider!=='google' && (
+                <Input label="Confirm your password" type="password" value={deletePw} onChange={e=>setDeletePw(e.target.value)} />
+              )}
+              <div style={{ display:'flex', gap:8 }}>
+                <Btn variant="danger" size="sm" loading={deleting} onClick={deleteAccount}>Yes, delete my account</Btn>
+                <Btn variant="ghost" size="sm" onClick={() => { setConfirmingDelete(false); setDeletePw('') }}>Cancel</Btn>
+              </div>
+            </div>
+          )}
         </DCard>
       )}
       {tab==='reviews'&&(
@@ -3786,41 +4522,145 @@ function Profile({ openProfile }) {
   )
 }
 
+// Admin monitoring overview — real platform stats + recent activity (§7.8).
+// Tiny dependency-free SVG bar chart for an admin time-series.
+function MiniChart({ data, dataKey, label, color='var(--accent)' }) {
+  const w = 520, h = 90, pad = 4
+  const vals = data.map(d => d[dataKey] || 0)
+  const max = Math.max(1, ...vals)
+  const n = data.length || 1
+  const bw = (w - pad * 2) / n
+  const total = vals.reduce((s, v) => s + v, 0)
+  return (
+    <div>
+      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+        <Mono>{label}</Mono><Mono color="var(--text-secondary)">{total} total</Mono>
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} role="img" aria-label={`${label}: ${total} over the period`} style={{ display:'block' }}>
+        {data.map((d, i) => {
+          const bh = Math.round((d[dataKey] || 0) / max * (h - pad * 2))
+          return <rect key={i} x={pad + i * bw + 0.5} y={h - pad - bh} width={Math.max(1, bw - 1.5)} height={bh} rx="1" fill={color} opacity={0.85}>
+            <title>{`${d.day}: ${d[dataKey] || 0}`}</title>
+          </rect>
+        })}
+      </svg>
+    </div>
+  )
+}
+
+function AdminDashboard() {
+  const token = () => localStorage.getItem('rl_token')
+  const [stats, setStats]   = useState(null)
+  const [activity, setActivity] = useState([])
+  const [series, setSeries] = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [error, setError]   = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    Promise.all([
+      fetch(API_BASE + '/admin/stats', { headers:{ Authorization:`Bearer ${token()}` } }).then(r => r.ok ? r.json() : Promise.reject(new Error('stats'))),
+      fetch(API_BASE + '/admin/activity?limit=20', { headers:{ Authorization:`Bearer ${token()}` } }).then(r => r.ok ? r.json() : { activity:[] }),
+      fetch(API_BASE + '/admin/analytics?days=30', { headers:{ Authorization:`Bearer ${token()}` } }).then(r => r.ok ? r.json() : { series:[] }),
+    ]).then(([s, a, an]) => { if (alive) { setStats(s); setActivity(a?.activity || []); setSeries(an?.series || []); setLoading(false) } })
+      .catch(() => { if (alive) { setError('Could not load admin stats'); setLoading(false) } })
+    return () => { alive = false }
+  }, [])
+
+  if (loading) return <div style={{ padding:48, textAlign:'center' }}><Spinner /></div>
+  if (error || !stats) return <EmptyState icon="◷" message={error || 'No stats'} />
+
+  const t = stats.tasks?.by_status || {}
+  const d = stats.disputes?.by_status || {}
+  const Tile = ({ label, value, sub, accent }) => (
+    <DCard hover={false} style={{ minWidth:150 }}>
+      <Mono style={{ display:'block', marginBottom:8 }}>{label}</Mono>
+      <div style={{ fontFamily:'var(--font-display)', fontSize:'1.9rem', fontWeight:700, lineHeight:1, color:accent?'var(--accent)':'var(--text-primary)' }}>{value}</div>
+      {sub && <div style={{ fontSize:'0.74rem', color:'var(--text-muted)', marginTop:6 }}>{sub}</div>}
+    </DCard>
+  )
+
+  return (
+    <div className="page-enter">
+      <PageTitle sub="Platform overview — live">Admin Dashboard</PageTitle>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:12, marginBottom:24 }}>
+        <Tile label="Users" value={stats.users.total} sub={`+${stats.users.new_7d} this week`} accent />
+        <Tile label="Tasks" value={stats.tasks.total} sub={`${t.open||0} open · ${t.completed||0} done`} />
+        <Tile label="Completion" value={stats.completion_rate != null ? `${stats.completion_rate}%` : '—'} />
+        <Tile label="Bids" value={stats.bids.total} />
+        <Tile label="Open disputes" value={d.open || 0} accent={!!d.open} />
+        <Tile label="Businesses" value={stats.businesses.total} sub={`${stats.businesses.active} active`} />
+      </div>
+      {series.length > 0 && (
+        <DCard hover={false} style={{ marginBottom:24 }}>
+          <Mono style={{ display:'block', marginBottom:16 }}>Last 30 days</Mono>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))', gap:20 }}>
+            <MiniChart data={series} dataKey="signups" label="Signups" color="var(--accent)" />
+            <MiniChart data={series} dataKey="tasks_created" label="Tasks posted" color="var(--info)" />
+            <MiniChart data={series} dataKey="tasks_completed" label="Tasks completed" color="var(--success)" />
+          </div>
+        </DCard>
+      )}
+      <DCard hover={false}>
+        <Mono style={{ display:'block', marginBottom:12 }}>Recent activity</Mono>
+        {activity.length === 0 ? <EmptyState icon="◷" message="No activity recorded yet — actions will appear here." /> : (
+          <div style={{ display:'flex', flexDirection:'column' }}>
+            {activity.map((a, i) => (
+              <div key={a.activity_id} style={{ display:'flex', justifyContent:'space-between', gap:10, padding:'9px 0', borderBottom:i<activity.length-1?'1px solid var(--border)':'none' }}>
+                <div style={{ minWidth:0 }}>
+                  <span style={{ fontWeight:600, fontSize:'0.85rem' }}>{a.action}</span>
+                  <span style={{ fontSize:'0.8rem', color:'var(--text-muted)' }}> · {a.actor_name || a.actor_role || 'system'}</span>
+                </div>
+                <Mono style={{ flexShrink:0 }}>{new Date(a.created_at).toLocaleString()}</Mono>
+              </div>
+            ))}
+          </div>
+        )}
+      </DCard>
+    </div>
+  )
+}
+
 function AdminDisputes({ setPage, setSelectedDispute }) {
-  const { state } = useStore()
-  const [filter, setFilter] = useState('open')
-  const filtered = state.disputes.filter(d=>filter==='all'||d.status===filter)
+  const token = () => localStorage.getItem('rl_token')
+  const [disputes, setDisputes] = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [filter, setFilter]     = useState('all')
+
+  useEffect(() => {
+    let alive = true
+    fetch(API_BASE + '/disputes', { headers:{ Authorization:`Bearer ${token()}` } })
+      .then(r => (r.ok ? r.json() : { disputes:[] }))
+      .then(d => { if (alive) { setDisputes(d.disputes || []); setLoading(false) } })
+      .catch(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [])
+
+  const filtered = disputes.filter(d => filter==='all' || d.status===filter)
+  const badgeFor = s => s==='open' ? 'disputed' : s==='under_review' ? 'pending' : 'completed'
+
   return (
     <div className="page-enter">
       <PageTitle sub="Review and resolve platform disputes">Dispute Queue</PageTitle>
       <div className="feed-scroll" style={{ display:'flex', gap:2, marginBottom:20, background:'var(--bg-elevated)', borderRadius:12, padding:3, overflowX:'auto', maxWidth:'fit-content' }}>
-        {['all','open','under_review','resolved_creator','resolved_earner'].map(s => (
+        {['all','open','under_review','resolved_creator','resolved_earner','closed'].map(s => (
           <button key={s} onClick={() => setFilter(s)}
             style={{ padding:'7px 14px', borderRadius:9, fontSize:'0.8rem', fontFamily:'var(--font-body)', fontWeight:600, cursor:'pointer', transition:'all 150ms ease', border:'none', whiteSpace:'nowrap', background:filter===s?'var(--bg-surface)':'transparent', color:filter===s?'var(--accent)':'var(--text-muted)', boxShadow:filter===s?'0 1px 3px rgba(33,28,46,.14)':'none' }}>
-            {s.replace('_',' ')} ({s==='all'?state.disputes.length:state.disputes.filter(d=>d.status===s).length})
+            {s.replace('_',' ')} ({s==='all'?disputes.length:disputes.filter(d=>d.status===s).length})
           </button>
         ))}
       </div>
-      {filtered.length===0?<EmptyState icon="⚖" message="No disputes in this category" />:(
+      {loading ? <div style={{ padding:40, textAlign:'center' }}><Spinner /></div> :
+       filtered.length===0 ? <EmptyState icon="⚖" message="No disputes in this category" /> : (
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
           {filtered.map(d => (
             <DCard key={d.dispute_id} onClick={() => { setSelectedDispute(d.dispute_id); setPage('admin-dispute-detail') }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                <div style={{ flex:1 }}>
-                  <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:8 }}>
-                    <Badge variant={d.status==='open'?'disputed':d.status==='under_review'?'pending':'completed'}>{d.status.replace('_',' ')}</Badge>
-                    <span style={{ fontFamily:'var(--font-display)', fontWeight:600, fontSize:'1.05rem' }}>{d.task_title}</span>
-                  </div>
-                  <p style={{ fontSize:'0.85rem', color:'var(--text-secondary)', marginBottom:10, lineHeight:1.5 }}>{d.reason.slice(0,160)}{d.reason.length>160?'…':''}</p>
-                  <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
-                    <Mono>Creator: {d.creator_email}</Mono><Mono>Earner: {d.earner_email}</Mono><Mono>Opened: {new Date(d.opened_at).toLocaleDateString()}</Mono>
-                  </div>
-                </div>
-                <div style={{ textAlign:'right', marginLeft:20, flexShrink:0 }}>
-                  <div style={{ fontFamily:'var(--font-mono)', fontSize:'1.2rem', color:'var(--accent)', fontWeight:500 }}>R{(d.amount_cents/100).toFixed(0)}</div>
-                  <Mono>in escrow</Mono>
-                </div>
+              <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:8, flexWrap:'wrap' }}>
+                <Badge variant={badgeFor(d.status)}>{d.status.replace('_',' ')}</Badge>
+                <span style={{ fontFamily:'var(--font-display)', fontWeight:600, fontSize:'1.05rem' }}>{d.task_title}</span>
               </div>
+              <p style={{ fontSize:'0.85rem', color:'var(--text-secondary)', marginBottom:10, lineHeight:1.5 }}>{d.reason.slice(0,160)}{d.reason.length>160?'…':''}</p>
+              <Mono>Opened {new Date(d.opened_at).toLocaleDateString()}{d.resolved_at ? ` · resolved ${new Date(d.resolved_at).toLocaleDateString()}` : ''}</Mono>
             </DCard>
           ))}
         </div>
@@ -3830,89 +4670,78 @@ function AdminDisputes({ setPage, setSelectedDispute }) {
 }
 
 function AdminDisputeDetail({ disputeId, setPage }) {
-  const { state, dispatch } = useStore()
   const toast = useToast()
-  const dispute = state.disputes.find(d=>d.dispute_id===disputeId)
-  const task    = dispute?state.tasks.find(t=>t.task_id===dispute.task_id):null
-  const [note, setNote]         = useState('')
-  const [noteErr, setNoteErr]   = useState('')
-  const [resolveModal, setResolveModal] = useState(null)
+  const token = () => localStorage.getItem('rl_token')
+  const [data, setData]       = useState(null)   // { dispute, events }
+  const [loading, setLoading] = useState(true)
+  const [note, setNote]       = useState('')
+  const [resolveModal, setResolveModal] = useState(null)   // 'refund' | 'release'
   const [resolveLoading, setResolveLoading] = useState(false)
-  const [timeline, setTimeline] = useState([
-    { action:'opened',   actor:'Creator', note:'Dispute raised by creator', time:dispute?.opened_at||new Date().toISOString() },
-    { action:'assigned', actor:'Admin',   note:'Assigned for admin review',  time:new Date(Date.now()-3600000).toISOString() },
-  ])
-  if (!dispute) return <EmptyState message="Dispute not found" action={<Btn onClick={() => setPage('admin-disputes')}>← Back</Btn>} />
-  const isResolved = dispute.status.startsWith('resolved')
 
-  function saveNote() {
-    if (!note.trim()||note.trim().length<5) { setNoteErr('Note must be at least 5 characters'); return }
-    setNoteErr('')
-    setTimeline(t=>[...t,{action:'note_added',actor:'Admin',note:note.trim(),time:new Date().toISOString()}])
-    dispatch({type:'UPDATE_DISPUTE',dispute_id:disputeId,changes:{admin_notes:note.trim()}})
-    setNote(''); toast('Note saved','success')
+  async function load() {
+    try {
+      const res = await fetch(`${API_BASE}/disputes/${disputeId}`, { headers:{ Authorization:`Bearer ${token()}` } })
+      if (res.ok) setData(await res.json())
+    } catch { /* offline */ } finally { setLoading(false) }
   }
+  useEffect(() => { load() }, [disputeId]) // eslint-disable-line
 
-  function resolve() {
+  if (loading) return <div style={{ padding:48, textAlign:'center' }}><Spinner /></div>
+  if (!data?.dispute) return <EmptyState message="Dispute not found" action={<Btn onClick={() => setPage('admin-disputes')}>← Back</Btn>} />
+  const dispute = data.dispute
+  const timeline = (data.events || []).map(e => ({ action:e.action, actor:e.actor_name || '—', note:e.note || '', time:e.created_at }))
+  const isResolved = dispute.status.startsWith('resolved') || dispute.status === 'closed'
+
+  async function patchDispute(body, msg) {
     setResolveLoading(true)
-    setTimeout(() => {
-      const status = resolveModal==='refund'?'resolved_creator':'resolved_earner'
-      dispatch({type:'UPDATE_DISPUTE',dispute_id:disputeId,changes:{status,resolved_at:new Date().toISOString(),resolution:resolveModal}})
-      if (task) dispatch({type:'UPDATE_TASK',task_id:task.task_id,changes:{status:'completed'}})
-      dispatch({type:'SET_ESCROW',task_id:dispute.task_id,status:resolveModal==='refund'?'refunded':'released'})
-      setTimeline(t=>[...t,{action:'resolved',actor:'Admin',note:resolveModal==='refund'?'Resolved: Refund to creator':'Resolved: Release to earner',time:new Date().toISOString()}])
-      toast(`Dispute resolved — ${resolveModal==='refund'?'Creator refunded':'Earner paid'}`, 'success')
-      setResolveLoading(false); setResolveModal(null)
-    }, 1200)
+    try {
+      const res = await fetch(`${API_BASE}/disputes/${disputeId}`, { method:'PATCH', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` }, body: JSON.stringify(body) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.message || 'Update failed')
+      toast(msg, 'success'); setResolveModal(null); setNote(''); load()
+    } catch (err) { toast(err.message, 'error') } finally { setResolveLoading(false) }
+  }
+  function saveNote() {
+    if (!note.trim() || note.trim().length < 5) { toast('Note must be at least 5 characters', 'error'); return }
+    patchDispute({ admin_notes: note.trim() }, 'Note saved')
+  }
+  function resolve() {
+    patchDispute({ status: resolveModal==='refund' ? 'resolved_creator' : 'resolved_earner', resolution: resolveModal },
+      `Dispute resolved in favour of the ${resolveModal==='refund' ? 'creator' : 'earner'}`)
   }
 
   return (
     <div className="page-enter" style={{ maxWidth:960 }}>
       <button onClick={() => setPage('admin-disputes')} style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'0.78rem', fontFamily:'var(--font-mono)', textTransform:'uppercase', letterSpacing:'0.08em', cursor:'pointer', marginBottom:20 }}>← Back to Queue</button>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:24, flexWrap:'wrap', gap:12 }}>
-        <div>
-          <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:8 }}><Badge variant={isResolved?'completed':'disputed'}>{dispute.status.replace('_',' ')}</Badge><Mono>Dispute #{dispute.dispute_id}</Mono></div>
-          <h1 style={{ fontFamily:'var(--font-display)', fontSize:'1.8rem', fontWeight:700 }}>{dispute.task_title}</h1>
-        </div>
-        <div style={{ textAlign:'right' }}><div style={{ fontFamily:'var(--font-mono)', fontSize:'1.5rem', color:'var(--accent)', fontWeight:500 }}>R{(dispute.amount_cents/100).toFixed(0)}</div><Mono>{isResolved?'resolved':'held in escrow'}</Mono></div>
+      <div style={{ marginBottom:24 }}>
+        <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:8, flexWrap:'wrap' }}><Badge variant={isResolved?'completed':'disputed'}>{dispute.status.replace('_',' ')}</Badge><Mono>Dispute #{String(dispute.dispute_id).slice(0,8)}</Mono></div>
+        <h1 style={{ fontFamily:'var(--font-display)', fontSize:'1.8rem', fontWeight:700 }}>{dispute.task_title}</h1>
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 300px', gap:20 }}>
+      <div className="stack-mobile" style={{ display:'grid', gridTemplateColumns:'1fr 300px', gap:20 }}>
         <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
           <DCard hover={false}><Mono size="0.68rem" color="var(--danger)" style={{ display:'block', marginBottom:10 }}>Dispute Reason</Mono><p style={{ color:'var(--text-secondary)', lineHeight:1.75 }}>{dispute.reason}</p></DCard>
-          <DCard hover={false}>
-            <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:14 }}>Message Log (Task Context)</Mono>
-            <div style={{ display:'flex', flexDirection:'column', gap:10, maxHeight:260, overflowY:'auto' }}>
-              {state.messages.slice(0,6).map(m => (
-                <div key={m.message_id} style={{ background:'var(--bg-elevated)', borderRadius:'var(--radius-sm)', padding:'10px 12px' }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
-                    <Mono color="var(--accent)" size="0.62rem">{m.sender_name}</Mono>
-                    <Mono size="0.6rem">{new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</Mono>
-                  </div>
-                  <p style={{ fontSize:'0.85rem', color:'var(--text-secondary)' }}>{m.content}</p>
-                </div>
-              ))}
-            </div>
-          </DCard>
+          {Array.isArray(dispute.evidence_urls) && dispute.evidence_urls.length>0 && (
+            <DCard hover={false}>
+              <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:10 }}>Evidence</Mono>
+              <ul style={{ paddingLeft:18, margin:0 }}>{dispute.evidence_urls.map((u,i) => <li key={i} style={{ marginBottom:4 }}><a href={u} target="_blank" rel="noreferrer" style={{ color:'var(--accent)', fontSize:'0.85rem' }}>{u}</a></li>)}</ul>
+            </DCard>
+          )}
+          {dispute.admin_notes && (
+            <DCard hover={false}><Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:10 }}>Admin Notes</Mono><p style={{ color:'var(--text-secondary)', lineHeight:1.7 }}>{dispute.admin_notes}</p></DCard>
+          )}
           {!isResolved&&(
             <>
               <DCard hover={false}>
                 <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:12 }}>Internal Notes</Mono>
-                <Textarea placeholder="Add investigation notes visible only to admins…" value={note} onChange={e=>{setNote(e.target.value);setNoteErr('')}} error={noteErr} />
-                <Btn variant="secondary" size="sm" style={{ marginTop:10 }} onClick={saveNote}>Save Note</Btn>
+                <Textarea placeholder="Add investigation notes visible only to admins…" value={note} onChange={e=>setNote(e.target.value)} />
+                <Btn variant="secondary" size="sm" style={{ marginTop:10 }} loading={resolveLoading} onClick={saveNote}>Save Note</Btn>
               </DCard>
               <DCard hover={false} style={{ border:'1px solid var(--border-strong)' }}>
-                <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:16 }}>Resolution</Mono>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-                  <div style={{ background:'rgba(239,68,68,.05)', border:'1px solid rgba(239,68,68,.2)', borderRadius:'var(--radius-md)', padding:16 }}>
-                    <Mono color="var(--danger)" size="0.68rem" style={{ display:'block', marginBottom:8 }}>Refund Creator</Mono>
-                    <p style={{ fontSize:'0.8rem', color:'var(--text-muted)', marginBottom:12, lineHeight:1.5 }}>Cancel the PaymentIntent. Held funds return to creator's card.</p>
-                    <Btn variant="danger" fullWidth onClick={() => setResolveModal('refund')}>Refund Creator</Btn>
-                  </div>
-                  <div style={{ background:'rgba(16,185,129,.05)', border:'1px solid rgba(16,185,129,.2)', borderRadius:'var(--radius-md)', padding:16 }}>
-                    <Mono color="var(--success)" size="0.68rem" style={{ display:'block', marginBottom:8 }}>Release to Earner</Mono>
-                    <p style={{ fontSize:'0.8rem', color:'var(--text-muted)', marginBottom:12, lineHeight:1.5 }}>Capture the PaymentIntent. Funds transfer to earner's Stripe account.</p>
-                    <Btn variant="success" fullWidth onClick={() => setResolveModal('release')}>Release to Earner</Btn>
-                  </div>
+                <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:8 }}>Resolution</Mono>
+                <p style={{ fontSize:'0.8rem', color:'var(--text-muted)', marginBottom:14, lineHeight:1.5 }}>Record the outcome. Funds settlement runs automatically once escrow/payments are live.</p>
+                <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+                  <Btn variant="danger" onClick={() => setResolveModal('refund')}>Resolve for creator</Btn>
+                  <Btn variant="success" onClick={() => setResolveModal('release')}>Resolve for earner</Btn>
                 </div>
               </DCard>
             </>
@@ -3926,15 +4755,6 @@ function AdminDisputeDetail({ disputeId, setPage }) {
           )}
         </div>
         <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-          <DCard hover={false}>
-            <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:14 }}>Parties</Mono>
-            {[{label:'Creator',email:dispute.creator_email,role:'creator'},{label:'Earner',email:dispute.earner_email,role:'earner'}].map(p => (
-              <div key={p.role} style={{ background:'var(--bg-elevated)', borderRadius:'var(--radius-sm)', padding:12, marginBottom:8 }}>
-                <Badge variant={p.role}>{p.label}</Badge>
-                <div style={{ marginTop:6, fontSize:'0.82rem', color:'var(--text-secondary)' }}>{p.email}</div>
-              </div>
-            ))}
-          </DCard>
           <DCard hover={false}>
             <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:14 }}>Audit Timeline</Mono>
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -3953,86 +4773,235 @@ function AdminDisputeDetail({ disputeId, setPage }) {
               ))}
             </div>
           </DCard>
-          {task&&(
-            <DCard hover={false}>
-              <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:10 }}>Task Info</Mono>
-              {[['Budget',`R${task.budget}`],['Status',task.status.replace('_',' ')],['Deadline',new Date(task.deadline).toLocaleDateString()]].map(([k,v]) => (
-                <div key={k} style={{ display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom:'1px solid var(--border)' }}>
-                  <Mono>{k}</Mono><span style={{ fontSize:'0.84rem', color:'var(--text-primary)' }}>{v}</span>
-                </div>
-              ))}
-            </DCard>
-          )}
         </div>
       </div>
       <ConfirmModal open={!!resolveModal} onClose={() => setResolveModal(null)} onConfirm={resolve} loading={resolveLoading}
-        title={resolveModal==='refund'?'Refund Creator':'Release to Earner'}
-        confirmLabel={resolveModal==='refund'?'Confirm Refund':'Confirm Release'}
+        title={resolveModal==='refund'?'Resolve for creator':'Resolve for earner'}
+        confirmLabel="Confirm resolution"
         confirmVariant={resolveModal==='refund'?'danger':'success'}
-        message={resolveModal==='refund'?`This will cancel the PaymentIntent and return R${(dispute.amount_cents/100).toFixed(0)} to the creator. This cannot be undone.`:`This will transfer R${(dispute.amount_cents/100).toFixed(0)} to the earner's Stripe account. This cannot be undone.`} />
+        message={`Mark this dispute resolved in favour of the ${resolveModal==='refund'?'creator':'earner'}? It's recorded now; any funds settlement happens automatically once payments go live.`} />
     </div>
   )
 }
 
-const MOCK_USERS_ADMIN = [
-  { user_id:'u1', email:'creator@demo.com',  role:'creator', displayName:'Demo Creator', created_at:'2025-01-15T00:00:00Z', status:'active',    tasks:4, spent:1250 },
-  { user_id:'u3', email:'earner@demo.com',   role:'earner',  displayName:'Alex Chen',    created_at:'2025-01-20T00:00:00Z', status:'active',    tasks:3, earned:920 },
-  { user_id:'u2', email:'creator2@demo.com', role:'creator', displayName:'James Lee',    created_at:'2025-02-01T00:00:00Z', status:'active',    tasks:2, spent:1600 },
-  { user_id:'u5', email:'maria@demo.com',    role:'earner',  displayName:'Maria Santos', created_at:'2025-02-10T00:00:00Z', status:'active',    tasks:5, earned:1800 },
-  { user_id:'u6', email:'james@demo.com',    role:'earner',  displayName:'James Kim',    created_at:'2025-03-01T00:00:00Z', status:'suspended', tasks:1, earned:0 },
-]
-
 function AdminUsers() {
   const toast = useToast()
-  const [users, setUsers] = useState(MOCK_USERS_ADMIN)
-  const [search, setSearch]       = useState('')
+  const token = () => localStorage.getItem('rl_token')
+  const [users, setUsers]   = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch]   = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
-  const [banModal, setBanModal]   = useState(null)
-  const filtered = users.filter(u => (roleFilter==='all'||u.role===roleFilter) && (!search||u.email.toLowerCase().includes(search.toLowerCase())||u.displayName.toLowerCase().includes(search.toLowerCase())))
-  function toggleBan(u) { setUsers(us=>us.map(x=>x.user_id===u.user_id?{...x,status:x.status==='suspended'?'active':'suspended'}:x)); toast(`${u.displayName} ${u.status==='suspended'?'reinstated':'suspended'}`,'warning'); setBanModal(null) }
+  const [banModal, setBanModal] = useState(null)
+  const [busy, setBusy]       = useState(false)
+  const th = { padding:'10px 16px', textAlign:'left', fontFamily:'var(--font-mono)', fontSize:'0.65rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.08em', fontWeight:400 }
+
+  async function load() {
+    setLoading(true)
+    try {
+      const res = await fetch(API_BASE + '/admin/users?limit=100', { headers:{ Authorization:`Bearer ${token()}` } })
+      if (res.ok) { const d = await res.json(); setUsers(d.users || []) }
+    } catch { /* offline */ } finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, []) // eslint-disable-line
+
+  const statusOf = u => u.deleted_at ? 'deleted' : u.suspended_at ? 'suspended' : 'active'
+  const filtered = users.filter(u => {
+    if (roleFilter !== 'all' && u.role !== roleFilter) return false
+    if (search) { const s = search.toLowerCase(); return (u.email||'').toLowerCase().includes(s) || (u.display_name||'').toLowerCase().includes(s) }
+    return true
+  })
+
+  async function moderate(u, suspend) {
+    setBusy(true)
+    try {
+      const res = await fetch(`${API_BASE}/admin/users/${u.user_id}`, {
+        method:'PATCH', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
+        body: JSON.stringify({ suspended: suspend }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.message || 'Could not update user')
+      toast(`${u.display_name || u.email} ${suspend ? 'suspended' : 'reinstated'}`, suspend ? 'warning' : 'success')
+      setBanModal(null); load()
+    } catch (err) { toast(err.message, 'error') } finally { setBusy(false) }
+  }
+
   return (
     <div className="page-enter">
       <PageTitle sub={`${users.length} registered users`}>User Management</PageTitle>
       <div style={{ display:'flex', gap:10, marginBottom:24, flexWrap:'wrap', alignItems:'flex-end' }}>
-        <Input placeholder="Search by name or email…" value={search} onChange={e=>setSearch(e.target.value)} style={{ width:260 }} />
+        <Input placeholder="Search by name or email…" aria-label="Search users" value={search} onChange={e=>setSearch(e.target.value)} style={{ width:260 }} />
         <SelectField value={roleFilter} onChange={e=>setRoleFilter(e.target.value)} style={{ minWidth:140 }}>
-          <option value="all">All Roles</option><option value="creator">Creators</option><option value="earner">Earners</option>
+          <option value="all">All Roles</option><option value="member">Members</option><option value="creator">Creators</option><option value="earner">Earners</option><option value="admin">Admins</option>
         </SelectField>
       </div>
-      <DCard hover={false} style={{ padding:0, overflow:'hidden' }}>
-        <table style={{ width:'100%', borderCollapse:'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom:'1px solid var(--border)', background:'var(--bg-elevated)' }}>
-              {['User','Role','Status','Joined','Activity','Actions'].map(h => (
-                <th key={h} style={{ padding:'10px 16px', textAlign:'left', fontFamily:'var(--font-mono)', fontSize:'0.65rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.08em', fontWeight:400 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((u,i) => (
-              <tr key={u.user_id} style={{ borderBottom:i<filtered.length-1?'1px solid var(--border)':'none', opacity:u.status==='suspended'?0.6:1 }}>
-                <td style={{ padding:'12px 16px' }}><div style={{ fontWeight:600, fontSize:'0.88rem' }}>{u.displayName}</div><div style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>{u.email}</div></td>
-                <td style={{ padding:'12px 16px' }}><Badge variant={u.role}>{u.role}</Badge></td>
-                <td style={{ padding:'12px 16px' }}><Badge variant={u.status==='active'?'open':'disputed'}>{u.status}</Badge></td>
-                <td style={{ padding:'12px 16px' }}><Mono>{new Date(u.created_at).toLocaleDateString()}</Mono></td>
-                <td style={{ padding:'12px 16px' }}><Mono>{u.tasks} tasks · </Mono><Mono color="var(--accent)">{u.spent?`R${u.spent} spent`:`R${u.earned} earned`}</Mono></td>
-                <td style={{ padding:'12px 16px' }}>
-                  <div style={{ display:'flex', gap:8 }}>
-                    <Btn variant="ghost" size="sm" onClick={() => toast(`Viewing ${u.displayName}'s profile`,'info')}>View</Btn>
-                    <Btn variant={u.status==='suspended'?'success':'danger'} size="sm" onClick={() => setBanModal(u)}>{u.status==='suspended'?'Reinstate':'Suspend'}</Btn>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {filtered.length===0&&<EmptyState icon="◈" message="No users match your search" />}
+      {loading ? <div style={{ padding:40, textAlign:'center' }}><Spinner /></div> : (
+        <DCard hover={false} style={{ padding:0, overflow:'hidden' }}>
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', minWidth:640 }}>
+              <thead>
+                <tr style={{ borderBottom:'1px solid var(--border)', background:'var(--bg-elevated)' }}>
+                  {['User','Role','Status','Joined','Tasks','Rating','Actions'].map(h => <th key={h} style={th}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((u, i) => {
+                  const st = statusOf(u)
+                  return (
+                    <tr key={u.user_id} style={{ borderBottom:i<filtered.length-1?'1px solid var(--border)':'none', opacity:st!=='active'?0.6:1 }}>
+                      <td style={{ padding:'12px 16px' }}><div style={{ fontWeight:600, fontSize:'0.88rem' }}>{u.display_name || '—'}</div><div style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>{u.email}</div></td>
+                      <td style={{ padding:'12px 16px' }}><Badge variant={u.role}>{u.role}</Badge></td>
+                      <td style={{ padding:'12px 16px' }}><Badge variant={st==='active'?'open':'disputed'}>{st}</Badge></td>
+                      <td style={{ padding:'12px 16px' }}><Mono>{new Date(u.created_at).toLocaleDateString()}</Mono></td>
+                      <td style={{ padding:'12px 16px' }}><Mono>{u.tasks_posted ?? 0}</Mono></td>
+                      <td style={{ padding:'12px 16px' }}><Mono>{u.rating_count > 0 ? `★ ${Number(u.avg_rating).toFixed(1)}` : '—'}</Mono></td>
+                      <td style={{ padding:'12px 16px' }}>
+                        {st !== 'deleted' && (
+                          <Btn variant={st==='suspended'?'success':'danger'} size="sm" onClick={() => setBanModal(u)}>{st==='suspended'?'Reinstate':'Suspend'}</Btn>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          {filtered.length===0 && <EmptyState icon="◈" message="No users match your search" />}
+        </DCard>
+      )}
+      <ConfirmModal open={!!banModal} onClose={() => setBanModal(null)} loading={busy}
+        onConfirm={() => moderate(banModal, statusOf(banModal) !== 'suspended')}
+        title={banModal && statusOf(banModal)==='suspended' ? 'Reinstate User' : 'Suspend User'}
+        confirmLabel={banModal && statusOf(banModal)==='suspended' ? 'Reinstate' : 'Suspend'}
+        confirmVariant={banModal && statusOf(banModal)==='suspended' ? 'success' : 'danger'}
+        message={banModal ? (statusOf(banModal)==='suspended'
+          ? `Reinstate ${banModal.display_name || banModal.email}? They'll regain access immediately.`
+          : `Suspend ${banModal.display_name || banModal.email}? Their active sessions end and they can't sign in until reinstated.`) : ''} />
+    </div>
+  )
+}
+
+// Public feature-flag map — lets the UI gate features without a deploy (§7.8).
+function useFlags() {
+  const [flags, setFlags] = useState({})
+  useEffect(() => {
+    let alive = true
+    fetch(API_BASE + '/flags').then(r => r.ok ? r.json() : { flags:{} })
+      .then(d => { if (alive) setFlags(d.flags || {}) }).catch(() => {})
+    return () => { alive = false }
+  }, [])
+  return flags
+}
+
+// Admin: add campuses / zones without writing SQL (§7.8).
+function AdminLocations() {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [campuses, setCampuses] = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [form, setForm] = useState({ name:'', kind:'campus', parentId:'' })
+  const [saving, setSaving] = useState(false)
+
+  async function load() {
+    try { const res = await fetch(API_BASE + '/locations'); if (res.ok) { const d = await res.json(); setCampuses(d.campuses || []) } }
+    catch { /* offline */ } finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, []) // eslint-disable-line
+
+  async function add() {
+    if (!form.name.trim()) { toast('Enter a name', 'error'); return }
+    if (form.kind === 'zone' && !form.parentId) { toast('Pick a parent campus for a zone', 'error'); return }
+    setSaving(true)
+    try {
+      const body = { name: form.name.trim(), kind: form.kind }
+      if (form.kind === 'zone') body.parentId = form.parentId
+      const res = await fetch(API_BASE + '/admin/locations', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` }, body: JSON.stringify(body) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.message || 'Could not add location')
+      toast('Location added', 'success'); setForm(f => ({ ...f, name:'' })); load()
+    } catch (err) { toast(err.message, 'error') } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="page-enter">
+      <PageTitle sub="Campuses & zones — expand without writing SQL">Locations</PageTitle>
+      <DCard hover={false} style={{ marginBottom:20 }}>
+        <Mono style={{ display:'block', marginBottom:12 }}>Add a location</Mono>
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'flex-end' }}>
+          <Input label="Name" value={form.name} onChange={e=>setForm(f=>({ ...f, name:e.target.value }))} style={{ width:200 }} />
+          <div>
+            <label>Type</label>
+            <select value={form.kind} onChange={e=>setForm(f=>({ ...f, kind:e.target.value }))}>
+              <option value="campus">Campus</option><option value="zone">Zone</option><option value="region">Region</option>
+            </select>
+          </div>
+          {form.kind==='zone' && (
+            <div>
+              <label>Parent campus</label>
+              <select value={form.parentId} onChange={e=>setForm(f=>({ ...f, parentId:e.target.value }))}>
+                <option value="">—</option>{campuses.map(c => <option key={c.location_id} value={c.location_id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
+          <Btn loading={saving} onClick={add}>Add</Btn>
+        </div>
       </DCard>
-      <ConfirmModal open={!!banModal} onClose={() => setBanModal(null)} onConfirm={() => toggleBan(banModal)}
-        title={banModal?.status==='suspended'?'Reinstate User':'Suspend User'}
-        confirmLabel={banModal?.status==='suspended'?'Reinstate':'Suspend'}
-        confirmVariant={banModal?.status==='suspended'?'success':'danger'}
-        message={banModal?(banModal.status==='suspended'?`Reinstate ${banModal.displayName}'s account? They will regain access immediately.`:`Suspend ${banModal.displayName}'s account? They will lose access until reinstated.`):''} />
+      {loading ? <div style={{ padding:40, textAlign:'center' }}><Spinner /></div> :
+       campuses.length===0 ? <EmptyState icon="◇" message="No locations yet — add your first campus." /> :
+       campuses.map(c => (
+        <DCard key={c.location_id} hover={false} style={{ marginBottom:12 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:700 }}>{c.name}</div>
+            <Mono>{c.zones?.length || 0} zones</Mono>
+          </div>
+          {c.zones?.length > 0 && <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:10 }}>{c.zones.map(z => <Tag key={z.location_id}>{z.name}</Tag>)}</div>}
+        </DCard>
+      ))}
+    </div>
+  )
+}
+
+// Admin: toggle feature flags (§7.8).
+function AdminFlags() {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [flags, setFlags]   = useState([])
+  const [loading, setLoading] = useState(true)
+
+  async function load() {
+    try { const res = await fetch(API_BASE + '/admin/flags', { headers:{ Authorization:`Bearer ${token()}` } }); if (res.ok) { const d = await res.json(); setFlags(d.flags || []) } }
+    catch { /* offline */ } finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, []) // eslint-disable-line
+
+  async function toggle(f) {
+    try {
+      const res = await fetch(`${API_BASE}/admin/flags/${f.flag_key}`, { method:'PATCH', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` }, body: JSON.stringify({ enabled: !f.enabled }) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.message || 'Could not update flag')
+      setFlags(fs => fs.map(x => x.flag_key===f.flag_key ? { ...x, enabled: !x.enabled } : x))
+      toast(`${f.flag_key} turned ${!f.enabled ? 'on' : 'off'}`, 'success')
+    } catch (err) { toast(err.message, 'error') }
+  }
+
+  return (
+    <div className="page-enter">
+      <PageTitle sub="Toggle features without a deploy">Feature Flags</PageTitle>
+      {loading ? <div style={{ padding:40, textAlign:'center' }}><Spinner /></div> :
+       flags.length===0 ? <EmptyState icon="⚑" message="No feature flags defined." /> : (
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          {flags.map(f => (
+            <DCard key={f.flag_key} hover={false}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontWeight:600, fontFamily:'var(--font-mono)', fontSize:'0.88rem' }}>{f.flag_key}</div>
+                  {f.description && <div style={{ fontSize:'0.8rem', color:'var(--text-muted)' }}>{f.description}</div>}
+                </div>
+                <Btn variant={f.enabled ? 'success' : 'secondary'} size="sm" onClick={() => toggle(f)}>{f.enabled ? 'On' : 'Off'}</Btn>
+              </div>
+            </DCard>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -4047,6 +5016,7 @@ function AdminUsers() {
 const DASH_ROUTES = {
   '/dashboard':       'dashboard',
   '/browse':          'tasks-browse',
+  '/search':          'search',
   '/post':            'tasks-new',
   '/my-tasks':        'tasks-mine',
   '/my-bids':         'my-bids',
@@ -4056,6 +5026,8 @@ const DASH_ROUTES = {
   '/profile':         'profile',
   '/local':           'local-browse',
   '/admin/disputes':  'admin-disputes',
+  '/admin/locations': 'admin-locations',
+  '/admin/flags':     'admin-flags',
   '/admin/users':     'admin-users',
   '/admin/businesses':'admin-businesses',
 }
@@ -4113,6 +5085,7 @@ export default function App() {
   useEffect(() => { window.__rlProfileId = selectedUser }, [selectedUser])
   // { userId, name } of a person to start/open a conversation with (set from TaskDetail)
   const [messageTarget,   setMessageTarget]   = useState(null)
+  const [searchQuery,     setSearchQuery]     = useState('')
   const [state, dispatch] = useReducer(appReducer, initialState)
 
   // Live unread-notification count — polls the backend so the bell badge
@@ -4123,7 +5096,7 @@ export default function App() {
     let stop = false
     async function pollUnread() {
       try {
-        const res = await fetch('/notifications?unread_only=true', {
+        const res = await fetch(API_BASE + '/notifications?unread_only=true', {
           headers: { Authorization: `Bearer ${localStorage.getItem('rl_token')}` },
         })
         if (!res.ok) throw new Error()
@@ -4165,7 +5138,7 @@ export default function App() {
         }
 
         // Fetch fresh user profile from backend
-        const res = await fetch('/auth/me', {
+        const res = await fetch(API_BASE + '/auth/me', {
           headers: { Authorization: `Bearer ${token}` },
         })
 
@@ -4179,9 +5152,15 @@ export default function App() {
             displayName: u.display_name || u.email?.split('@')[0] || 'User',
             avatarUrl:   u.avatar_url   || u.google_avatar_url || null,
             provider:    u.google_id ? 'google' : 'email',
+            popia_consent: u.popia_consent !== false,
           })
-          // The URL (parsed at startup) already determines the view — leave it.
-          // If they deep-linked to a dashboard page, they stay there.
+          // Logged-in users must not see the landing page — redirect to app.
+          const loc = parseLocation()
+          if (loc.view === 'landing') {
+            const home = u.role === 'admin' ? 'dashboard' : 'tasks-browse'
+            setView('dashboard')
+            setDashPage(home)
+          }
         } else {
           // Token rejected by server — clear it
           localStorage.removeItem('rl_token')
@@ -4239,7 +5218,7 @@ export default function App() {
     localStorage.setItem('rl_token', rawUser.token || '')
     saveUser(u)
     setView('dashboard')
-    setDashPage('tasks-browse')
+    setDashPage(u.role === 'admin' ? 'dashboard' : 'tasks-browse')
     setAuthModal(null)
   }
 
@@ -4252,13 +5231,15 @@ export default function App() {
       const role        = params.get('role')
       const displayName = params.get('displayName') || email?.split('@')[0] || 'User'
       const avatarUrl   = params.get('avatarUrl') || null
+      const needsConsent = params.get('needsConsent') === '1'
 
       if (!token || !userId) return false
 
       localStorage.setItem('rl_token', token)
-      saveUser({ userId, email, role, displayName, avatarUrl, provider: 'google' })
+      saveUser({ userId, email, role, displayName, avatarUrl, provider: 'google',
+                 popia_consent: !needsConsent })
       setView('dashboard')
-      setDashPage('tasks-browse')
+      setDashPage(role === 'admin' ? 'dashboard' : 'tasks-browse')
       setAuthModal(null)
       return true
     } catch {
@@ -4271,7 +5252,7 @@ export default function App() {
     // Tell auth service to destroy the session (non-blocking)
     const token = localStorage.getItem('rl_token')
     if (token) {
-      fetch('/auth/logout', {
+      fetch(API_BASE + '/auth/logout', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       }).catch(() => {})
@@ -4306,7 +5287,7 @@ export default function App() {
   // admins on their dispute queue. Used by the logo and the bottom-nav home tab.
   function appHome() {
     if (!user) return 'tasks-browse'
-    if (user.role === 'admin') return 'admin-disputes'
+    if (user.role === 'admin') return 'dashboard'
     return 'tasks-browse'
   }
   function goAppHome() {
@@ -4322,7 +5303,7 @@ export default function App() {
   }
 
   function navigate(target) {
-    if (target==='home')      { setView('landing'); window.scrollTo({top:0,behavior:'smooth'}); return }
+    if (target==='home')      { if (user) { goAppHome(); return } setView('landing'); window.scrollTo({top:0,behavior:'smooth'}); return }
     if (target==='dashboard') { if (user) setView('dashboard'); else setAuthModal('login'); return }
     if (INFO_PAGES.includes(target)) { setView(target); window.scrollTo({top:0,behavior:'smooth'}); return }
     setView('landing')
@@ -4343,7 +5324,7 @@ export default function App() {
       case 'contact':           return <ContactPage         {...props} />
       case 'report':            return <ReportPage          {...props} />
       case 'guidelines':        return <GuidelinesPage      {...props} />
-      case 'about-page':        return <ComingSoonPage title="About ReLiv" subtitle="Company" onNav={navigate} />
+      case 'about-page':        return <ComingSoonPage title="About ReLivR" subtitle="Company" onNav={navigate} />
       case 'blog':              return <ComingSoonPage title="Blog"             subtitle="Company" onNav={navigate} />
       case 'careers':           return <ComingSoonPage title="Careers"          subtitle="Company" onNav={navigate} />
       default:                  return null
@@ -4352,8 +5333,10 @@ export default function App() {
 
   function renderDashPage() {
     switch (dashPage) {
-      case 'dashboard':            return <Dashboard setPage={setDashPage} setSelectedTask={setSelectedTask} />
+      case 'dashboard':            return user.role==='admin' ? <AdminDashboard /> : <Dashboard setPage={setDashPage} setSelectedTask={setSelectedTask} />
       case 'tasks-browse':         return <TaskBrowse setPage={setDashPage} setSelectedTask={setSelectedTask} />
+      case 'search':               return <SearchResults query={searchQuery} setPage={setDashPage} setSelectedTask={setSelectedTask} openProfile={(uid) => { setSelectedUser(uid); setDashPage('public-profile') }} />
+
       case 'task-detail':          return <TaskDetail taskId={selectedTask} setPage={setDashPage} openChat={(userId, name) => { setMessageTarget({ userId, name }); setDashPage('messages') }} openProfile={(uid) => { setSelectedUser(uid); setDashPage('public-profile') }} />
       case 'tasks-new':            return <TaskNew setPage={setDashPage} setSelectedTask={setSelectedTask} />
       case 'tasks-mine':           return <MyTasks setPage={setDashPage} setSelectedTask={setSelectedTask} />
@@ -4366,6 +5349,8 @@ export default function App() {
       case 'admin-disputes':       return <AdminDisputes setPage={setDashPage} setSelectedDispute={setSelectedDispute} />
       case 'admin-dispute-detail': return <AdminDisputeDetail disputeId={selectedDispute} setPage={setDashPage} />
       case 'admin-users':          return <AdminUsers />
+      case 'admin-locations':      return <AdminLocations />
+      case 'admin-flags':          return <AdminFlags />
       case 'local-browse':         return <LocalBrowse setPage={setDashPage} />
       case 'admin-businesses':     return <AdminBusinesses />
       default:                     return <Dashboard setPage={setDashPage} setSelectedTask={setSelectedTask} />
@@ -4397,6 +5382,7 @@ export default function App() {
             <div>
               <LandingNavbar onOpenAuth={openAuth} onNav={navigate} user={user} onEnterApp={goAppHome} />
               <Hero         onOpenAuth={openAuth} />
+              <LaunchSection />
               <StatsBar />
               <CampusStrip />
               <HowItWorks />
@@ -4405,6 +5391,7 @@ export default function App() {
               <Pricing      onOpenAuth={openAuth} />
               <Testimonials />
               <LandingAbout />
+              <FeedbackSection />
               <LandingCTA   onOpenAuth={openAuth} />
               <LandingFooter onNav={navigate} />
             </div>
@@ -4420,15 +5407,31 @@ export default function App() {
           )}
 
           {/* ── DASHBOARD ────────────────────────────────────── */}
-          {view==='dashboard' && user && (
+          {/* Pre-launch lock: only admins reach the real app. Everyone else who
+              signs in/up lands on the founding-member holding screen instead. */}
+          {view==='dashboard' && user && isAppLocked(user) && (
+            <LaunchGate user={user} onLogout={logout} onViewLanding={() => navigate('landing')} />
+          )}
+          {view==='dashboard' && user && !isAppLocked(user) && (
             <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column', background:'var(--bg-base)' }}>
-              <TopBar page={dashPage} setPage={setDashPage} unreadCount={unreadCount} onGoHome={goAppHome} onViewLanding={() => navigate('landing')} />
+              <TopBar page={dashPage} setPage={setDashPage} unreadCount={unreadCount} onGoHome={goAppHome} onViewLanding={() => navigate('landing')} onSearch={(q) => { setSearchQuery(q); setDashPage('search') }} />
               {/* DashSidebar is mobile-only now — CSS turns it into the bottom tab bar */}
               <DashSidebar page={dashPage} setPage={setDashPage} unreadCount={unreadCount} onGoHome={goAppHome} />
               <main className="dash-main" style={{ flex:1, width:'100%', maxWidth:1280, margin:'0 auto', padding:'28px 24px 60px' }}>
                 {renderDashPage()}
               </main>
             </div>
+          )}
+
+          {/* POPIA consent gate — blocks the app until consent is explicitly given
+              (chiefly the Google path, which can't capture consent at OAuth).
+              Suppressed while the launch gate is up — they'll consent at launch. */}
+          {user && user.popia_consent === false && !isAppLocked(user) && (
+            <ConsentGate
+              onConsented={() => setUser(u => ({ ...u, popia_consent: true }))}
+              onDecline={logout}
+              onViewPrivacy={() => navigate('privacy')}
+            />
           )}
 
           {/* ── AUTH MODAL (accessible from any view) ────────── */}

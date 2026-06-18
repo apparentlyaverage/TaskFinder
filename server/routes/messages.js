@@ -5,6 +5,8 @@
 import { Router } from 'express'
 import { body, param, validationResult } from 'express-validator'
 import { pool } from '../db.js'
+import log from '../log.js'
+import { createNotification } from '../notify.js'
 import { requireAuth } from '../middleware.js'
 
 const router = Router()
@@ -28,9 +30,17 @@ router.post('/messages',
         'INSERT INTO messages (sender_id, receiver_id, task_id, content) VALUES ($1,$2,$3,$4) RETURNING *',
         [req.userId, receiver_id, task_id, content]
       )
+      // In-app + email notification for the recipient (best-effort).
+      createNotification({
+        userId: receiver_id,
+        type: 'message.received',
+        title: 'New message',
+        body: 'You have a new message on ReLivR.',
+        referenceId: req.userId,
+      })
       return res.status(201).json({ message: rows[0] })
     } catch (err) {
-      console.error('[POST /messages]', err.message)
+      log.error('POST /messages', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     }
   }
@@ -55,7 +65,7 @@ router.get('/messages/threads', requireAuth, async (req, res) => {
     )
     return res.status(200).json({ threads: rows })
   } catch (err) {
-    console.error('[GET /messages/threads]', err.message)
+    log.error('GET /messages/threads', { reqId: req.id, msg: err.message })
     return res.status(500).json({ message: 'Internal server error.' })
   }
 })
@@ -82,7 +92,7 @@ router.get('/messages/:userId',
       ).catch(() => {})
       return res.status(200).json({ messages: rows.reverse() })
     } catch (err) {
-      console.error('[GET /messages/:userId]', err.message)
+      log.error('GET /messages/:userId', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     }
   }
@@ -100,7 +110,7 @@ router.get('/notifications', requireAuth, async (req, res) => {
       'SELECT COUNT(*) FROM notifications WHERE user_id=$1 AND is_read=FALSE', [req.userId])
     return res.status(200).json({ notifications: rows, unread_count: parseInt(count.rows[0].count) })
   } catch (err) {
-    console.error('[GET /notifications]', err.message)
+    log.error('GET /notifications', { reqId: req.id, msg: err.message })
     return res.status(500).json({ message: 'Internal server error.' })
   }
 })
@@ -113,7 +123,7 @@ router.patch('/notifications/read', requireAuth, async (req, res) => {
       [req.userId])
     return res.status(200).json({ message: 'All notifications marked as read.' })
   } catch (err) {
-    console.error('[PATCH /notifications/read]', err.message)
+    log.error('PATCH /notifications/read', { reqId: req.id, msg: err.message })
     return res.status(500).json({ message: 'Internal server error.' })
   }
 })

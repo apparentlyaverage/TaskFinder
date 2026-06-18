@@ -9,6 +9,7 @@
 import { Router } from 'express'
 import { body, param, query, validationResult } from 'express-validator'
 import { pool } from '../db.js'
+import log from '../log.js'
 import { requireAuth } from '../middleware.js'
 
 const router = Router()
@@ -75,7 +76,7 @@ router.get('/',
          ORDER BY created_at DESC`, params)
       return res.status(200).json({ businesses: rows })
     } catch (err) {
-      console.error('[GET /businesses]', err.message)
+      log.error('GET /businesses', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     }
   }
@@ -91,7 +92,7 @@ router.get('/categories', async (req, res) => {
        GROUP BY category ORDER BY category`)
     return res.status(200).json({ categories: rows })
   } catch (err) {
-    console.error('[GET /businesses/categories]', err.message)
+    log.error('GET /businesses/categories', { reqId: req.id, msg: err.message })
     return res.status(500).json({ message: 'Internal server error.' })
   }
 })
@@ -104,7 +105,7 @@ router.get('/admin/all', requireAuth, requireAdmin, async (req, res) => {
       `SELECT * FROM businesses ORDER BY created_at DESC`)
     return res.status(200).json({ businesses: rows })
   } catch (err) {
-    console.error('[GET /businesses/admin/all]', err.message)
+    log.error('GET /businesses/admin/all', { reqId: req.id, msg: err.message })
     return res.status(500).json({ message: 'Internal server error.' })
   }
 })
@@ -125,7 +126,7 @@ router.get('/:id',
       if (rows[0].status !== 'active') return res.status(404).json({ message: 'Business not found.' })
       return res.status(200).json({ business: rows[0] })
     } catch (err) {
-      console.error('[GET /businesses/:id]', err.message)
+      log.error('GET /businesses/:id', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     }
   }
@@ -162,8 +163,8 @@ router.post('/',
            (name, category, description, address, map_hint, phone, whatsapp, email,
             hours, image_urls, logo_url, link_url, status, fee_paid, paid_at,
             signed_by_rep, notes)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
-                 CASE WHEN $14 IS NOT NULL THEN NOW() ELSE NULL END,$15,$16)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::numeric,
+                 CASE WHEN $14::numeric IS NOT NULL THEN NOW() ELSE NULL END,$15,$16)
          RETURNING *`,
         [b.name, b.category, b.description || null, b.address || null, b.mapHint || null,
          b.phone || null, b.whatsapp || null, b.email || null, b.hours || null,
@@ -172,7 +173,7 @@ router.post('/',
       return res.status(201).json({ business: rows[0] })
     } catch (err) {
       if (/URL|link|image|array/i.test(err.message)) return res.status(422).json({ message: err.message })
-      console.error('[POST /businesses]', err.message)
+      log.error('POST /businesses', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     }
   }
@@ -230,7 +231,7 @@ router.patch('/:id',
       return res.status(200).json({ business: rows[0] })
     } catch (err) {
       if (/URL|link|image|array/i.test(err.message)) return res.status(422).json({ message: err.message })
-      console.error('[PATCH /businesses/:id]', err.message)
+      log.error('PATCH /businesses/:id', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     }
   }
@@ -248,7 +249,7 @@ router.delete('/:id',
       if (rowCount === 0) return res.status(404).json({ message: 'Business not found.' })
       return res.status(200).json({ message: 'Business deleted.' })
     } catch (err) {
-      console.error('[DELETE /businesses/:id]', err.message)
+      log.error('DELETE /businesses/:id', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     }
   }
