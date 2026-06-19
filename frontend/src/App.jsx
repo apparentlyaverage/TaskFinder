@@ -5453,10 +5453,21 @@ export default function App() {
         } catch { /* ignore */ }
       }
 
-      try {
-        // Decode token to get userId without a network call
-        const payload = JSON.parse(atob(token.split('.')[1]))
+      // Defensively decode the JWT payload first, OUTSIDE the network try/catch.
+      // A token that isn't a well-formed JWT (e.g. a legacy fake 'demo-token') is
+      // invalid — clear it and show landing rather than hydrating a dead session.
+      let payload = null
+      try { payload = JSON.parse(atob(token.split('.')[1] || '')) } catch { payload = null }
+      if (!payload || typeof payload !== 'object') {
+        localStorage.removeItem('rl_token')
+        localStorage.removeItem('rl_user')
+        const loc = parseLocation()
+        if (loc.view === 'dashboard') { setView('landing'); window.history.replaceState({}, '', '/') }
+        setUserLoading(false)
+        return
+      }
 
+      try {
         // Check token isn't expired
         if (payload.exp && payload.exp * 1000 < Date.now()) {
           localStorage.removeItem('rl_token')
