@@ -3631,7 +3631,12 @@ function LocalBrowse({ setPage }) {
     let cancelled = false
     setLoading(true)
     const q = cat === 'all' ? '' : `?category=${encodeURIComponent(cat)}`
-    fetch(`${API_BASE}/businesses${q}`)
+    // /businesses is a public read, but pre-launch the server gate blocks
+    // anonymous requests. Send the token when signed in so app-accessible users
+    // (incl. QA/test accounts) see the directory; at launch the gate opens and
+    // this works for everyone with or without a token.
+    const tok = localStorage.getItem('rl_token')
+    fetch(`${API_BASE}/businesses${q}`, tok ? { headers: { Authorization: `Bearer ${tok}` } } : undefined)
       .then(r => r.json())
       .then(d => { if (!cancelled) { setBusinesses(d.businesses || []); setLoading(false) } })
       .catch(() => { if (!cancelled) { setBusinesses([]); setLoading(false) } })
