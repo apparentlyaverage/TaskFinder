@@ -9,7 +9,11 @@ export default defineConfig({
     port: Number(process.env.PORT) || 3000,
     historyApiFallback: true,
     proxy: {
-      '/auth':          { target: 'http://localhost:3001', changeOrigin: true, proxyTimeout: 4000, timeout: 4000 },
+      // 4s was too aggressive: a cold Neon (serverless Postgres) connection can
+      // push the first /auth/me past it, the proxy then errors, and the client
+      // restore logic clears the token — silently logging the user out on reload.
+      // 20s tolerates cold starts. (Prod is unaffected: Vercel calls Railway directly.)
+      '/auth':          { target: 'http://localhost:3001', changeOrigin: true, proxyTimeout: 20000, timeout: 20000 },
       '/tasks':         { target: 'http://localhost:3001', changeOrigin: true },
       '/messages':      { target: 'http://localhost:3001', changeOrigin: true },
       '/notifications': { target: 'http://localhost:3001', changeOrigin: true },

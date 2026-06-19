@@ -9,7 +9,8 @@
     "test:watch": "vitest",
     "migrate": "node scripts/migrate.mjs",
     "make-admin": "node scripts/make-admin.mjs",
-    "seed-admin": "node scripts/seed-admin.mjs"
+    "seed-admin": "node scripts/seed-admin.mjs",
+    "seed:test-users": "node scripts/seed-test-users.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

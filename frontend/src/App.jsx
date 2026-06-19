@@ -29,8 +29,24 @@ export const LAUNCH_AT = '2026-07-07T00:00:00'
 const launchMs = () => new Date(LAUNCH_AT).getTime()
 const hasLaunched = () => Date.now() >= launchMs()
 // A signed-in user is locked out of the app when it hasn't launched and they
-// aren't an admin. Admins always get in (they run the show pre-launch).
-const isAppLocked = (user) => !!user && user.role !== 'admin' && !hasLaunched()
+// aren't an admin or a business partner. Admins run the show pre-launch;
+// business partners onboard (set up their page) ahead of launch day.
+const PRELAUNCH_ROLES = ['admin', 'business']
+const isAppLocked = (user) => !!user && !PRELAUNCH_ROLES.includes(user.role) && !hasLaunched()
+
+// Fire-and-forget public analytics beacon for a business page. Never throws and
+// never blocks the UI — a failed beacon must not affect what the visitor sees.
+function trackBizEvent(businessId, type) {
+  if (!businessId) return
+  try {
+    fetch(`${API_BASE}/businesses/${businessId}/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type }),
+      keepalive: true,
+    }).catch(() => {})
+  } catch { /* ignore */ }
+}
 
 // ─── FONTS & GLOBAL STYLES ───────────────────────────────────────────────────
 const _fl = document.createElement('link')
@@ -3639,9 +3655,9 @@ function LocalBrowse({ setPage }) {
               {b.hours   && <Mono>🕒 {b.hours}</Mono>}
             </div>
             <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginTop:18 }}>
-              {b.phone    && <a href={`tel:${b.phone}`} style={{ textDecoration:'none' }}><Btn variant="secondary" size="sm">📞 Call</Btn></a>}
-              {b.whatsapp && <a href={`https://wa.me/${b.whatsapp.replace(/[^0-9]/g,'')}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}><Btn variant="secondary" size="sm">💬 WhatsApp</Btn></a>}
-              {b.link_url && <a href={b.link_url} target="_blank" rel="noopener noreferrer nofollow" style={{ textDecoration:'none' }}><Btn variant="ghost" size="sm">🔗 Website</Btn></a>}
+              {b.phone    && <a href={`tel:${b.phone}`} onClick={() => trackBizEvent(b.business_id, 'phone_click')} style={{ textDecoration:'none' }}><Btn variant="secondary" size="sm">📞 Call</Btn></a>}
+              {b.whatsapp && <a href={`https://wa.me/${b.whatsapp.replace(/[^0-9]/g,'')}`} onClick={() => trackBizEvent(b.business_id, 'whatsapp_click')} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}><Btn variant="secondary" size="sm">💬 WhatsApp</Btn></a>}
+              {b.link_url && <a href={b.link_url} onClick={() => trackBizEvent(b.business_id, 'link_click')} target="_blank" rel="noopener noreferrer nofollow" style={{ textDecoration:'none' }}><Btn variant="ghost" size="sm">🔗 Website</Btn></a>}
             </div>
           </div>
         </DCard>
@@ -3672,7 +3688,7 @@ function LocalBrowse({ setPage }) {
       ) : (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))', gap:16 }}>
           {businesses.map(b => (
-            <DCard key={b.business_id} onClick={() => setSelected(b)} style={{ padding:0, overflow:'hidden', cursor:'pointer' }}>
+            <DCard key={b.business_id} onClick={() => { setSelected(b); trackBizEvent(b.business_id, 'view') }} style={{ padding:0, overflow:'hidden', cursor:'pointer' }}>
               <BizGallery images={b.image_urls} height={150} />
               <div style={{ padding:'14px 16px' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8 }}>
@@ -4548,6 +4564,300 @@ function MiniChart({ data, dataKey, label, color='var(--accent)' }) {
   )
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// BUSINESS DASHBOARD — self-contained surface for role='business' users
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const bizTaStyle = { width:'100%', padding:'9px 12px', borderRadius:10, border:'1px solid var(--border)', background:'var(--bg-elevated)', color:'var(--text-primary)', fontSize:'.9rem', fontFamily:'var(--font-body)', resize:'vertical', boxSizing:'border-box' }
+const bizGhostBtn = { padding:'7px 12px', borderRadius:9, border:'1px solid var(--border)', background:'transparent', color:'var(--text-secondary)', fontSize:'.82rem', fontWeight:600, fontFamily:'var(--font-body)', cursor:'pointer' }
+const bizTab = (active) => ({ padding:'10px 16px', border:'none', borderBottom:`2px solid ${active?'var(--accent)':'transparent'}`, background:'transparent', color:active?'var(--accent)':'var(--text-secondary)', fontSize:'.9rem', fontWeight:700, fontFamily:'var(--font-body)', cursor:'pointer' })
+
+function BusinessDashboard({ onLogout, onViewLanding }) {
+  const { user } = useAuth()
+  const token = () => localStorage.getItem('rl_token')
+  const [tab, setTab]         = useState('page')   // 'page' | 'analytics'
+  const [biz, setBiz]         = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [status, setStatus]   = useState(null)     // null | 'notlinked' | 'error'
+  const [tick, setTick]       = useState(0)        // bump to retry the load
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true); setStatus(null)
+    let attempt = 0
+    const run = () => {
+      fetch(API_BASE + '/businesses/mine', { headers:{ Authorization:`Bearer ${token()}` } })
+        .then(async r => {
+          if (cancelled) return
+          // 404 = genuinely no business linked (don't retry that).
+          if (r.status === 404) { setStatus('notlinked'); setLoading(false); return }
+          const d = await r.json().catch(() => ({}))
+          if (!r.ok) throw new Error('transient')
+          setBiz(d.business); setLoading(false)
+        })
+        .catch(() => {
+          if (cancelled) return
+          // Transient failure (e.g. a cold backend) — auto-retry twice before
+          // surfacing the error card, so a slow first request self-heals.
+          if (attempt < 2) { attempt += 1; setTimeout(run, 700); return }
+          setStatus('error'); setLoading(false)
+        })
+    }
+    run()
+    return () => { cancelled = true }
+  }, [tick])
+
+  return (
+    <div style={{ minHeight:'100vh', background:'var(--bg-base)', color:'var(--text-primary)', display:'flex', flexDirection:'column' }}>
+      <header style={{ position:'sticky', top:0, zIndex:90, background:'var(--bg-surface)', borderBottom:'1px solid var(--border)' }}>
+        <div style={{ maxWidth:1100, margin:'0 auto', display:'flex', alignItems:'center', gap:14, minHeight:60, padding:'0 20px' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:9 }}>
+            <div style={{ background:'var(--accent)', color:'#fff', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'0.85rem', padding:'4px 8px', borderRadius:'var(--radius-sm)', letterSpacing:'0.06em' }}>R</div>
+            <span style={{ fontFamily:'var(--font-display)', fontSize:'1.05rem', fontWeight:700 }}>ReLivR <span style={{ color:'var(--text-muted)', fontWeight:500 }}>· Business</span></span>
+          </div>
+          <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ fontFamily:'var(--font-mono)', fontSize:'.72rem', color:'var(--text-muted)' }}>{biz?.name || user?.email}</span>
+            {onViewLanding && <button onClick={onViewLanding} style={bizGhostBtn}>Public site</button>}
+            <button onClick={onLogout} style={{ ...bizGhostBtn, color:'var(--danger)' }}>Sign out</button>
+          </div>
+        </div>
+        <div style={{ maxWidth:1100, margin:'0 auto', display:'flex', gap:4, padding:'0 20px' }}>
+          <button onClick={() => setTab('page')}      style={bizTab(tab==='page')}>My Page</button>
+          <button onClick={() => setTab('analytics')} style={bizTab(tab==='analytics')}>Analytics</button>
+        </div>
+      </header>
+
+      <main style={{ flex:1, width:'100%', maxWidth:1100, margin:'0 auto', padding:'28px 20px 60px' }}>
+        {loading ? <div style={{ padding:60, textAlign:'center' }}><Spinner /></div>
+         : status === 'error' ? (
+          <DCard hover={false} style={{ padding:'40px 24px', textAlign:'center', maxWidth:520, margin:'40px auto' }}>
+            <div style={{ fontSize:'2rem', marginBottom:10 }}>⚠️</div>
+            <h2 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.2rem', marginBottom:8 }}>Couldn’t load your dashboard</h2>
+            <p style={{ color:'var(--text-secondary)', fontSize:'.9rem', lineHeight:1.6, marginBottom:16 }}>Something went wrong reaching the server. Please try again.</p>
+            <Btn onClick={() => setTick(t => t + 1)}>Retry</Btn>
+          </DCard>
+        )
+         : status === 'notlinked' ? (
+          <DCard hover={false} style={{ padding:'40px 24px', textAlign:'center', maxWidth:520, margin:'40px auto' }}>
+            <div style={{ fontSize:'2rem', marginBottom:10 }}>◇</div>
+            <h2 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.2rem', marginBottom:8 }}>No business linked yet</h2>
+            <p style={{ color:'var(--text-secondary)', fontSize:'.9rem', lineHeight:1.6 }}>
+              Your account isn’t linked to a business listing yet. The ReLivR team links your
+              listing once your founding-partner onboarding (R750) is set up. Reach out and
+              we’ll connect it to <Mono>{user?.email}</Mono>.
+            </p>
+          </DCard>
+        )
+         : tab === 'page' ? <BusinessPageEditor biz={biz} onSaved={setBiz} />
+         : <BusinessAnalytics />}
+      </main>
+    </div>
+  )
+}
+
+function BusinessPreviewCard({ b }) {
+  const theme = b.theme_color || 'var(--accent)'
+  return (
+    <DCard hover={false} style={{ padding:0, overflow:'hidden', border:`1px solid var(--border)` }}>
+      <div style={{ height:10, background:theme }} />
+      {b.cover_image_url
+        ? <img src={b.cover_image_url} alt="" style={{ width:'100%', height:120, objectFit:'cover', display:'block' }} />
+        : (b.image_urls?.length ? <BizGallery images={b.image_urls} height={120} /> : <div style={{ height:60 }} />)}
+      <div style={{ padding:18 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6, flexWrap:'wrap' }}>
+          {b.logo_url && <img src={b.logo_url} alt="" style={{ width:40, height:40, borderRadius:9, objectFit:'cover' }} />}
+          <h3 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.15rem', margin:0 }}>{b.name || 'Your business name'}</h3>
+        </div>
+        {b.tagline && <p style={{ color:theme, fontWeight:600, fontSize:'.9rem', margin:'0 0 6px' }}>{b.tagline}</p>}
+        {b.category && <span style={{ display:'inline-block', fontSize:'.72rem', fontWeight:700, color:theme, background:'var(--bg-elevated)', border:`1px solid ${theme}`, borderRadius:100, padding:'2px 10px' }}>{b.category}</span>}
+        {b.description && <p style={{ color:'var(--text-secondary)', fontSize:'.86rem', lineHeight:1.6, marginTop:10 }}>{b.description}</p>}
+        {b.hours && <Mono style={{ display:'block', marginTop:10 }}>🕒 {b.hours}</Mono>}
+      </div>
+    </DCard>
+  )
+}
+
+function BusinessPageEditor({ biz, onSaved }) {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const s = biz.socials || {}
+  const [f, setF] = useState({
+    name: biz.name || '', tagline: biz.tagline || '', category: biz.category || '',
+    description: biz.description || '', hours: biz.hours || '', address: biz.address || '',
+    phone: biz.phone || '', whatsapp: biz.whatsapp || '', email: biz.email || '',
+    themeColor: biz.theme_color || '#6C5CE7',
+    coverImageUrl: biz.cover_image_url || '', logoUrl: biz.logo_url || '', linkUrl: biz.link_url || '',
+    gallery: (biz.image_urls || []).join('\n'),
+    instagram: s.instagram || '', facebook: s.facebook || '', tiktok: s.tiktok || '', website: s.website || '',
+  })
+  const set = k => e => setF(p => ({ ...p, [k]: e.target.value }))
+  const [saving, setSaving] = useState(false)
+
+  const galleryArr = () => f.gallery.split('\n').map(x => x.trim()).filter(Boolean)
+
+  async function save() {
+    setSaving(true)
+    try {
+      const payload = {
+        name: f.name, tagline: f.tagline, category: f.category, description: f.description,
+        hours: f.hours, address: f.address, phone: f.phone, whatsapp: f.whatsapp, email: f.email,
+        themeColor: f.themeColor, coverImageUrl: f.coverImageUrl || null, logoUrl: f.logoUrl || null,
+        linkUrl: f.linkUrl || null, imageUrls: galleryArr(),
+        socials: { instagram: f.instagram, facebook: f.facebook, tiktok: f.tiktok, website: f.website },
+      }
+      const res = await fetch(API_BASE + '/businesses/mine', {
+        method:'PATCH', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
+        body: JSON.stringify(payload),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.message || 'Save failed.')
+      toast('Your page was updated.', 'success')
+      onSaved(d.business)
+    } catch (e) { toast(e.message || 'Save failed.', 'error') }
+    finally { setSaving(false) }
+  }
+
+  const preview = {
+    ...biz, name:f.name, tagline:f.tagline, category:f.category, description:f.description,
+    hours:f.hours, theme_color:f.themeColor, cover_image_url:f.coverImageUrl, logo_url:f.logoUrl,
+    image_urls: galleryArr(),
+  }
+  const sectionLabel = (t) => <Mono style={{ display:'block', margin:'18px 0 10px', color:'var(--text-secondary)' }}>{t}</Mono>
+
+  return (
+    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(320px, 1fr))', gap:24, alignItems:'start' }}>
+      <DCard hover={false} style={{ padding:22 }}>
+        {sectionLabel('— Basics')}
+        <Input label="Business name" value={f.name} onChange={set('name')} />
+        <Input label="Tagline" value={f.tagline} onChange={set('tagline')} />
+        <Input label="Category" value={f.category} onChange={set('category')} />
+        <label style={{ display:'block', marginTop:4 }}>
+          <span style={{ display:'block', fontSize:'.75rem', fontWeight:600, color:'var(--text-secondary)', marginBottom:5 }}>Description</span>
+          <textarea value={f.description} onChange={set('description')} rows={4} style={bizTaStyle} maxLength={2000} />
+        </label>
+
+        {sectionLabel('— Hours & location')}
+        <Input label="Opening hours" value={f.hours} onChange={set('hours')} />
+        <Input label="Address" value={f.address} onChange={set('address')} />
+
+        {sectionLabel('— Contact')}
+        <Input label="Phone" value={f.phone} onChange={set('phone')} />
+        <Input label="WhatsApp" value={f.whatsapp} onChange={set('whatsapp')} />
+        <Input label="Email" value={f.email} onChange={set('email')} />
+        <Input label="Website link" value={f.linkUrl} onChange={set('linkUrl')} />
+
+        {sectionLabel('— Appearance')}
+        <label style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
+          <span style={{ fontSize:'.75rem', fontWeight:600, color:'var(--text-secondary)' }}>Theme colour</span>
+          <input type="color" value={/^#[0-9a-fA-F]{6}$/.test(f.themeColor) ? f.themeColor : '#6C5CE7'} onChange={set('themeColor')} style={{ width:42, height:30, border:'1px solid var(--border)', borderRadius:8, background:'none', cursor:'pointer' }} />
+          <input value={f.themeColor} onChange={set('themeColor')} style={{ ...bizTaStyle, width:120 }} />
+        </label>
+        <Input label="Cover image URL" value={f.coverImageUrl} onChange={set('coverImageUrl')} />
+        <Input label="Logo URL" value={f.logoUrl} onChange={set('logoUrl')} />
+        <label style={{ display:'block', marginTop:4 }}>
+          <span style={{ display:'block', fontSize:'.75rem', fontWeight:600, color:'var(--text-secondary)', marginBottom:5 }}>Gallery image URLs (one per line, up to 8)</span>
+          <textarea value={f.gallery} onChange={set('gallery')} rows={3} style={bizTaStyle} placeholder="https://…" />
+        </label>
+
+        {sectionLabel('— Social links')}
+        <Input label="Instagram" value={f.instagram} onChange={set('instagram')} />
+        <Input label="Facebook" value={f.facebook} onChange={set('facebook')} />
+        <Input label="TikTok" value={f.tiktok} onChange={set('tiktok')} />
+        <Input label="Website (social)" value={f.website} onChange={set('website')} />
+
+        <div style={{ marginTop:20 }}>
+          <Btn loading={saving} onClick={save}>Save changes</Btn>
+        </div>
+      </DCard>
+
+      <div>
+        <Mono style={{ display:'block', marginBottom:10 }}>Live preview — how students see you</Mono>
+        <BusinessPreviewCard b={preview} />
+      </div>
+    </div>
+  )
+}
+
+function BizStatTile({ label, value, sub, color='var(--accent)' }) {
+  return (
+    <DCard hover={false} style={{ padding:'18px 20px' }}>
+      <Mono style={{ color:'var(--text-secondary)' }}>{label}</Mono>
+      <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.8rem', color, marginTop:4 }}>{value}</div>
+      {sub && <Mono style={{ color:'var(--text-muted)' }}>{sub}</Mono>}
+    </DCard>
+  )
+}
+
+function BusinessAnalytics() {
+  const token = () => localStorage.getItem('rl_token')
+  const [days, setDays]       = useState(30)
+  const [data, setData]       = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    fetch(`${API_BASE}/businesses/mine/analytics?days=${days}`, { headers:{ Authorization:`Bearer ${token()}` } })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('analytics')))
+      .then(d => { if (!cancelled) { setData(d); setLoading(false) } })
+      .catch(() => { if (!cancelled) { setData(null); setLoading(false) } })
+    return () => { cancelled = true }
+  }, [days])
+
+  if (loading) return <div style={{ padding:60, textAlign:'center' }}><Spinner /></div>
+  if (!data)   return <EmptyState icon="📊" message="No analytics yet — they’ll appear as students view your page." />
+
+  const t = data.totals || {}
+  const clickRows = [
+    ['💬 WhatsApp',  t.whatsapp_click || 0],
+    ['📞 Phone',     t.phone_click || 0],
+    ['🔗 Website',   t.link_click || 0],
+    ['✉️ Email',     t.email_click || 0],
+    ['📍 Directions',t.directions_click || 0],
+  ]
+  return (
+    <div>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10, marginBottom:18 }}>
+        <h2 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.3rem', margin:0 }}>Your page analytics</h2>
+        <div style={{ display:'flex', gap:6 }}>
+          {[7, 30, 90].map(d => (
+            <button key={d} onClick={() => setDays(d)}
+              style={{ padding:'6px 12px', borderRadius:100, fontSize:'.78rem', fontWeight:600, cursor:'pointer', border:`1px solid ${days===d?'var(--accent)':'var(--border)'}`, background:days===d?'var(--accent)':'var(--bg-surface)', color:days===d?'#fff':'var(--text-secondary)' }}>
+              {d}d
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:14, marginBottom:22 }}>
+        <BizStatTile label="Page views" value={data.total_views} sub={`last ${data.range_days} days`} />
+        <BizStatTile label="Contact clicks" value={data.total_clicks} color="var(--success)" />
+        <BizStatTile label="Engagement" value={`${data.engagement_rate}%`} sub="clicks ÷ views" color="var(--info)" />
+      </div>
+
+      <DCard hover={false} style={{ padding:20, marginBottom:22 }}>
+        <MiniChart data={data.views_series} dataKey="count" label="Daily page views" />
+      </DCard>
+
+      <DCard hover={false} style={{ padding:20 }}>
+        <Mono style={{ display:'block', marginBottom:12, color:'var(--text-secondary)' }}>Where people tapped — contact breakdown</Mono>
+        {clickRows.map(([label, n]) => {
+          const max = Math.max(1, ...clickRows.map(r => r[1]))
+          return (
+            <div key={label} style={{ display:'flex', alignItems:'center', gap:12, marginBottom:8 }}>
+              <span style={{ width:120, fontSize:'.85rem', color:'var(--text-secondary)' }}>{label}</span>
+              <div style={{ flex:1, height:8, background:'var(--bg-elevated)', borderRadius:6, overflow:'hidden' }}>
+                <div style={{ width:`${(n / max) * 100}%`, height:'100%', background:'var(--accent)', borderRadius:6 }} />
+              </div>
+              <span style={{ width:36, textAlign:'right', fontFamily:'var(--font-mono)', fontSize:'.8rem' }}>{n}</span>
+            </div>
+          )
+        })}
+      </DCard>
+    </div>
+  )
+}
+
 function AdminDashboard() {
   const token = () => localStorage.getItem('rl_token')
   const [stats, setStats]   = useState(null)
@@ -5126,6 +5436,16 @@ export default function App() {
         return
       }
 
+      // Hydrate identity from the cached rl_user so the app can render even when
+      // /auth/me can't be reached right now (cold backend, flaky network). The
+      // token stays in place; per-request auth still happens on every API call.
+      const hydrateFromCache = () => {
+        try {
+          const cached = JSON.parse(localStorage.getItem('rl_user') || 'null')
+          if (cached && cached.role) setUser({ ...cached, popia_consent: cached.popia_consent !== false })
+        } catch { /* ignore */ }
+      }
+
       try {
         // Decode token to get userId without a network call
         const payload = JSON.parse(atob(token.split('.')[1]))
@@ -5133,6 +5453,9 @@ export default function App() {
         // Check token isn't expired
         if (payload.exp && payload.exp * 1000 < Date.now()) {
           localStorage.removeItem('rl_token')
+          localStorage.removeItem('rl_user')
+          const loc = parseLocation()
+          if (loc.view === 'dashboard') { setView('landing'); window.history.replaceState({}, '', '/') }
           setUserLoading(false)
           return
         }
@@ -5161,13 +5484,21 @@ export default function App() {
             setView('dashboard')
             setDashPage(home)
           }
-        } else {
-          // Token rejected by server — clear it
+        } else if (res.status === 401 || res.status === 403) {
+          // Token genuinely rejected (expired/revoked) — clear and go to landing.
           localStorage.removeItem('rl_token')
+          localStorage.removeItem('rl_user')
+          const loc = parseLocation()
+          if (loc.view === 'dashboard') { setView('landing'); window.history.replaceState({}, '', '/') }
+        } else {
+          // Transient server error (5xx/timeout) — keep the session, hydrate
+          // from cache so a cold backend doesn't bounce the user to landing.
+          hydrateFromCache()
         }
       } catch {
-        // Token malformed or network error — clear silently
-        localStorage.removeItem('rl_token')
+        // Network error or malformed response — transient. Keep the token and
+        // hydrate from cache rather than silently logging the user out.
+        hydrateFromCache()
       } finally {
         setUserLoading(false)
       }
@@ -5412,7 +5743,11 @@ export default function App() {
           {view==='dashboard' && user && isAppLocked(user) && (
             <LaunchGate user={user} onLogout={logout} onViewLanding={() => navigate('landing')} />
           )}
-          {view==='dashboard' && user && !isAppLocked(user) && (
+          {/* Business partners get their own self-contained dashboard surface. */}
+          {view==='dashboard' && user && !isAppLocked(user) && user.role==='business' && (
+            <BusinessDashboard onLogout={logout} onViewLanding={() => navigate('landing')} />
+          )}
+          {view==='dashboard' && user && !isAppLocked(user) && user.role!=='business' && (
             <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column', background:'var(--bg-base)' }}>
               <TopBar page={dashPage} setPage={setDashPage} unreadCount={unreadCount} onGoHome={goAppHome} onViewLanding={() => navigate('landing')} onSearch={(q) => { setSearchQuery(q); setDashPage('search') }} />
               {/* DashSidebar is mobile-only now — CSS turns it into the bottom tab bar */}

@@ -37,18 +37,24 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'
 // ── Pre-launch gate ───────────────────────────────────────────────────────────
 // Mirrors the client-side isAppLocked() check so the API is equally protected.
 // Routes needed before launch (auth handshake, health, public read-only) bypass
-// the gate. Admin tokens bypass unconditionally.
+// the gate. Admins bypass unconditionally; BUSINESS partners also bypass so they
+// can onboard and set up their page ahead of launch day (they only reach their
+// own ownership-gated business data).
 const LAUNCH_AT_MS = new Date('2026-07-07T00:00:00').getTime()
 const PRE_LAUNCH_OPEN = ['/auth', '/health', '/flags', '/feedback', '/waitlist']
+const PRE_LAUNCH_ROLES = ['admin', 'business']
+// Public, rate-limited, no-PII analytics beacon — safe to leave open like /feedback.
+const PRE_LAUNCH_OPEN_RE = /^\/businesses\/[^/]+\/events$/
 app.use((req, res, next) => {
   if (process.env.NODE_ENV === 'test') return next()  // gate off in test env
   if (Date.now() >= LAUNCH_AT_MS) return next()
   if (PRE_LAUNCH_OPEN.some(p => req.path === p || req.path.startsWith(p + '/'))) return next()
+  if (PRE_LAUNCH_OPEN_RE.test(req.path)) return next()
   const auth = req.headers.authorization
   if (auth?.startsWith('Bearer ')) {
     try {
       const payload = jwt.verify(auth.slice(7), process.env.JWT_SECRET)
-      if (payload.role === 'admin') return next()
+      if (PRE_LAUNCH_ROLES.includes(payload.role)) return next()
     } catch { /* fall through — invalid token → blocked */ }
   }
   res.status(503).json({ message: 'ReLivR launches on 7 July 2026. The app will open automatically.' })

@@ -8,11 +8,58 @@
 //     no schema change needed.
 import { Router } from 'express'
 import { body, param, query, validationResult } from 'express-validator'
+import rateLimit from 'express-rate-limit'
 import { pool } from '../db.js'
 import log from '../log.js'
 import { requireAuth } from '../middleware.js'
 
 const router = Router()
+
+// Public page-event tracking is unauthenticated and writes a row per call, so it
+// gets its own limiter on top of the global ceiling — generous enough for real
+// browsing, tight enough to stop a single IP inflating a business's analytics.
+const eventsLimiter = rateLimit({
+  windowMs: 60 * 1000, max: 60,
+  message: { message: 'Too many events from this client.' },
+})
+
+// Fields a business OWNER may edit on their own page. Deliberately excludes
+// status, fee_paid, paid_at, expires_at, signed_by_rep, notes, owner_id — those
+// are admin-only (an owner must never flip themselves to 'active' for free).
+// Plain text fields mapped body-key → column. themeColor / socials / URL / image
+// fields are handled explicitly below because they need validation/normalisation.
+const OWNER_EDITABLE = {
+  name: 'name', category: 'category', description: 'description', address: 'address',
+  mapHint: 'map_hint', phone: 'phone', whatsapp: 'whatsapp', email: 'email',
+  hours: 'hours', tagline: 'tagline',
+}
+
+const SOCIAL_KEYS = ['website', 'instagram', 'facebook', 'tiktok', 'twitter', 'linkedin']
+
+// Validate/normalise the socials object: known keys only, each a short string.
+function cleanSocials(value) {
+  if (value === undefined) return undefined
+  if (value === null) return {}
+  if (typeof value !== 'object' || Array.isArray(value)) throw new Error('socials must be an object.')
+  const out = {}
+  for (const k of SOCIAL_KEYS) {
+    if (value[k] === undefined || value[k] === null || value[k] === '') continue
+    const v = String(value[k]).trim()
+    if (v.length > 200) throw new Error('Social link too long.')
+    // website is a full URL; the rest may be a handle or URL — store as given (trimmed).
+    out[k] = k === 'website' ? cleanUrl(v) : v
+  }
+  return out
+}
+
+// #RGB or #RRGGBB (with optional alpha) — reject anything else.
+function cleanHexColor(value) {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  const v = String(value).trim()
+  if (!/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(v)) throw new Error('Invalid theme colour.')
+  return v
+}
 
 function check(req, res, next) {
   const errors = validationResult(req)
@@ -109,6 +156,232 @@ router.get('/admin/all', requireAuth, requireAdmin, async (req, res) => {
     return res.status(500).json({ message: 'Internal server error.' })
   }
 })
+
+// ════════════════════════════════════════════════════════════════════════════
+//  BUSINESS-OWNER SELF-SERVICE  (the dashboard backend)
+//  Authorised by OWNERSHIP (businesses.owner_id == req.userId), not role alone.
+//  NOTE: these /mine routes MUST be declared before GET '/:id', or '/mine' would
+//  be captured by the :id param and fail UUID validation.
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── OWNER: my business (full record) ──
+// GET /businesses/mine
+router.get('/mine', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM businesses WHERE owner_id = $1 ORDER BY created_at ASC LIMIT 1`,
+      [req.userId])
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'No business is linked to your account yet.' })
+    }
+    return res.status(200).json({ business: rows[0] })
+  } catch (err) {
+    log.error('GET /businesses/mine', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
+
+// ── OWNER: edit my page (whitelisted fields only) ──
+// PATCH /businesses/mine
+router.patch('/mine',
+  requireAuth,
+  [
+    body('name').optional().trim().isLength({ min: 1, max: 160 }),
+    body('category').optional().trim().isLength({ min: 1, max: 60 }),
+    body('description').optional({ nullable: true }).trim().isLength({ max: 2000 }),
+    body('address').optional({ nullable: true }).trim().isLength({ max: 500 }),
+    body('mapHint').optional({ nullable: true }).trim().isLength({ max: 500 }),
+    body('phone').optional({ nullable: true }).trim().isLength({ max: 30 }),
+    body('whatsapp').optional({ nullable: true }).trim().isLength({ max: 30 }),
+    body('email').optional({ nullable: true }).trim().isLength({ max: 160 }),
+    body('hours').optional({ nullable: true }).trim().isLength({ max: 200 }),
+    body('tagline').optional({ nullable: true }).trim().isLength({ max: 200 }),
+  ],
+  check,
+  async (req, res) => {
+    try {
+      // Resolve the caller's business first (ownership gate).
+      const owned = await pool.query('SELECT business_id FROM businesses WHERE owner_id = $1 LIMIT 1', [req.userId])
+      if (owned.rows.length === 0) {
+        return res.status(404).json({ message: 'No business is linked to your account yet.' })
+      }
+      const businessId = owned.rows[0].business_id
+
+      const sets = []
+      const vals = []
+      let i = 1
+      // Plain text fields from the whitelist.
+      for (const [k, col] of Object.entries(OWNER_EDITABLE)) {
+        if (req.body[k] !== undefined) { sets.push(`${col} = $${i++}`); vals.push(req.body[k] === '' ? null : req.body[k]) }
+      }
+      // Validated/normalised fields.
+      const theme = cleanHexColor(req.body.themeColor)
+      if (theme !== undefined) { sets.push(`theme_color = $${i++}`); vals.push(theme) }
+      if (req.body.coverImageUrl !== undefined) { sets.push(`cover_image_url = $${i++}`); vals.push(cleanUrl(req.body.coverImageUrl)) }
+      if (req.body.linkUrl   !== undefined) { sets.push(`link_url = $${i++}`);   vals.push(cleanUrl(req.body.linkUrl)) }
+      if (req.body.logoUrl   !== undefined) { sets.push(`logo_url = $${i++}`);   vals.push(cleanUrl(req.body.logoUrl)) }
+      if (req.body.imageUrls !== undefined) { sets.push(`image_urls = $${i++}`); vals.push(cleanImageUrls(req.body.imageUrls)) }
+      const socials = cleanSocials(req.body.socials)
+      if (socials !== undefined) { sets.push(`socials = $${i++}`); vals.push(JSON.stringify(socials)) }
+
+      if (sets.length === 0) return res.status(400).json({ message: 'Nothing to update.' })
+      sets.push(`updated_at = NOW()`)
+      vals.push(businessId)
+
+      const { rows } = await pool.query(
+        `UPDATE businesses SET ${sets.join(', ')} WHERE business_id = $${i} RETURNING *`, vals)
+      return res.status(200).json({ business: rows[0] })
+    } catch (err) {
+      if (/URL|link|image|array|colour|social/i.test(err.message)) return res.status(422).json({ message: err.message })
+      log.error('PATCH /businesses/mine', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// ── OWNER: my analytics ──
+// GET /businesses/mine/analytics?days=30
+router.get('/mine/analytics',
+  requireAuth,
+  [ query('days').optional().isInt({ min: 1, max: 365 }) ],
+  check,
+  async (req, res) => {
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365)
+    try {
+      const owned = await pool.query('SELECT business_id FROM businesses WHERE owner_id = $1 LIMIT 1', [req.userId])
+      if (owned.rows.length === 0) {
+        return res.status(404).json({ message: 'No business is linked to your account yet.' })
+      }
+      const businessId = owned.rows[0].business_id
+
+      // Totals per event type over the window.
+      const totalsQ = await pool.query(
+        `SELECT event_type, COUNT(*)::int AS cnt
+         FROM business_page_events
+         WHERE business_id = $1
+           AND created_at >= (CURRENT_DATE - ($2::int - 1) * INTERVAL '1 day')
+         GROUP BY event_type`,
+        [businessId, days])
+      const totals = {}
+      for (const r of totalsQ.rows) totals[r.event_type] = r.cnt
+
+      // Daily 'view' series (zero-filled).
+      const seriesQ = await pool.query(
+        `SELECT to_char(d.day, 'YYYY-MM-DD') AS day, COALESCE(c.cnt, 0)::int AS count
+         FROM generate_series(
+                (CURRENT_DATE - ($2::int - 1) * INTERVAL '1 day'), CURRENT_DATE, INTERVAL '1 day'
+              ) AS d(day)
+         LEFT JOIN (
+              SELECT date_trunc('day', created_at)::date AS day, COUNT(*) AS cnt
+              FROM business_page_events
+              WHERE business_id = $1 AND event_type = 'view'
+                AND created_at >= (CURRENT_DATE - ($2::int - 1) * INTERVAL '1 day')
+              GROUP BY 1
+         ) c ON c.day = d.day::date
+         ORDER BY d.day`,
+        [businessId, days])
+
+      const totalViews = totals.view || 0
+      const totalClicks = (totals.phone_click || 0) + (totals.whatsapp_click || 0) +
+                          (totals.email_click || 0) + (totals.link_click || 0) +
+                          (totals.directions_click || 0)
+      return res.status(200).json({
+        business_id: businessId,
+        range_days: days,
+        totals,
+        total_views: totalViews,
+        total_clicks: totalClicks,
+        engagement_rate: totalViews > 0 ? Math.round((totalClicks / totalViews) * 1000) / 10 : 0,
+        views_series: seriesQ.rows,
+      })
+    } catch (err) {
+      log.error('GET /businesses/mine/analytics', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// ── PUBLIC: record a page event (view / click) ──
+// POST /businesses/:id/events   body: { type }
+// Unauthenticated + rate-limited. Only records for ACTIVE businesses; stores no PII.
+router.post('/:id/events',
+  eventsLimiter,
+  [
+    param('id').isUUID(),
+    body('type').isIn(['view','phone_click','whatsapp_click','email_click','link_click','directions_click','image_view']),
+  ],
+  check,
+  async (req, res) => {
+    try {
+      const biz = await pool.query(`SELECT status FROM businesses WHERE business_id = $1`, [req.params.id])
+      if (biz.rows.length === 0 || biz.rows[0].status !== 'active') {
+        // Don't reveal existence/status — just no-op for non-active/unknown.
+        return res.status(204).end()
+      }
+      // Coarse referrer host only (never the full URL with query params).
+      let referrerHost = null
+      const ref = req.headers['referer'] || req.headers['referrer']
+      if (ref) { try { referrerHost = new URL(ref).hostname.slice(0, 255) } catch { /* ignore */ } }
+
+      await pool.query(
+        `INSERT INTO business_page_events (business_id, event_type, referrer_host) VALUES ($1, $2, $3)`,
+        [req.params.id, req.body.type, referrerHost])
+      return res.status(204).end()
+    } catch (err) {
+      log.error('POST /businesses/:id/events', { reqId: req.id, msg: err.message })
+      // Analytics must never break the page — swallow as a soft 204.
+      return res.status(204).end()
+    }
+  }
+)
+
+// ── ADMIN: assign (or clear) the owner of a business ──
+// PATCH /businesses/:id/owner   body: { ownerEmail }  (null/empty clears)
+router.patch('/:id/owner',
+  requireAuth, requireAdmin,
+  [
+    param('id').isUUID(),
+    body('ownerEmail').optional({ nullable: true }).trim().isLength({ max: 255 }),
+  ],
+  check,
+  async (req, res) => {
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      let ownerId = null
+      const email = (req.body.ownerEmail || '').trim()
+      if (email) {
+        const u = await client.query(
+          `SELECT user_id, role FROM users WHERE lower(email) = lower($1) AND deleted_at IS NULL`, [email])
+        if (u.rows.length === 0) {
+          await client.query('ROLLBACK')
+          return res.status(404).json({ message: `No active user with email "${email}".` })
+        }
+        ownerId = u.rows[0].user_id
+        // Promote to 'business' so the frontend routes them to the dashboard
+        // (never downgrade an admin).
+        if (u.rows[0].role !== 'admin') {
+          await client.query(`UPDATE users SET role = 'business', updated_at = NOW() WHERE user_id = $1`, [ownerId])
+        }
+      }
+      const { rows } = await client.query(
+        `UPDATE businesses SET owner_id = $1, updated_at = NOW() WHERE business_id = $2 RETURNING *`,
+        [ownerId, req.params.id])
+      if (rows.length === 0) {
+        await client.query('ROLLBACK')
+        return res.status(404).json({ message: 'Business not found.' })
+      }
+      await client.query('COMMIT')
+      return res.status(200).json({ business: rows[0] })
+    } catch (err) {
+      await client.query('ROLLBACK')
+      log.error('PATCH /businesses/:id/owner', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    } finally {
+      client.release()
+    }
+  }
+)
 
 // ── PUBLIC: single business detail ──
 // GET /businesses/:id
