@@ -30,9 +30,12 @@ const launchMs = () => new Date(LAUNCH_AT).getTime()
 const hasLaunched = () => Date.now() >= launchMs()
 // A signed-in user is locked out of the app when it hasn't launched and they
 // aren't an admin or a business partner. Admins run the show pre-launch;
-// business partners onboard (set up their page) ahead of launch day.
+// business partners onboard (set up their page) ahead of launch day; QA/test
+// accounts on the reserved @relivr.test domain get in so the team can exercise
+// the full app before launch. Mirror of the server-side gate in app.js.
 const PRELAUNCH_ROLES = ['admin', 'business']
-const isAppLocked = (user) => !!user && !PRELAUNCH_ROLES.includes(user.role) && !hasLaunched()
+const isTestAccount = (user) => !!user?.email && user.email.toLowerCase().endsWith('@relivr.test')
+const isAppLocked = (user) => !!user && !PRELAUNCH_ROLES.includes(user.role) && !isTestAccount(user) && !hasLaunched()
 
 // Fire-and-forget public analytics beacon for a business page. Never throws and
 // never blocks the UI — a failed beacon must not affect what the visitor sees.
