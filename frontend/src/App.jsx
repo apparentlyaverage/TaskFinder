@@ -773,8 +773,11 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
             popiaConsent: consent,
           }
 
+      // Generous timeout: a cold serverless DB (Neon) can make the first request
+      // after an idle period take several seconds. 5s used to abort and silently
+      // drop into a fake "demo" session whose token couldn't call the API.
       const ctrl = new AbortController()
-      const tid  = setTimeout(() => ctrl.abort(), 5000)
+      const tid  = setTimeout(() => ctrl.abort(), 25000)
       const res  = await fetch(endpoint, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -801,17 +804,13 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
       })
       onClose()
     } catch (err) {
-      // Network error — fall back to demo mode so app still works without backend
-      console.warn('[auth] Backend unreachable, using demo mode:', err.message)
-      onLogin({
-        token:       'demo-token',
-        userId:      'demo-' + Date.now(),
-        email,
-        role:        role || 'creator',
-        displayName: name || email.split('@')[0],
-        avatarUrl:   null,
-      })
-      onClose()
+      // Real failure — surface it. NEVER fake a session: a bogus token can't call
+      // the API, so the user would look signed in but see nothing load.
+      const msg = err.name === 'AbortError'
+        ? 'The server took too long to respond. Please try again in a moment.'
+        : 'Couldn’t reach the server. Check your connection and try again.'
+      setError(msg)
+      setLoading(false)
       return
     } finally {
       setLoading(false)
