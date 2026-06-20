@@ -98,7 +98,17 @@ _style.textContent = `
   --radius-sm:     10px;
   --radius-md:     14px;
   --radius-lg:     20px;
+  --radius-xl:     28px;
+  --radius-pill:   999px;
   --transition:    150ms ease;
+  --ease:          cubic-bezier(.4,0,.2,1);
+  /* Soft, layered elevation scale — the backbone of the premium/clean feel */
+  --shadow-xs:     0 1px 2px rgba(33,28,46,.05);
+  --shadow-sm:     0 1px 3px rgba(33,28,46,.06), 0 1px 2px rgba(33,28,46,.04);
+  --shadow-md:     0 6px 16px rgba(33,28,46,.07), 0 2px 6px rgba(33,28,46,.04);
+  --shadow-lg:     0 16px 40px rgba(33,28,46,.10), 0 4px 12px rgba(33,28,46,.05);
+  --shadow-xl:     0 30px 70px rgba(33,28,46,.14), 0 10px 24px rgba(33,28,46,.06);
+  --ring:          0 0 0 3px rgba(91,33,182,.14);
 }
 html { scroll-behavior: smooth; font-size: 16px; }
 body {
@@ -133,19 +143,22 @@ input, textarea, select { font-family: var(--font-body); font-size: inherit; }
 .nav-link:hover { color:var(--text-primary); }
 .slabel { font-family:var(--fm); font-size:.68rem; font-weight:500; letter-spacing:.14em; text-transform:uppercase; color:var(--amber); display:flex; align-items:center; gap:8px; }
 .slabel::before { content:''; display:block; width:18px; height:1px; background:var(--amber); }
-.lcard { background:var(--bg-surface); border:1px solid var(--border); border-radius:14px; padding:26px; transition:border-color 200ms,transform 200ms,box-shadow 200ms; }
-.lcard:hover { border-color:var(--border-strong); transform:translateY(-3px); box-shadow:0 12px 40px rgba(33,28,46,.10); }
-.btn-p { background:var(--amber); color:#fff; border:none; padding:12px 26px; border-radius:10px; font-family:var(--fd); font-weight:700; font-size:.9rem; letter-spacing:.01em; cursor:pointer; transition:all 150ms; display:inline-flex; align-items:center; gap:7px; }
-.btn-p:hover { background:var(--amber2); transform:translateY(-2px); box-shadow:0 8px 24px rgba(91,33,182,.35); }
-.btn-p:disabled { opacity:.5; cursor:not-allowed; transform:none; }
-.btn-s { background:transparent; color:var(--text-primary); border:1px solid var(--border-strong); padding:12px 26px; border-radius:10px; font-family:var(--fd); font-weight:700; font-size:.9rem; letter-spacing:.01em; cursor:pointer; transition:all 150ms; }
-.btn-s:hover { border-color:var(--text-primary); background:rgba(33,28,46,.04); }
+.lcard { background:var(--bg-surface); border:1px solid var(--border); border-radius:16px; padding:28px; box-shadow:var(--shadow-xs); transition:border-color 200ms var(--ease),transform 200ms var(--ease),box-shadow 200ms var(--ease); }
+.lcard:hover { border-color:var(--border-strong); transform:translateY(-4px); box-shadow:var(--shadow-lg); }
+.photo-card img { transition:transform .55s var(--ease); will-change:transform; }
+.photo-card:hover img { transform:scale(1.05); }
+.btn-p { background:var(--amber); color:#fff; border:none; padding:13px 28px; border-radius:12px; font-family:var(--fd); font-weight:700; font-size:.9rem; letter-spacing:.01em; cursor:pointer; box-shadow:var(--shadow-sm); transition:all 160ms var(--ease); display:inline-flex; align-items:center; gap:7px; }
+.btn-p:hover { background:var(--amber2); transform:translateY(-1px); box-shadow:0 10px 24px rgba(91,33,182,.26); }
+.btn-p:active { transform:translateY(0); box-shadow:var(--shadow-sm); }
+.btn-p:disabled { opacity:.5; cursor:not-allowed; transform:none; box-shadow:none; }
+.btn-s { background:var(--bg-surface); color:var(--text-primary); border:1px solid var(--border-strong); padding:13px 28px; border-radius:12px; font-family:var(--fd); font-weight:700; font-size:.9rem; letter-spacing:.01em; cursor:pointer; transition:all 160ms var(--ease); }
+.btn-s:hover { border-color:var(--text-primary); background:var(--bg-surface); box-shadow:var(--shadow-md); transform:translateY(-1px); }
 .btn-g { background:transparent; color:var(--text-muted); border:none; padding:10px 18px; font-family:var(--font-body); font-size:.875rem; cursor:pointer; transition:color 150ms; }
 .btn-g:hover { color:var(--text-primary); }
 
 /* Forms */
 input, textarea, select { background:var(--bg-elevated); border:1px solid var(--border-strong); border-radius:10px; color:var(--text-primary); padding:11px 14px; font-size:.9rem; width:100%; outline:none; transition:border-color 150ms,box-shadow 150ms; }
-input:focus, textarea:focus, select:focus { border-color:var(--amber); box-shadow:0 0 0 3px rgba(91,33,182,.1); }
+input:focus, textarea:focus, select:focus { border-color:var(--amber); box-shadow:var(--ring); }
 input::placeholder, textarea::placeholder { color:#b3aebc; }
 label { font-family:var(--fm); font-size:.62rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.1em; display:block; margin-bottom:6px; }
 
@@ -1001,21 +1014,22 @@ const TESTIMONIALS_DATA = [
 
 function CampusStrip() {
   const slots = [
-    { label:'[Image: Student earner fixing a laptop in res]',                    caption:'Tech help, same day' },
-    { label:'[Image: Two students exchanging laundry bags outside Eden Grove]',  caption:'Errands, sorted' },
-    { label:'[Image: Tutoring session on the library lawn]',                     caption:'Skills, shared' },
+    { img:'/img/campus-tech.webp',     caption:'Tech help, same day', tag:'Tech & Coding' },
+    { img:'/img/campus-errands.webp',  caption:'Errands, sorted',     tag:'Errands' },
+    { img:'/img/campus-tutoring.webp', caption:'Skills, shared',      tag:'Tutoring' },
   ]
   return (
-    <section style={{ padding:'72px 24px', borderBottom:'1px solid var(--border)' }}>
+    <section style={{ padding:'88px 24px', borderBottom:'1px solid var(--border)' }}>
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
         <div className="slabel" style={{ marginBottom:28 }}>Real campus, real tasks</div>
-        <div className="tasks-grid" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14 }}>
+        <div className="tasks-grid" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:20 }}>
           {slots.map((s,i) => (
-            <figure key={i} style={{ margin:0 }}>
-              <div style={{ aspectRatio:'4/3', borderRadius:18, background:'linear-gradient(135deg, var(--accent-dim), var(--bg-elevated))', border:'1px dashed var(--border-strong)', display:'flex', alignItems:'center', justifyContent:'center', padding:20, textAlign:'center' }}>
-                <Mono size="0.68rem">{s.label}</Mono>
+            <figure key={i} className="lcard photo-card" style={{ margin:0, padding:0, overflow:'hidden', borderRadius:18 }}>
+              <div style={{ position:'relative', aspectRatio:'4/3', overflow:'hidden' }}>
+                <img src={s.img} alt={s.caption} loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
+                <span style={{ position:'absolute', top:12, left:12, background:'rgba(33,28,46,.5)', backdropFilter:'blur(8px)', color:'#fff', fontFamily:'var(--fm)', fontSize:'.6rem', letterSpacing:'.08em', textTransform:'uppercase', padding:'5px 11px', borderRadius:100 }}>{s.tag}</span>
               </div>
-              <figcaption style={{ fontFamily:'var(--font-display)', fontWeight:700, marginTop:10, fontSize:'.95rem' }}>{s.caption}</figcaption>
+              <figcaption style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:'1.02rem', padding:'16px 18px' }}>{s.caption}</figcaption>
             </figure>
           ))}
         </div>
@@ -1419,17 +1433,20 @@ function LaunchGate({ user, onLogout, onViewLanding }) {
 
 function LandingCTA({ onOpenAuth }) {
   return (
-    <section style={{ padding:'100px 24px', textAlign:'center', position:'relative', overflow:'hidden' }}>
-      <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:700, height:350, background:'radial-gradient(ellipse,rgba(91,33,182,.05) 0%,transparent 70%)', pointerEvents:'none' }} />
-      <div style={{ position:'relative', zIndex:1 }}>
-        <div className="slabel" style={{ justifyContent:'center', marginBottom:18 }}>Get Started</div>
-        <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(2.2rem,4.5vw,3.8rem)', fontWeight:800, lineHeight:1.05, marginBottom:20, letterSpacing:'-.02em' }}>
-          Ready to join your<br /><span style={{ color:'var(--amber)' }}>campus economy?</span>
-        </h2>
-        <p style={{ color:'#665f72', maxWidth:400, margin:'0 auto 36px', lineHeight:1.7, fontSize:'.9rem' }}>Join hundreds of Rhodes students already posting tasks, earning money, and getting things done.</p>
-        <div style={{ display:'flex', gap:12, justifyContent:'center', flexWrap:'wrap' }}>
-          <button className="btn-p" style={{ fontSize:'.95rem', padding:'14px 34px' }} onClick={() => onOpenAuth('register')}>Create Free Account →</button>
-          <button className="btn-s" style={{ fontSize:'.95rem', padding:'14px 34px' }} onClick={() => onOpenAuth('login')}>Sign In</button>
+    <section style={{ padding:'80px 24px' }}>
+      <div style={{ maxWidth:1100, margin:'0 auto', position:'relative', borderRadius:28, overflow:'hidden', boxShadow:'var(--shadow-xl)' }}>
+        <img src="/img/community.webp" alt="Rhodes students together on campus" loading="lazy" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }} />
+        <div style={{ position:'absolute', inset:0, background:'linear-gradient(115deg, rgba(33,28,46,.88) 0%, rgba(33,28,46,.6) 52%, rgba(76,29,149,.5) 100%)' }} />
+        <div style={{ position:'relative', zIndex:1, padding:'clamp(44px,7vw,86px) clamp(26px,6vw,72px)', maxWidth:640 }}>
+          <div className="slabel" style={{ color:'var(--highlight)', marginBottom:18 }}>Get Started</div>
+          <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(2rem,4vw,3.4rem)', fontWeight:800, lineHeight:1.06, marginBottom:18, letterSpacing:'-.02em', color:'#fff' }}>
+            Ready to join your<br /><span style={{ color:'var(--highlight)' }}>campus economy?</span>
+          </h2>
+          <p style={{ color:'rgba(255,255,255,.82)', maxWidth:440, marginBottom:32, lineHeight:1.7, fontSize:'.98rem' }}>Join hundreds of Rhodes students already posting tasks, earning money, and getting things done — all in one place they trust.</p>
+          <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
+            <button className="btn-p" style={{ fontSize:'.95rem', padding:'14px 34px' }} onClick={() => onOpenAuth('register')}>Create Free Account →</button>
+            <button onClick={() => onOpenAuth('login')} style={{ fontSize:'.95rem', padding:'14px 34px', borderRadius:12, border:'1px solid rgba(255,255,255,.35)', background:'rgba(255,255,255,.08)', backdropFilter:'blur(8px)', color:'#fff', fontFamily:'var(--fd)', fontWeight:700, cursor:'pointer' }}>Sign In</button>
+          </div>
         </div>
       </div>
     </section>
@@ -3674,9 +3691,14 @@ function LocalBrowse({ setPage }) {
 
   return (
     <div className="page-enter">
-      <div style={{ marginBottom:18 }}>
-        <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.6rem', marginBottom:4 }}>Local in Makhanda</h1>
-        <p style={{ color:'var(--text-secondary)', fontSize:'.92rem' }}>Discover businesses around Grahamstown — supported by ReLivR.</p>
+      <div style={{ position:'relative', borderRadius:22, overflow:'hidden', marginBottom:22, boxShadow:'var(--shadow-md)' }}>
+        <img src="/img/local-cafe.webp" alt="Local café near campus" loading="lazy" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }} />
+        <div style={{ position:'absolute', inset:0, background:'linear-gradient(105deg, rgba(33,28,46,.82) 0%, rgba(33,28,46,.5) 55%, rgba(33,28,46,.2) 100%)' }} />
+        <div style={{ position:'relative', zIndex:1, padding:'clamp(26px,5vw,44px)' }}>
+          <div className="slabel" style={{ color:'var(--highlight)', marginBottom:12 }}>Local Directory</div>
+          <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'clamp(1.6rem,3vw,2.2rem)', marginBottom:6, color:'#fff', letterSpacing:'-.01em' }}>Local in Makhanda</h1>
+          <p style={{ color:'rgba(255,255,255,.85)', fontSize:'.95rem', maxWidth:440 }}>Discover the businesses around Grahamstown — supported by ReLivR.</p>
+        </div>
       </div>
 
       {/* Category filter */}
