@@ -501,11 +501,14 @@ function EmptyState({ icon='◻', message, action }) {
 }
 
 function StatCard({ label, value, accent=false }) {
+  const [hov, setHov] = useState(false)
   return (
-    <DCard hover={false} style={{ flex:1, minWidth:120 }}>
-      <Mono style={{ display:'block', marginBottom:8 }}>{label}</Mono>
-      <div style={{ fontFamily:'var(--font-display)', fontSize:'2rem', fontWeight:700, color:accent?'var(--accent)':'var(--text-primary)', lineHeight:1 }}>{value}</div>
-    </DCard>
+    <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      style={{ flex:1, minWidth:130, position:'relative', overflow:'hidden', background:accent?'linear-gradient(160deg, var(--bg-surface), var(--accent-dim))':'var(--bg-surface)', border:`1px solid ${accent?'var(--accent-dim)':'var(--border)'}`, borderRadius:'var(--radius-md)', padding:'18px 20px', boxShadow:hov?'var(--shadow-md)':'var(--shadow-xs)', transform:hov?'translateY(-2px)':'none', transition:'box-shadow 180ms var(--ease), transform 180ms var(--ease)' }}>
+      <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:'linear-gradient(90deg, var(--accent), var(--amber2))', opacity:accent?1:0 }} />
+      <Mono style={{ display:'block', marginBottom:10, color:'var(--text-muted)' }}>{label}</Mono>
+      <div style={{ fontFamily:'var(--font-display)', fontSize:'2.1rem', fontWeight:800, color:accent?'var(--accent)':'var(--text-primary)', lineHeight:1, letterSpacing:'-0.02em', fontVariantNumeric:'tabular-nums' }}>{value}</div>
+    </div>
   )
 }
 
@@ -4416,27 +4419,30 @@ function Profile({ openProfile }) {
         <PageTitle sub="Manage your account settings">Profile</PageTitle>
         {avgRating&&<div style={{ textAlign:'center' }}><div style={{ fontFamily:'var(--font-mono)', fontSize:'1.5rem', color:'var(--accent)' }}>{avgRating}</div><Stars rating={parseFloat(avgRating)} /><Mono>{myReviews.length} reviews</Mono></div>}
       </div>
-      {/* Trust header — avatar, identity, key stats */}
-      <DCard hover={false} style={{ display:'flex', alignItems:'center', gap:16, marginBottom:24, flexWrap:'wrap' }}>
-        {user.avatarUrl
-          ? <img src={user.avatarUrl} alt="" style={{ width:64, height:64, borderRadius:'50%', objectFit:'cover', border:'2px solid var(--accent-dim)', flexShrink:0 }} />
-          : <div style={{ width:64, height:64, borderRadius:'50%', background:'var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.5rem', color:'var(--accent)', flexShrink:0 }}>{(user.displayName || user.email || '?').charAt(0).toUpperCase()}</div>}
-        <div style={{ minWidth:140 }}>
-          <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:'1.25rem', lineHeight:1.2 }}>{user.displayName || user.email?.split('@')[0]}</div>
-          <Mono>{user.email}</Mono>
-        </div>
-        <div style={{ marginLeft:'auto', display:'flex', gap:28 }}>
-          <div style={{ textAlign:'center' }}>
-            <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.3rem', color:'#d97706' }}>{avgRating || '—'}</div>
-            <Mono>rating</Mono>
+      {/* Trust header — gradient banner, overlapping avatar, key stats */}
+      <DCard hover={false} style={{ padding:0, marginBottom:24, overflow:'hidden' }}>
+        <div style={{ height:72, background:'linear-gradient(120deg, var(--accent), var(--amber2))' }} />
+        <div style={{ display:'flex', alignItems:'flex-end', gap:16, flexWrap:'wrap', padding:'14px 22px 20px' }}>
+          {user.avatarUrl
+            ? <img src={user.avatarUrl} alt="" style={{ width:72, height:72, borderRadius:'50%', objectFit:'cover', border:'3px solid var(--bg-surface)', boxShadow:'var(--shadow-sm)', flexShrink:0, marginTop:-50 }} />
+            : <div style={{ width:72, height:72, borderRadius:'50%', background:'var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.6rem', color:'var(--accent)', border:'3px solid var(--bg-surface)', boxShadow:'var(--shadow-sm)', flexShrink:0, marginTop:-50 }}>{(user.displayName || user.email || '?').charAt(0).toUpperCase()}</div>}
+          <div style={{ minWidth:140, paddingBottom:4 }}>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.3rem', lineHeight:1.2, letterSpacing:'-0.01em' }}>{user.displayName || user.email?.split('@')[0]}</div>
+            <Mono>{user.email}</Mono>
           </div>
-          <div style={{ textAlign:'center' }}>
-            <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.3rem' }}>{state.tasks.filter(t=>t.status==='completed').length}</div>
-            <Mono>completed</Mono>
-          </div>
-          <div style={{ textAlign:'center' }}>
-            <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.3rem', color:'var(--success)' }}>{user.provider==='google' ? '✓' : '—'}</div>
-            <Mono>verified</Mono>
+          <div style={{ marginLeft:'auto', display:'flex', gap:0, paddingBottom:2 }}>
+            <div style={{ textAlign:'center', padding:'0 22px' }}>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.35rem', color:'#d97706', lineHeight:1 }}>{avgRating || '—'}</div>
+              <Mono style={{ marginTop:5 }}>rating</Mono>
+            </div>
+            <div style={{ textAlign:'center', padding:'0 22px', borderLeft:'1px solid var(--border)' }}>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.35rem', lineHeight:1 }}>{state.tasks.filter(t=>t.status==='completed').length}</div>
+              <Mono style={{ marginTop:5 }}>completed</Mono>
+            </div>
+            <div style={{ textAlign:'center', padding:'0 22px', borderLeft:'1px solid var(--border)' }}>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.35rem', color:'var(--success)', lineHeight:1 }}>{user.provider==='google' ? '✓' : '—'}</div>
+              <Mono style={{ marginTop:5 }}>verified</Mono>
+            </div>
           </div>
         </div>
       </DCard>
@@ -4809,11 +4815,12 @@ function BusinessPageEditor({ biz, onSaved }) {
 
 function BizStatTile({ label, value, sub, color='var(--accent)' }) {
   return (
-    <DCard hover={false} style={{ padding:'18px 20px' }}>
-      <Mono style={{ color:'var(--text-secondary)' }}>{label}</Mono>
-      <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.8rem', color, marginTop:4 }}>{value}</div>
-      {sub && <Mono style={{ color:'var(--text-muted)' }}>{sub}</Mono>}
-    </DCard>
+    <div style={{ flex:1, position:'relative', overflow:'hidden', background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:'var(--radius-md)', padding:'18px 20px 18px 22px', boxShadow:'var(--shadow-xs)' }}>
+      <div style={{ position:'absolute', top:0, left:0, bottom:0, width:3, background:color }} />
+      <Mono style={{ color:'var(--text-muted)' }}>{label}</Mono>
+      <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.9rem', color, marginTop:6, lineHeight:1, letterSpacing:'-0.02em', fontVariantNumeric:'tabular-nums' }}>{value}</div>
+      {sub && <Mono style={{ color:'var(--text-muted)', display:'block', marginTop:6 }}>{sub}</Mono>}
+    </div>
   )
 }
 
