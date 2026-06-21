@@ -48,7 +48,7 @@ In the HostAfrica control panel → DNS zone for `relivr.co.za`. **The exact tar
 
 ## Phase C — Railway (backend)
 
-- [ ] **[YOU]** Connect the repo (it uses `railway.json`: `cd server && npm ci` / `npm start`, health check `/health`).
+- [ ] **[YOU]** Connect the repo. Set the service **Root Directory = `server`** so Railway builds the backend (via Nixpacks or `server/Dockerfile`). `railway.json` keeps the health check at `/health`. *(A Railway auto-fix already removed the in-file build/start commands so its detection isn't overridden — leave those out.)*
 - [ ] **[YOU]** Add custom domain `api.relivr.co.za` → copy the CNAME target it gives into HostAfrica (Phase A).
 - [ ] **[YOU]** Set environment variables (see the matrix below). **Do NOT set `PORT`** — Railway injects it.
 
