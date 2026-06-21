@@ -92,9 +92,16 @@ app.use((req, res, next) => {
 // ── Security headers ──────────────────────────────────────────────────────────
 app.use(helmet())
 
-// ── CORS — exact origin, never '*' ────────────────────────────────────────────
+// ── CORS — exact origins, never '*' ───────────────────────────────────────────
+// FRONTEND_URL is the single canonical origin (used for redirects elsewhere).
+// CORS_EXTRA_ORIGINS is an optional comma-separated list for additional allowed
+// origins — e.g. the www host or a Vercel preview URL.
+const CORS_ORIGINS = [
+  FRONTEND_URL,
+  ...(process.env.CORS_EXTRA_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean),
+]
 app.use(cors({
-  origin: [FRONTEND_URL],
+  origin: CORS_ORIGINS,
   credentials: true,
 }))
 

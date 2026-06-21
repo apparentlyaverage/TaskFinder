@@ -6,7 +6,7 @@
 import log from './log.js'
 
 // Default sender for the time being — override with a verified domain via env.
-export const EMAIL_FROM = process.env.EMAIL_FROM || 'ReLivR <noreply@relivr.app>'
+export const EMAIL_FROM = process.env.EMAIL_FROM || 'ReLivR <noreply@relivr.co.za>'
 
 export async function sendEmail({ to, subject, text, html }) {
   const key = process.env.RESEND_API_KEY
