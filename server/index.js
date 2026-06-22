@@ -23,9 +23,13 @@ const { startScheduler } = await import('./jobs.js')
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'
 const PORT = process.env.PORT || 3001
 
-app.listen(PORT, () => {
+// Bind explicitly to 0.0.0.0 — Node's default listen() can bind IPv6-only (::),
+// which Railway's public proxy can't reach, causing a persistent
+// 502 "Application failed to respond" even though the app started fine.
+app.listen(PORT, '0.0.0.0', () => {
   log.info('server.started', {
     port: Number(PORT),
+    host: '0.0.0.0',
     frontend: FRONTEND_URL,
     db: process.env.DATABASE_URL?.split('@')[1]?.split('/')[0] || 'NOT SET',
   })
