@@ -5653,7 +5653,9 @@ export default function App() {
     userLoading,
     handleOAuthCallback,
     handleLogin,
-    loginWithGoogle: () => { window.location.href = '/auth/google' },
+    // Go straight to the backend so the OAuth redirect works in production.
+    // (In dev API_BASE is '' and Vite proxies /auth → localhost:3001.)
+    loginWithGoogle: () => { window.location.href = API_BASE + '/auth/google' },
     logout,
   }
   const storeValue = { state, dispatch }
