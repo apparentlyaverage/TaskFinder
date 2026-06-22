@@ -49,6 +49,10 @@ const TEST_EMAIL_DOMAIN = '@relivr.test'
 // Public, rate-limited, no-PII analytics beacon — safe to leave open like /feedback.
 const PRE_LAUNCH_OPEN_RE = /^\/businesses\/[^/]+\/events$/
 app.use((req, res, next) => {
+  // Let CORS preflight (OPTIONS) reach the cors() middleware below. Otherwise the
+  // gate 503s the preflight before any Access-Control-* header is set, which the
+  // browser reports as a CORS failure on every gated route (/admin, /notifications…).
+  if (req.method === 'OPTIONS') return next()
   if (process.env.NODE_ENV === 'test') return next()  // gate off in test env
   if (Date.now() >= LAUNCH_AT_MS) return next()
   if (PRE_LAUNCH_OPEN.some(p => req.path === p || req.path.startsWith(p + '/'))) return next()
