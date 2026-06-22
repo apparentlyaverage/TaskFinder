@@ -794,7 +794,7 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
       // drop into a fake "demo" session whose token couldn't call the API.
       const ctrl = new AbortController()
       const tid  = setTimeout(() => ctrl.abort(), 25000)
-      const res  = await fetch(endpoint, {
+      const res  = await fetch(API_BASE + endpoint, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(body),
