@@ -93,11 +93,21 @@ app.use((req, res, next) => {
 app.use(helmet())
 
 // ── CORS — exact origins, never '*' ───────────────────────────────────────────
-// FRONTEND_URL is the single canonical origin (used for redirects elsewhere).
-// CORS_EXTRA_ORIGINS is an optional comma-separated list for additional allowed
-// origins — e.g. the www host or a Vercel preview URL.
+// FRONTEND_URL is the canonical origin (used for redirects elsewhere). We also
+// allow its apex/www counterpart automatically so it doesn't matter which one a
+// user lands on (e.g. relivr.co.za vs www.relivr.co.za). CORS_EXTRA_ORIGINS adds
+// any further origins (comma-separated) such as a Vercel preview URL.
+function withApexWwwVariant(url) {
+  try {
+    const u = new URL(url)
+    const out = new Set([`${u.protocol}//${u.host}`])
+    if (u.host.startsWith('www.')) out.add(`${u.protocol}//${u.host.slice(4)}`)
+    else out.add(`${u.protocol}//www.${u.host}`)
+    return [...out]
+  } catch { return [url] }
+}
 const CORS_ORIGINS = [
-  FRONTEND_URL,
+  ...withApexWwwVariant(FRONTEND_URL),
   ...(process.env.CORS_EXTRA_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean),
 ]
 app.use(cors({
