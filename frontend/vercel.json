@@ -1,18 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "https://api.relivr.co.za/api/$1" 
-    },
-    {
-      "source": "/auth/(.*)",
-      "destination": "https://api.relivr.co.za/auth/$1" 
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/"
-    }
+    { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
     {
