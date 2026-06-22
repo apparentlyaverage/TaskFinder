@@ -43,7 +43,10 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'
 // @relivr.test domain also bypass so the team can exercise the full app
 // pre-launch — `.test` is a reserved, non-resolvable TLD so no real user has one.
 const LAUNCH_AT_MS = new Date('2026-07-07T00:00:00').getTime()
-const PRE_LAUNCH_OPEN = ['/auth', '/health', '/flags', '/feedback', '/waitlist']
+// Public, no-PII reference reads needed before launch (campus picker, category
+// chips). They pass the gate so the browser gets real data + CORS headers
+// instead of a 503 that reads as a CORS error.
+const PRE_LAUNCH_OPEN = ['/auth', '/health', '/flags', '/feedback', '/waitlist', '/locations', '/categories']
 const PRE_LAUNCH_ROLES = ['admin', 'business']
 const TEST_EMAIL_DOMAIN = '@relivr.test'
 // Public, rate-limited, no-PII analytics beacon — safe to leave open like /feedback.
