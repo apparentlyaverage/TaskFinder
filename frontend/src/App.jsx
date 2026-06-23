@@ -4844,13 +4844,24 @@ function BusinessPageEditor({ biz, onSaved }) {
     phone: biz.phone || '', whatsapp: biz.whatsapp || '', email: biz.email || '',
     themeColor: biz.theme_color || '#6C5CE7',
     coverImageUrl: biz.cover_image_url || '', logoUrl: biz.logo_url || '', linkUrl: biz.link_url || '',
-    gallery: (biz.image_urls || []).join('\n'),
+    gallery: Array.isArray(biz.image_urls) ? biz.image_urls : [],
     instagram: s.instagram || '', facebook: s.facebook || '', tiktok: s.tiktok || '', website: s.website || '',
   })
   const set = k => e => setF(p => ({ ...p, [k]: e.target.value }))
   const [saving, setSaving] = useState(false)
+  const [imgInput, setImgInput] = useState('')
 
-  const galleryArr = () => f.gallery.split('\n').map(x => x.trim()).filter(Boolean)
+  // Gallery is a plain array (identical to the admin form's proven pattern).
+  // Every mutation goes through a functional updater reading `p`, so concurrent
+  // uploads append cleanly and never clobber an earlier image.
+  function addGalleryImage(url) {
+    const v = (url || '').trim()
+    if (!v) return
+    setF(p => p.gallery.length >= 8 ? (toast('Up to 8 images', 'error'), p) : ({ ...p, gallery: [...p.gallery, v] }))
+  }
+  function removeGalleryImage(idx) {
+    setF(p => ({ ...p, gallery: p.gallery.filter((_, j) => j !== idx) }))
+  }
 
   async function save() {
     setSaving(true)
@@ -4859,7 +4870,7 @@ function BusinessPageEditor({ biz, onSaved }) {
         name: f.name, tagline: f.tagline, category: f.category, description: f.description,
         hours: f.hours, address: f.address, phone: f.phone, whatsapp: f.whatsapp, email: f.email,
         themeColor: f.themeColor, coverImageUrl: f.coverImageUrl || null, logoUrl: f.logoUrl || null,
-        linkUrl: f.linkUrl || null, imageUrls: galleryArr(),
+        linkUrl: f.linkUrl || null, imageUrls: f.gallery,
         socials: { instagram: f.instagram, facebook: f.facebook, tiktok: f.tiktok, website: f.website },
       }
       const res = await fetch(API_BASE + '/businesses/mine', {
@@ -4877,7 +4888,7 @@ function BusinessPageEditor({ biz, onSaved }) {
   const preview = {
     ...biz, name:f.name, tagline:f.tagline, category:f.category, description:f.description,
     hours:f.hours, theme_color:f.themeColor, cover_image_url:f.coverImageUrl, logo_url:f.logoUrl,
-    image_urls: galleryArr(),
+    image_urls: f.gallery,
   }
   const sectionLabel = (t) => <Mono style={{ display:'block', margin:'18px 0 10px', color:'var(--text-secondary)' }}>{t}</Mono>
 
@@ -4936,25 +4947,26 @@ function BusinessPageEditor({ biz, onSaved }) {
         </label>
 
         <label style={{ display:'block', marginTop:14 }}>
-          <span style={{ display:'block', fontSize:'.75rem', fontWeight:600, color:'var(--text-secondary)', marginBottom:5 }}>Gallery (storefront, goods, menus — up to 8)</span>
-          {galleryArr().length > 0 && (
+          <span style={{ display:'block', fontSize:'.75rem', fontWeight:600, color:'var(--text-secondary)', marginBottom:5 }}>Gallery (storefront, goods, menus — up to 8). New uploads are added; they don't replace existing photos.</span>
+          {f.gallery.length > 0 && (
             <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:8 }}>
-              {galleryArr().map((url, i) => (
-                <div key={i} style={{ position:'relative', width:64, height:64, borderRadius:8, overflow:'hidden', background:'var(--bg-elevated)' }}>
+              {f.gallery.map((url, i) => (
+                <div key={`${i}-${url}`} style={{ position:'relative', width:64, height:64, borderRadius:8, overflow:'hidden', background:'var(--bg-elevated)' }}>
                   <img src={url} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                  <button type="button" onClick={() => setF(p => ({ ...p, gallery: galleryArr().filter((_, j) => j !== i).join('\n') }))}
+                  <button type="button" onClick={() => removeGalleryImage(i)}
                     style={{ position:'absolute', top:2, right:2, width:18, height:18, borderRadius:'50%', border:'none', background:'rgba(0,0,0,.6)', color:'#fff', fontSize:'.7rem', cursor:'pointer', lineHeight:1 }}>×</button>
                 </div>
               ))}
             </div>
           )}
           <ImageUpload businessId={biz.business_id} multiple label="⬆ Upload photos or drop them here"
-            onUploaded={url => setF(p => {
-              const arr = p.gallery.split('\n').map(x => x.trim()).filter(Boolean)
-              if (arr.length >= 8) { toast('Up to 8 images', 'error'); return p }
-              return { ...p, gallery: [...arr, url].join('\n') }
-            })} />
-          <textarea value={f.gallery} onChange={set('gallery')} rows={2} style={bizTaStyle} placeholder="…or paste image URLs, one per line" />
+            onUploaded={addGalleryImage} />
+          <div style={{ display:'flex', gap:8, marginTop:4 }}>
+            <input value={imgInput} onChange={e=>setImgInput(e.target.value)} placeholder="…or paste an image URL"
+              onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); addGalleryImage(imgInput); setImgInput('') } }}
+              style={{ ...bizTaStyle, flex:1 }} />
+            <Btn variant="secondary" size="sm" onClick={() => { addGalleryImage(imgInput); setImgInput('') }}>Add</Btn>
+          </div>
         </label>
 
         {sectionLabel('— Social links')}
