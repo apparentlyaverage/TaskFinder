@@ -2,7 +2,7 @@
 
 > Persistent state file for the autonomous development agency.
 > **Read this first at the start of every session.**
-> Last updated: 2026-06-23 — *Campus Deals system BUILT + verified (§7.10): migration 32, deals API + expiry job, business Deals tab, public /deals page, admin moderation. Backend 191 tests.*
+> Last updated: 2026-06-23 — *Scaling backlog added (§7.11): follow/social graph, recurring specials + task TTL, god-mode admin + audit. Prioritised, schema/API/scheduler drafted. (Campus Deals shipped §7.10.)*
 
 ---
 
@@ -40,9 +40,9 @@ Supplements §0. Engaged at the owner's request to run this project as a self-di
 - **CURRENT SPRINT GOAL:** PIVOT → build the **Campus Deals** system (business-posted limited-time specials + public campus-wide Deals page with query-time expiry). Design in §7.10.
 - **STATUS:** ✅ Built + verified (in-browser, local full-stack). Migration 32 applied to Neon; backend **191 tests** green; frontend builds clean. Public `/deals` page intentionally gated until 7 July (token-less fetch → 503); business owners can post deals now. **Pushed; Vercel/Railway redeploy.**
 - **COMPLETED (recent):** signed `/uploads/signature` endpoint (auth + ownership-locked folder + signed `allowed_formats`); upload UI wired into owner + admin editors; `cover_image_url` made public; prod end-to-end upload verified via a `@relivr.test` business account.
-- **PENDING (backlog top):** MVP-3 payments / escrow wiring (TD-3, parked on company registration); UI redesign **pass 2** (in-app surfaces); Campus Deals follow-ups (campus filter chips on `/deals`, deal view beacons/analytics); launch-day TODOs (flip `beta_founder` default → FALSE, email the waitlist, clean leftover test records).
+- **PENDING (backlog top):** 🆕 **Scaling roadmap (§7.11)** — P1: god-mode audit chokepoint + task TTL/archive; P2: recurring specials, god-mode full-CRUD endpoints, follow/social graph; P3: Client History (blocked on a deal-redemption model). Then: MVP-3 payments (TD-3, parked on company reg.); UI redesign **pass 2**; Campus Deals follow-ups; launch-day TODOs.
 - **SECURITY AUDIT LOG:** uploads endpoint — `requireAuth`, folder derived server-side (no cross-tenant write), `allowed_formats` signed (client can't widen), path-injection `businessId` rejected to scratch folder, 503 when unconfigured. No new runtime deps (crypto-only signing). **CORS fix:** gate now runs after `cors()` so gated 503s carry `Access-Control-Allow-Origin` (no header leakage/security change — same origin allowlist). Backend **171 tests** green.
-- **NEXT ACTION:** Campus Deals shipped (§7.10). On 7 July the public `/deals` page opens automatically with the launch gate. Next: await owner direction — UI redesign **pass 2** vs. **MVP-3 payments**.
+- **NEXT ACTION:** §7.11 scaling backlog recorded + prioritised (design only, no code this turn). Awaiting owner go-ahead to build — recommend the **P1** items first (god-mode **audit chokepoint**, then **task TTL/archive**). Open question for Client History: confirm a **deal-redemption** record is acceptable as its precursor. Campus Deals `/deals` still opens publicly on 7 July with the gate.
 
 ---
 
@@ -56,8 +56,9 @@ Supplements §0. Engaged at the owner's request to run this project as a self-di
 
 - **Frontend:** React 18 + Vite (`frontend/`) → Vercel
 - **Backend:** **Consolidated Express monolith** (`server/`) → Railway. Modular via routers.
-- **DB:** PostgreSQL 16 (Neon), 13 tables, schema in `db/init/01..06_*.sql`
+- **DB:** PostgreSQL 16 (Neon); schema in `db/init/*.sql`, **migrations 01–32 applied** (latest: `32_campus_deals.sql`). ~30 tables. Migrations are idempotent (`IF NOT EXISTS`) and applied via `npm run migrate` (no framework).
 - **Auth:** Local (bcrypt) + Google OAuth, JWT-based (stateless)
+- **Background work:** centralised in `server/jobs.js` (`startScheduler` from `index.js`) — task expiry, deal expiry, digests, recurring tasks. **Design rule:** time-based *visibility* is enforced at **query time** (`WHERE … expires_at > NOW()`); scheduler jobs are for state hygiene/recurrence/archival, never the sole gate. New scaling jobs (recurring-deal refresh, task archival — §7.11) extend this scheduler.
 
 ---
 
@@ -430,7 +431,7 @@ sprints — nothing here is committed to a sprint yet. **Blocker legend:**
 - ✅ **Data-driven categories taxonomy** (`categories` table + `GET /categories` + `useCategories()`)
 - ✅ Two-party completion handshake (`/submit`, `/request-changes`, creator-confirm `complete`)
 - ✅ Recurring / templated tasks (`task_templates`, `/templates` CRUD+use, `sendRecurring` job)
-- ❌ Saved / favourite tasks; follow a creator — **WILL NOT IMPLEMENT** (owner decision 2026-06-15)
+- ⚠️ Saved / favourite tasks; follow a creator — *was* WILL NOT IMPLEMENT (2026-06-15). **Follow is now back in scope — superseded by the owner's scaling request 2026-06-23 (see §7.11.1).** (Saved/favourite tasks remain out of scope.)
 - ⬜ Search & filter improvements (full-text, campus/distance filters) — **P2** (still open)
 
 ### 7.6 Payments & Escrow 💳🏢 (MVP-3 — parked until company registration)
@@ -574,8 +575,97 @@ SELECT d.deal_id, d.title, d.description, d.image_url, d.price_cents, d.original
 
 ---
 
+## 7.11 — Scaling Roadmap: social graph · business upgrades · god-mode admin — BACKLOG (2026-06-23)
+
+Owner scaling request. Captured + prioritised; **nothing committed to a sprint yet** (per §7 convention). Priority legend as §7 (P0 critical … P3 nice-to-have). The requested drafts (schema, god-mode API, expiration scheduler) are inline below.
+
+**⚠️ Reverses a prior decision:** the **Follow system** supersedes the 2026-06-15 "follow a creator — WILL NOT IMPLEMENT" call (§7.5). Following is back in scope.
+
+### Priority & suggested sequence (Architect + PM)
+| # | Item | Priority | Why / dependency |
+|---|---|---|---|
+| 1 | **Audit-logging chokepoint** (god-mode) | **P1** | Security foundation — log every admin mutation *before* widening admin power. `activity_logs` already exists (mig 18). |
+| 2 | **Task TTL / archive** | **P1** | Small; reuses the scheduler; data-retention (POPIA) win. Partial today (`deadline`→expired for open tasks). |
+| 3 | **Recurring specials** (deals) | **P2** | Extends the just-shipped Campus Deals; mirrors `task_templates`/`sendRecurring`. |
+| 4 | **God-mode full-CRUD admin endpoints** | **P2** | Most entities already have admin paths; this completes + unifies them on the audit chokepoint. |
+| 5 | **Follow / social graph** | **P2** | New schema + "following" feed + UI; no hard dependency. |
+| 6 | **Client History dashboard** | **P3** | **Blocked:** needs a business↔customer *transaction/redemption* record that doesn't exist yet. Define a deal-redemption model first. |
+
+### 7.11.1 — Social & relationship graph
+**Follow system** — one many-to-many table, polymorphic target so a user follows users *and* businesses with one feed query:
+```sql
+CREATE TABLE follows (
+  follower_id  UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  target_type  VARCHAR(10) NOT NULL CHECK (target_type IN ('user','business')),
+  target_id    UUID NOT NULL,                 -- users.user_id | businesses.business_id (polymorphic; app-enforced)
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (follower_id, target_type, target_id)
+);
+CREATE INDEX idx_follows_target   ON follows (target_type, target_id);  -- "who follows X" + counts
+CREATE INDEX idx_follows_follower ON follows (follower_id);             -- "X's following feed"
+```
+- App guards: no self-follow; validate the target exists on write.
+- **Caveat:** a polymorphic `target_id` can't be a hard FK — deleting a target orphans rows; clean up in the entity-delete path or a periodic sweep. *Alternative:* two typed tables (`user_follows`, `business_follows`) with real FKs + cascade both sides — choose this if referential integrity outweighs single-feed simplicity.
+- Endpoints: `POST /follows` `{targetType,targetId}` · `DELETE /follows/:type/:id` · `GET /follows/me` · `GET /users/:id/followers` · `GET /businesses/:id/followers` (+ follower counts on profile/business reads). Notify the target on a new follower (reuse `createNotification`).
+
+**Client History dashboard (P3 — blocked).** Businesses view/analyse their completed-transaction client base. *Precursor:* no business↔customer transaction exists today (businesses list + post deals; they don't fulfil tasks). Define a **deal redemption / booking** record first:
+```sql
+CREATE TABLE deal_redemptions (
+  redemption_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  deal_id       UUID REFERENCES campus_deals(deal_id) ON DELETE SET NULL,
+  business_id   UUID NOT NULL REFERENCES businesses(business_id) ON DELETE CASCADE,
+  customer_id   UUID REFERENCES users(user_id) ON DELETE SET NULL,
+  redeemed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  amount_cents  INTEGER
+);
+```
+Client History then aggregates redemptions per business (unique customers, repeat rate, spend, timeline). **POPIA:** a customer must consent to a business retaining their identity; otherwise expose aggregate/anonymous metrics only.
+
+### 7.11.2 — Business management upgrades
+**Recurring specials** — extend `campus_deals`:
+```sql
+ALTER TABLE campus_deals
+  ADD COLUMN recurrence       VARCHAR(10) NOT NULL DEFAULT 'none'
+                                CHECK (recurrence IN ('none','daily','weekly','monthly')),
+  ADD COLUMN recurrence_until TIMESTAMPTZ,     -- optional end of the series
+  ADD COLUMN active_window_s  INTEGER;         -- how long each cycle stays live (defaults to the first window)
+```
+Server logic — new `jobs.refreshRecurringDeals()` on the scheduler: for each deal `status='expired' AND recurrence<>'none' AND (recurrence_until IS NULL OR NOW() < recurrence_until)`, **re-activate in place** — `status='active', starts_at=NOW(), expires_at = NOW() + active_window_s (or +1 interval), updated_at=NOW()`. Idempotent (gated on `expired`). Refresh-in-place (not spawn) keeps one stable "Tuesday special" row; cycle history lives in page-events. Ops manual trigger like the existing `POST /tasks/admin/expire`.
+
+**Task expiration / global TTL** — tasks already auto-expire *open* past-`deadline` (`jobs.expireDueTasks`). Add a hard TTL + archival:
+```sql
+ALTER TABLE tasks
+  ADD COLUMN expires_at  TIMESTAMPTZ,   -- optional hard TTL, independent of deadline
+  ADD COLUMN archived_at TIMESTAMPTZ;   -- set by the archive sweep; excluded from default feeds
+```
+Server logic — new `jobs.archiveExpiredTasks()`: archive where `expires_at < NOW()` OR terminal (`completed`/`cancelled`/`expired`) older than a retention window; default browse/feed queries gain `AND archived_at IS NULL`. Authoritative visibility stays a **query-time filter** (same lesson as deals); the sweep is hygiene + retention (POPIA data-minimisation).
+
+### 7.11.3 — God-mode admin panel
+Foundation already exists (§6.15–6.17 + AdminDeals): `requireAdmin`, `/admin/stats|activity|users|analytics|flags|locations`, user suspend/role, dispute + business + deal moderation, and the `activity_logs` table (mig 18). God-mode = **(a) full CRUD on every entity + (b) audit EVERY action.**
+
+**Audit chokepoint (P1 — build first):** a shared `audit({ actorId, action, entityType, entityId, before, after, reqId })` writing append-only to `activity_logs`, called by *every* admin mutation — ideally an Express wrapper around admin write handlers so it can't be forgotten. Append-only; destructive actions require a `reason`. Stretch: hash-chain rows for tamper-evidence.
+
+**God-mode endpoints (all `requireAdmin`, all audited):**
+| Entity | Endpoints |
+|---|---|
+| Users | `GET /admin/users` (✓), `PATCH /admin/users/:id` (✓ suspend/role) → **add** `PUT` (full edit), `DELETE` (soft-delete/anonymise), `GET /admin/users/:id/activity` |
+| Tasks | `GET /admin/tasks`, `PATCH /admin/tasks/:id` (override status/fields), `DELETE /admin/tasks/:id` |
+| Deals | formalise `PATCH/DELETE /admin/deals/:id` (today via ownership-bypass + `GET /deals/admin/all`) |
+| Businesses | existing admin CRUD (✓) — fold through the audit chokepoint |
+| Audit view | `GET /admin/audit?entity=&actor=&from=&to=` over `activity_logs` |
+
+**Security (Security Officer):** highest-risk surface. Mandate — every mutation audit-logged; keep the self-target guards (no self-suspend/-delete, ✓); `reason` on destructive ops; revisit **admin 2FA** (deferred in §7.2) *before* shipping delete powers; never expose god-mode to the `business` role (the ownership model already blocks it). Frontend: a single **AdminConsole** consolidating the existing admin pages + a global entity search + the live audit feed.
+
+### 7.11.4 — Requested drafts (delivered inline above)
+- ✅ **Data model** — follows (7.11.1) + recurring deals & task TTL (7.11.2) + deal-redemption precursor for Client History (7.11.1).
+- ✅ **God-mode API surface** — 7.11.3.
+- ✅ **Expiration/recurrence scheduler** — `jobs.refreshRecurringDeals` + `jobs.archiveExpiredTasks` alongside the existing `expireDueTasks`/`expireDeals`, query-time-filter-first (7.11.2).
+
+---
+
 ## 8. Session Log
 
+- **2026-06-23 — Scaling backlog added + prioritised (§7.11) — design/doc only, no code:** Owner scaling request captured. **Four-persona review against the live codebase first** (to avoid duplicating what exists): much of "god-mode" already ships (§6.15–6.17 admin + `activity_logs` mig 18); recurring/expiry have proven patterns (`jobs.expireDueTasks/expireDeals`, `task_templates/sendRecurring`); **Follow reverses the 2026-06-15 "will not implement" call** (flagged in §7.5); **Client History is blocked** — businesses don't transact tasks, so it needs a new `deal_redemptions` precursor. **Recorded in §7.11** with a priority table + drafts: (1) `follows` schema (polymorphic many-to-many, + two-table FK alternative) & follow API; (2) `campus_deals` recurrence columns + `jobs.refreshRecurringDeals()` (refresh-in-place); (3) `tasks.expires_at/archived_at` + `jobs.archiveExpiredTasks()`; (4) god-mode = **audit chokepoint (P1)** + full-CRUD admin endpoints over users/tasks/deals/businesses, every mutation append-logged to `activity_logs`. **Priorities:** P1 audit chokepoint + task TTL; P2 recurring specials, god-mode CRUD, follow graph; P3 Client History (blocked). Also refreshed the §1 architecture/data-model line (migrations 01–32, ~30 tables, scheduler design rule: query-time filter is authoritative). **No schema/code applied** — awaiting go-ahead; recommend building the P1 items first.
 - **2026-06-23 — Campus Deals system BUILT + verified (§7.10 ✅):** Implemented the full 6-step build order. **DB:** migration `32_campus_deals.sql` (`campus_deals` with `business_owner_id`, `expires_at TIMESTAMPTZ`, `location_id`, `CHECK (expires_at > starts_at)`, partial index `WHERE status='active'`) — applied to Neon via `npm run migrate 32`. **Backend:** `routes/deals.js` mounted `/deals` — public `GET /deals` + `GET /deals/:id` enforce expiry at **query time** (`status='active' AND expires_at > NOW()`); ownership-gated `GET /deals/mine`, `POST`, `PATCH`, `DELETE` (business edits own only — `business_owner_id == req.userId`; admin any); `GET /deals/admin/all` for moderation. `jobs.expireDeals()` added to the scheduler (housekeeping). `/uploads/signature` gained a `deals` folder scope. **Frontend:** `DealCard`, `DealForm` (title/desc/price/image-upload/future-only expiry picker + presets + live preview), `BusinessDeals` dashboard tab, public `DealsPage` (`/deals` + nav, sends token if present so privileged roles can preview pre-launch), `AdminDeals` moderation page + nav; Vite `/deals` proxy. **Tests:** +20 → **backend 191** (incl. the critical expiry guard: active filter is in the SQL, and a past `expiresAt` is rejected 422 at create). **Verified in-browser** (local full-stack, `biz01@relivr.test`): create → owner list shows "Active · Ends in 2d 23h · R25"; public query returns it (authed); token-less public fetch → 503 (gate, as designed); `DealCard` live preview renders; test deal deleted after. **Decisions honoured:** public `/deals` **gated until 7 July** (businesses can post now — `business` role bypasses the gate). **Follow-ups:** campus filter chips on `/deals` (needs campus-id list; `useLocations` returns names only), deal view beacons/analytics.
 - **2026-06-23 — PIVOT: Campus Deals system designed + integrated (§7.10):** Owner is pivoting the feature set to **Campus Deals** — businesses post time-limited "Limited Time Specials" (title/description/image/price/expiry); a public, campus-wide, responsive Deals page shows only active (un-expired) deals. **Four-persona design (no code yet):** *PM* — RBAC matrix (public read active; business CRUD own only; admin moderates any + owns static content). *Architect* — reuse existing infra (no new stack): new `campus_deals` table (migration 32) with `business_owner_id` + `expires_at TIMESTAMPTZ` + `location_id` (UUID, existing `locations` taxonomy); ownership-gated `routes/deals.js`; image upload via the existing Cloudinary signature endpoint; `expireDeals()` sweep added to `jobs.js`. *Security* — **expiry enforced at QUERY time** (`WHERE status='active' AND expires_at > NOW()` using the DB server clock — atomic, on every read, cannot be bypassed by client clock/cache/job failure); the background sweep is housekeeping only; partial index `WHERE status='active'`; `CHECK (expires_at > starts_at)`; express-validator future-date; ownership gate so no cross-tenant writes. *QA* — Vitest/Supertest plan incl. a critical test that a past-`expires_at` deal is absent from `GET /deals`. Full schema, retrieval SQL, API surface, UI/UX flow (Business Dashboard "Deals" tab + public `/deals` page + AdminDeals), tech stack, and a 6-step build order recorded in **§7.10**. **One open decision for owner:** is the public `/deals` page open pre-launch, or gated until 7 July? **No code changes this turn** — design + doc only; awaiting go-ahead to implement.
 - **2026-06-23 — Business page-editor gallery rewritten to array state + VERIFIED in-browser (🐞 "deletes oldest on upload"):** Owner reported the business side still deleted the oldest image on upload (admin panel works perfectly). **Root cause:** the business `BusinessPageEditor` stored the gallery as a newline-joined **string** (`f.gallery` split/join) and the thumbnail-remove used a **stale closure** (`galleryArr()` captured at render, not the updater's `p`) — fragile vs. the admin `BusinessForm`, which uses a clean **array** and works. **Fix:** aligned business with admin — gallery is now a plain array; `addGalleryImage`/`removeGalleryImage` go through functional updaters (`p`); uploads append; the newline textarea was replaced with a paste-input + **Add** button (same control as admin); upload + paste now share one `addGalleryImage` path. **Verified live in a real browser** (ran frontend+backend locally, logged in as `biz01@relivr.test`): adding images went 2→3→4 with the **oldest always preserved**, and remove targeted the correct image. Nothing persisted (never clicked Save) so biz01's real data is intact. Frontend builds clean. Pushed (`42220ab`). **This supersedes the open clarification in the entry below — the business gallery now behaves like the admin panel.**
