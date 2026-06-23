@@ -4815,9 +4815,11 @@ function BusinessPreviewCard({ b }) {
   return (
     <DCard hover={false} style={{ padding:0, overflow:'hidden', border:`1px solid var(--border)` }}>
       <div style={{ height:10, background:theme }} />
-      {b.cover_image_url
-        ? <img src={b.cover_image_url} alt="" style={{ width:'100%', height:120, objectFit:'cover', display:'block' }} />
-        : (b.image_urls?.length ? <BizGallery images={b.image_urls} height={120} /> : <div style={{ height:60 }} />)}
+      {/* Mirror the public detail page: show the cover AND the gallery (cover does
+          not replace/hide the gallery — that previously read as "deleting" images). */}
+      {b.cover_image_url && <img src={b.cover_image_url} alt="" style={{ width:'100%', height:120, objectFit:'cover', display:'block' }} />}
+      {b.image_urls?.length > 0 && <BizGallery images={b.image_urls} height={b.cover_image_url ? 96 : 120} />}
+      {!b.cover_image_url && !(b.image_urls?.length) && <div style={{ height:60 }} />}
       <div style={{ padding:18 }}>
         <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6, flexWrap:'wrap' }}>
           {b.logo_url && <img src={b.logo_url} alt="" style={{ width:40, height:40, borderRadius:9, objectFit:'cover' }} />}
