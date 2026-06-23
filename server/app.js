@@ -52,25 +52,10 @@ const PRE_LAUNCH_ROLES = ['admin', 'business']
 const TEST_EMAIL_DOMAIN = '@relivr.test'
 // Public, rate-limited, no-PII analytics beacon — safe to leave open like /feedback.
 const PRE_LAUNCH_OPEN_RE = /^\/businesses\/[^/]+\/events$/
-app.use((req, res, next) => {
-  // Let CORS preflight (OPTIONS) reach the cors() middleware below. Otherwise the
-  // gate 503s the preflight before any Access-Control-* header is set, which the
-  // browser reports as a CORS failure on every gated route (/admin, /notifications…).
-  if (req.method === 'OPTIONS') return next()
-  if (process.env.NODE_ENV === 'test') return next()  // gate off in test env
-  if (Date.now() >= LAUNCH_AT_MS) return next()
-  if (PRE_LAUNCH_OPEN.some(p => req.path === p || req.path.startsWith(p + '/'))) return next()
-  if (PRE_LAUNCH_OPEN_RE.test(req.path)) return next()
-  const auth = req.headers.authorization
-  if (auth?.startsWith('Bearer ')) {
-    try {
-      const payload = jwt.verify(auth.slice(7), process.env.JWT_SECRET)
-      if (PRE_LAUNCH_ROLES.includes(payload.role)) return next()
-      if (payload.email?.toLowerCase().endsWith(TEST_EMAIL_DOMAIN)) return next()
-    } catch { /* fall through — invalid token → blocked */ }
-  }
-  res.status(503).json({ message: 'ReLivR launches on 7 July 2026. The app will open automatically.' })
-})
+// NOTE: the gate MIDDLEWARE is registered further down, AFTER cors(), so that a
+// gated 503 still carries the Access-Control-* headers. If it runs before cors()
+// the browser sees a 503 with no Access-Control-Allow-Origin and reports a CORS
+// error instead of the real status — masking the gate on every cross-origin call.
 
 // Railway/Vercel sit behind a proxy — needed for secure cookies + correct req.ip
 app.set('trust proxy', 1)
@@ -122,6 +107,28 @@ app.use(cors({
   origin: CORS_ORIGINS,
   credentials: true,
 }))
+
+// ── Pre-launch gate ───────────────────────────────────────────────────────────
+// Registered AFTER cors() (see note up top) so gated 503 responses still carry
+// CORS headers. cors() already answers OPTIONS preflight before this runs, so
+// only real GET/POST/… reach the gate; the OPTIONS check below is a harmless
+// belt-and-braces guard.
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') return next()
+  if (process.env.NODE_ENV === 'test') return next()  // gate off in test env
+  if (Date.now() >= LAUNCH_AT_MS) return next()
+  if (PRE_LAUNCH_OPEN.some(p => req.path === p || req.path.startsWith(p + '/'))) return next()
+  if (PRE_LAUNCH_OPEN_RE.test(req.path)) return next()
+  const auth = req.headers.authorization
+  if (auth?.startsWith('Bearer ')) {
+    try {
+      const payload = jwt.verify(auth.slice(7), process.env.JWT_SECRET)
+      if (PRE_LAUNCH_ROLES.includes(payload.role)) return next()
+      if (payload.email?.toLowerCase().endsWith(TEST_EMAIL_DOMAIN)) return next()
+    } catch { /* fall through — invalid token → blocked */ }
+  }
+  res.status(503).json({ message: 'ReLivR launches on 7 July 2026. The app will open automatically.' })
+})
 
 // Paystack webhook needs the raw request body for HMAC-SHA512 verification.
 // Capture it before express.json() parses and discards the buffer.
