@@ -3669,7 +3669,8 @@ function LocalBrowse({ setPage }) {
       <div className="page-enter" style={{ maxWidth:760 }}>
         <button onClick={() => setSelected(null)} style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'0.78rem', fontFamily:'var(--font-mono)', letterSpacing:'0.06em', cursor:'pointer', marginBottom:16 }}>← Back to Local</button>
         <DCard hover={false} style={{ padding:0, overflow:'hidden' }}>
-          <BizGallery images={b.image_urls} height={240} />
+          {b.cover_image_url && <img src={b.cover_image_url} alt="" style={{ width:'100%', height:240, objectFit:'cover', display:'block' }} />}
+          {b.image_urls?.length > 0 && <BizGallery images={b.image_urls} height={b.cover_image_url ? 150 : 240} />}
           <div style={{ padding:22 }}>
             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8, flexWrap:'wrap' }}>
               {b.logo_url && <img src={b.logo_url} alt="" style={{ width:44, height:44, borderRadius:10, objectFit:'cover' }} />}
@@ -3792,6 +3793,118 @@ function AdminBusinesses() {
   )
 }
 
+// ─── CLOUDINARY IMAGE UPLOAD ───────────────────────────────────────────────────
+// Business owners (and admins) upload photos straight from their device. The file
+// goes BROWSER → CLOUDINARY directly using a short-lived signature minted by our
+// backend (POST /uploads/signature) — it never passes through our server. The
+// returned URL is then saved through the normal /businesses save path.
+const UPLOAD_MAX_BYTES = 10 * 1024 * 1024 // 10 MB — generous for phone photos
+const UPLOAD_OK_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+
+// Insert f_auto,q_auto into a Cloudinary delivery URL so every render site serves
+// an optimised (auto format + quality) image with no extra wiring.
+function optimizeCldUrl(url) {
+  if (typeof url !== 'string' || !url.includes('res.cloudinary.com') || !url.includes('/upload/')) return url
+  if (/\/upload\/(f_auto|q_auto)/.test(url)) return url // already optimised
+  return url.replace('/upload/', '/upload/f_auto,q_auto/')
+}
+
+async function fetchUploadSignature(businessId) {
+  const token = localStorage.getItem('rl_token')
+  const res = await fetch(`${API_BASE}/uploads/signature`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(businessId ? { businessId } : {}),
+  })
+  const d = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(d.message || 'Uploads are unavailable right now.')
+  return d
+}
+
+// XHR (not fetch) so we get an upload progress callback for big phone photos.
+function postToCloudinary(file, sig, onProgress) {
+  return new Promise((resolve, reject) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('api_key', sig.apiKey)
+    form.append('timestamp', sig.timestamp)
+    form.append('folder', sig.folder)
+    // Must echo every signed param back verbatim, or Cloudinary rejects the signature.
+    if (sig.allowedFormats) form.append('allowed_formats', sig.allowedFormats)
+    if (sig.uploadPreset) form.append('upload_preset', sig.uploadPreset)
+    form.append('signature', sig.signature)
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`)
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100)) }
+    xhr.onload = () => {
+      let r = {}
+      try { r = JSON.parse(xhr.responseText) } catch { /* fall through to error */ }
+      if (xhr.status >= 200 && xhr.status < 300 && r.secure_url) resolve(optimizeCldUrl(r.secure_url))
+      else reject(new Error(r?.error?.message || 'Upload failed.'))
+    }
+    xhr.onerror = () => reject(new Error('Network error during upload.'))
+    xhr.send(form)
+  })
+}
+
+// Drag/drop + tap-to-pick uploader. Calls onUploaded(url) once per file. On
+// mobile, accept="image/*" lets the user pick from camera OR photo library.
+function ImageUpload({ businessId, multiple = false, onUploaded, label }) {
+  const toast = useToast()
+  const inputRef = useRef(null)
+  const [busy, setBusy] = useState(false)
+  const [pct, setPct] = useState(0)
+  const [drag, setDrag] = useState(false)
+
+  async function handleFiles(fileList) {
+    const files = Array.from(fileList || [])
+    if (!files.length || busy) return
+    setBusy(true)
+    let any = false
+    try {
+      for (const file of files) {
+        if (!UPLOAD_OK_TYPES.includes(file.type)) { toast(`${file.name}: use JPG, PNG, WebP or GIF`, 'error'); continue }
+        if (file.size > UPLOAD_MAX_BYTES) { toast(`${file.name}: must be under 10 MB`, 'error'); continue }
+        setPct(0)
+        // Fresh signature per file — avoids any timestamp-expiry edge cases.
+        const sig = await fetchUploadSignature(businessId)
+        const url = await postToCloudinary(file, sig, setPct)
+        onUploaded(url)
+        any = true
+      }
+      if (any) toast(multiple ? 'Photos uploaded' : 'Photo uploaded', 'success')
+    } catch (e) {
+      toast(e.message || 'Upload failed', 'error')
+    } finally {
+      setBusy(false); setPct(0)
+      if (inputRef.current) inputRef.current.value = ''
+    }
+  }
+
+  return (
+    <div
+      onDragOver={(e) => { e.preventDefault(); setDrag(true) }}
+      onDragLeave={() => setDrag(false)}
+      onDrop={(e) => { e.preventDefault(); setDrag(false); handleFiles(e.dataTransfer.files) }}
+      onClick={() => { if (!busy) inputRef.current?.click() }}
+      role="button" tabIndex={0}
+      onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !busy) { e.preventDefault(); inputRef.current?.click() } }}
+      style={{
+        border: `1px dashed ${drag ? 'var(--accent)' : 'var(--border)'}`,
+        borderRadius: 'var(--radius-sm)', padding: '14px 16px', textAlign: 'center',
+        cursor: busy ? 'progress' : 'pointer', background: drag ? 'var(--bg-elevated)' : 'transparent',
+        transition: 'all .15s', marginBottom: 8,
+      }}
+    >
+      <Mono size="0.72rem" color={busy ? 'var(--accent)' : 'var(--text-muted)'}>
+        {busy ? `Uploading… ${pct}%` : (label || (multiple ? '⬆ Tap to upload or drop photos' : '⬆ Tap to upload or drop a photo'))}
+      </Mono>
+      <input ref={inputRef} type="file" accept="image/*" multiple={multiple}
+        onChange={(e) => handleFiles(e.target.files)} style={{ display: 'none' }} />
+    </div>
+  )
+}
+
 function BusinessForm({ business, onDone, onCancel }) {
   const toast = useToast()
   const isNew = !business
@@ -3868,15 +3981,22 @@ function BusinessForm({ business, onDone, onCancel }) {
             </div>
             <Input label="Email" value={f.email} onChange={set('email')} type="email" />
             <Input label="Website / social link" value={f.linkUrl} onChange={set('linkUrl')} placeholder="instagram.com/their-handle" hint="Any valid link — checked on save." />
-            <Input label="Logo URL (optional)" value={f.logoUrl} onChange={set('logoUrl')} />
+            <div>
+              <Input label="Logo (optional)" value={f.logoUrl} onChange={set('logoUrl')} placeholder="Upload below or paste a URL" />
+              <div style={{ marginTop:8 }}>
+                <ImageUpload businessId={business?.business_id} label="⬆ Upload logo" onUploaded={url => setF(s => ({ ...s, logoUrl: url }))} />
+              </div>
+            </div>
           </div>
         </DCard>
 
         <DCard hover={false}>
           <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:6 }}>Photos (storefront, goods, menus)</Mono>
-          <p style={{ fontSize:'.78rem', color:'var(--text-muted)', marginBottom:12, lineHeight:1.5 }}>Paste image links (up to 8). Menus and price lists go here as pictures. When a Cloudinary account is connected, uploads will populate this list automatically.</p>
+          <p style={{ fontSize:'.78rem', color:'var(--text-muted)', marginBottom:12, lineHeight:1.5 }}>Upload photos from your device, or paste image links (up to 8). Menus and price lists go here as pictures.</p>
+          <ImageUpload businessId={business?.business_id} multiple
+            onUploaded={url => setImages(arr => arr.length >= 8 ? (toast('Up to 8 images', 'error'), arr) : [...arr, url])} />
           <div style={{ display:'flex', gap:8, marginBottom:12 }}>
-            <input value={imgInput} onChange={e=>setImgInput(e.target.value)} placeholder="https://…/photo.jpg" onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addImage()}}}
+            <input value={imgInput} onChange={e=>setImgInput(e.target.value)} placeholder="…or paste https://…/photo.jpg" onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addImage()}}}
               style={{ flex:1, padding:'9px 13px', borderRadius:'var(--radius-sm)', border:'1px solid var(--border)', fontSize:'.9rem' }} />
             <Btn variant="secondary" size="sm" onClick={addImage}>Add</Btn>
           </div>
@@ -4787,11 +4907,52 @@ function BusinessPageEditor({ biz, onSaved }) {
           <input type="color" value={/^#[0-9a-fA-F]{6}$/.test(f.themeColor) ? f.themeColor : '#6C5CE7'} onChange={set('themeColor')} style={{ width:42, height:30, border:'1px solid var(--border)', borderRadius:8, background:'none', cursor:'pointer' }} />
           <input value={f.themeColor} onChange={set('themeColor')} style={{ ...bizTaStyle, width:120 }} />
         </label>
-        <Input label="Cover image URL" value={f.coverImageUrl} onChange={set('coverImageUrl')} />
-        <Input label="Logo URL" value={f.logoUrl} onChange={set('logoUrl')} />
         <label style={{ display:'block', marginTop:4 }}>
-          <span style={{ display:'block', fontSize:'.75rem', fontWeight:600, color:'var(--text-secondary)', marginBottom:5 }}>Gallery image URLs (one per line, up to 8)</span>
-          <textarea value={f.gallery} onChange={set('gallery')} rows={3} style={bizTaStyle} placeholder="https://…" />
+          <span style={{ display:'block', fontSize:'.75rem', fontWeight:600, color:'var(--text-secondary)', marginBottom:5 }}>Cover image</span>
+          {f.coverImageUrl && (
+            <div style={{ position:'relative', width:'100%', height:96, borderRadius:8, overflow:'hidden', marginBottom:8, background:'var(--bg-elevated)' }}>
+              <img src={f.coverImageUrl} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+              <button type="button" onClick={() => setF(p => ({ ...p, coverImageUrl:'' }))}
+                style={{ position:'absolute', top:6, right:6, width:22, height:22, borderRadius:'50%', border:'none', background:'rgba(0,0,0,.6)', color:'#fff', fontSize:'.8rem', cursor:'pointer', lineHeight:1 }}>×</button>
+            </div>
+          )}
+          <ImageUpload businessId={biz.business_id} label="⬆ Upload cover photo" onUploaded={url => setF(p => ({ ...p, coverImageUrl: url }))} />
+          <input value={f.coverImageUrl} onChange={set('coverImageUrl')} placeholder="…or paste a URL" style={{ ...bizTaStyle, width:'100%' }} />
+        </label>
+
+        <label style={{ display:'block', marginTop:14 }}>
+          <span style={{ display:'block', fontSize:'.75rem', fontWeight:600, color:'var(--text-secondary)', marginBottom:5 }}>Logo</span>
+          {f.logoUrl && (
+            <div style={{ position:'relative', width:64, height:64, borderRadius:10, overflow:'hidden', marginBottom:8, background:'var(--bg-elevated)' }}>
+              <img src={f.logoUrl} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+              <button type="button" onClick={() => setF(p => ({ ...p, logoUrl:'' }))}
+                style={{ position:'absolute', top:2, right:2, width:18, height:18, borderRadius:'50%', border:'none', background:'rgba(0,0,0,.6)', color:'#fff', fontSize:'.7rem', cursor:'pointer', lineHeight:1 }}>×</button>
+            </div>
+          )}
+          <ImageUpload businessId={biz.business_id} label="⬆ Upload logo" onUploaded={url => setF(p => ({ ...p, logoUrl: url }))} />
+          <input value={f.logoUrl} onChange={set('logoUrl')} placeholder="…or paste a URL" style={{ ...bizTaStyle, width:'100%' }} />
+        </label>
+
+        <label style={{ display:'block', marginTop:14 }}>
+          <span style={{ display:'block', fontSize:'.75rem', fontWeight:600, color:'var(--text-secondary)', marginBottom:5 }}>Gallery (storefront, goods, menus — up to 8)</span>
+          {galleryArr().length > 0 && (
+            <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:8 }}>
+              {galleryArr().map((url, i) => (
+                <div key={i} style={{ position:'relative', width:64, height:64, borderRadius:8, overflow:'hidden', background:'var(--bg-elevated)' }}>
+                  <img src={url} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                  <button type="button" onClick={() => setF(p => ({ ...p, gallery: galleryArr().filter((_, j) => j !== i).join('\n') }))}
+                    style={{ position:'absolute', top:2, right:2, width:18, height:18, borderRadius:'50%', border:'none', background:'rgba(0,0,0,.6)', color:'#fff', fontSize:'.7rem', cursor:'pointer', lineHeight:1 }}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <ImageUpload businessId={biz.business_id} multiple label="⬆ Upload photos or drop them here"
+            onUploaded={url => setF(p => {
+              const arr = p.gallery.split('\n').map(x => x.trim()).filter(Boolean)
+              if (arr.length >= 8) { toast('Up to 8 images', 'error'); return p }
+              return { ...p, gallery: [...arr, url].join('\n') }
+            })} />
+          <textarea value={f.gallery} onChange={set('gallery')} rows={2} style={bizTaStyle} placeholder="…or paste image URLs, one per line" />
         </label>
 
         {sectionLabel('— Social links')}

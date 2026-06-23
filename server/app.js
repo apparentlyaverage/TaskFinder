@@ -28,6 +28,7 @@ import adminRouter from './routes/admin.js'
 import flagsRouter from './routes/flags.js'
 import betaRouter from './routes/beta.js'
 import paymentsRouter from './routes/payments.js'
+import uploadsRouter from './routes/uploads.js'
 import jwt from 'jsonwebtoken'
 import { pool } from './db.js'
 
@@ -178,6 +179,7 @@ app.use('/templates', templatesRouter)
 app.use('/admin', adminRouter)
 app.use('/flags', flagsRouter)
 app.use('/payments', paymentsRouter)
+app.use('/uploads', uploadsRouter)
 app.use('/', betaRouter)   // /feedback + /waitlist
 
 // 404 + error handlers

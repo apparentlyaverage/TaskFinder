@@ -117,7 +117,8 @@ router.get('/',
       }
       const { rows } = await pool.query(
         `SELECT business_id, name, category, description, address, map_hint,
-                phone, whatsapp, email, hours, image_urls, logo_url, link_url, created_at
+                phone, whatsapp, email, hours, image_urls, logo_url, cover_image_url,
+                link_url, created_at
          FROM businesses
          WHERE ${where}
          ORDER BY created_at DESC`, params)
@@ -392,7 +393,8 @@ router.get('/:id',
     try {
       const { rows } = await pool.query(
         `SELECT business_id, name, category, description, address, map_hint,
-                phone, whatsapp, email, hours, image_urls, logo_url, link_url, status, created_at
+                phone, whatsapp, email, hours, image_urls, logo_url, cover_image_url,
+                link_url, status, created_at
          FROM businesses WHERE business_id = $1`, [req.params.id])
       if (rows.length === 0) return res.status(404).json({ message: 'Business not found.' })
       // Only expose active ones publicly (admins use /admin/all for the rest)

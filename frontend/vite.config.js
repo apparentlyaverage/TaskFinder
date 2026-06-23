@@ -27,6 +27,7 @@ export default defineConfig({
       '/templates':     { target: 'http://localhost:3001', changeOrigin: true },
       '/admin':         { target: 'http://localhost:3001', changeOrigin: true },
       '/flags':         { target: 'http://localhost:3001', changeOrigin: true },
+      '/uploads':       { target: 'http://localhost:3001', changeOrigin: true },
       '/feedback':      { target: 'http://localhost:3001', changeOrigin: true },
       '/waitlist':      { target: 'http://localhost:3001', changeOrigin: true },
       '/health':        { target: 'http://localhost:3001', changeOrigin: true },
