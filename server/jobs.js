@@ -19,6 +19,21 @@ export async function expireDueTasks(db = pool) {
   return rows.length
 }
 
+// Mark lapsed Campus Deals 'expired'. HOUSEKEEPING ONLY — the public Deals query
+// already hides anything past expires_at via `WHERE status='active' AND
+// expires_at > NOW()`, so correctness never depends on this running. This just
+// keeps `status` truthful for owner dashboards/analytics.
+export async function expireDeals(db = pool) {
+  const { rows } = await db.query(
+    `UPDATE campus_deals
+        SET status = 'expired', updated_at = NOW()
+      WHERE status = 'active' AND expires_at <= NOW()
+      RETURNING deal_id`
+  )
+  if (rows.length) log.info('jobs.deals_expired', { count: rows.length })
+  return rows.length
+}
+
 // Email a batched digest to 'daily' users who have new notifications since their
 // last digest. The ≥20h gate enforces a roughly-daily cadence regardless of how
 // often this runs, so the scheduler can tick more frequently safely.
@@ -81,7 +96,10 @@ export async function sendRecurring(db = pool) {
 // Start the periodic scheduler. Called from index.js (never from app.js, so
 // tests don't spawn timers). Runs once on boot, then on intervals.
 export function startScheduler({ expiryMs = 5 * 60 * 1000, digestMs = 60 * 60 * 1000, recurringMs = 60 * 60 * 1000 } = {}) {
-  const runExpiry = () => expireDueTasks().catch(err => log.error('jobs.expire_failed', { msg: err.message }))
+  const runExpiry = () => {
+    expireDueTasks().catch(err => log.error('jobs.expire_failed', { msg: err.message }))
+    expireDeals().catch(err => log.error('jobs.deals_expire_failed', { msg: err.message }))
+  }
   const runDigest = () => sendDigests().catch(err => log.error('jobs.digest_failed', { msg: err.message }))
   const runRecurring = () => sendRecurring().catch(err => log.error('jobs.recurring_failed', { msg: err.message }))
   runExpiry(); runDigest(); runRecurring()

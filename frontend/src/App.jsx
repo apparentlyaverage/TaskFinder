@@ -2006,10 +2006,11 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch 
   // wide enough to fit them, so navigation never depends on the mobile bottom bar.
   const isAdmin = user.role === 'admin'
   const navLinks = isAdmin
-    ? [ { id:'dashboard', label:'Dashboard' }, { id:'admin-disputes', label:'Disputes' }, { id:'admin-users', label:'Users' }, { id:'admin-businesses', label:'Businesses' }, { id:'admin-locations', label:'Locations' }, { id:'admin-flags', label:'Flags' } ]
+    ? [ { id:'dashboard', label:'Dashboard' }, { id:'admin-disputes', label:'Disputes' }, { id:'admin-users', label:'Users' }, { id:'admin-businesses', label:'Businesses' }, { id:'admin-deals', label:'Deals' }, { id:'admin-locations', label:'Locations' }, { id:'admin-flags', label:'Flags' } ]
     : [
         { id:'tasks-browse', label:'Browse' },
         { id:'local-browse', label:'Local' },
+        { id:'deals',        label:'Deals' },
         { id:'tasks-mine',   label:'My Tasks' },
         { id:'my-bids',      label:'My Bids' },
       ]
@@ -3809,12 +3810,15 @@ function optimizeCldUrl(url) {
   return url.replace('/upload/', '/upload/f_auto,q_auto/')
 }
 
-async function fetchUploadSignature(businessId) {
+async function fetchUploadSignature(businessId, scope) {
   const token = localStorage.getItem('rl_token')
+  const body = {}
+  if (businessId) body.businessId = businessId
+  if (scope) body.scope = scope
   const res = await fetch(`${API_BASE}/uploads/signature`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(businessId ? { businessId } : {}),
+    body: JSON.stringify(body),
   })
   const d = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(d.message || 'Uploads are unavailable right now.')
@@ -3849,7 +3853,7 @@ function postToCloudinary(file, sig, onProgress) {
 
 // Drag/drop + tap-to-pick uploader. Calls onUploaded(url) once per file. On
 // mobile, accept="image/*" lets the user pick from camera OR photo library.
-function ImageUpload({ businessId, multiple = false, onUploaded, label }) {
+function ImageUpload({ businessId, scope, multiple = false, onUploaded, label }) {
   const toast = useToast()
   const inputRef = useRef(null)
   const [busy, setBusy] = useState(false)
@@ -3867,7 +3871,7 @@ function ImageUpload({ businessId, multiple = false, onUploaded, label }) {
         if (file.size > UPLOAD_MAX_BYTES) { toast(`${file.name}: must be under 10 MB`, 'error'); continue }
         setPct(0)
         // Fresh signature per file — avoids any timestamp-expiry edge cases.
-        const sig = await fetchUploadSignature(businessId)
+        const sig = await fetchUploadSignature(businessId, scope)
         const url = await postToCloudinary(file, sig, setPct)
         onUploaded(url)
         any = true
@@ -4778,6 +4782,7 @@ function BusinessDashboard({ onLogout, onViewLanding }) {
         </div>
         <div style={{ maxWidth:1100, margin:'0 auto', display:'flex', gap:4, padding:'0 20px' }}>
           <button onClick={() => setTab('page')}      style={bizTab(tab==='page')}>My Page</button>
+          <button onClick={() => setTab('deals')}     style={bizTab(tab==='deals')}>Deals</button>
           <button onClick={() => setTab('analytics')} style={bizTab(tab==='analytics')}>Analytics</button>
         </div>
       </header>
@@ -4804,6 +4809,7 @@ function BusinessDashboard({ onLogout, onViewLanding }) {
           </DCard>
         )
          : tab === 'page' ? <BusinessPageEditor biz={biz} onSaved={setBiz} />
+         : tab === 'deals' ? <BusinessDeals biz={biz} />
          : <BusinessAnalytics />}
       </main>
     </div>
@@ -4831,6 +4837,289 @@ function BusinessPreviewCard({ b }) {
         {b.hours && <Mono style={{ display:'block', marginTop:10 }}>🕒 {b.hours}</Mono>}
       </div>
     </DCard>
+  )
+}
+
+// ─── CAMPUS DEALS ──────────────────────────────────────────────────────────────
+// Business-posted limited-time specials. Expiry is authoritative on the server
+// (the API only returns deals where expires_at > NOW()); the countdown here is
+// display-only.
+const zar = (cents) => cents == null ? '' : 'R' + (cents / 100).toFixed(2).replace(/\.00$/, '')
+function dealTimeLeft(expiresAt) {
+  const ms = new Date(expiresAt).getTime() - Date.now()
+  if (ms <= 0) return 'Expired'
+  const d = Math.floor(ms / 86400000), h = Math.floor((ms % 86400000) / 3600000), m = Math.floor((ms % 3600000) / 60000)
+  if (d > 0) return `Ends in ${d}d ${h}h`
+  if (h > 0) return `Ends in ${h}h ${m}m`
+  return `Ends in ${m}m`
+}
+// A datetime-local input speaks browser-local time; convert to/from ISO for the API.
+const isoToLocalInput = (iso) => iso ? new Date(new Date(iso).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''
+const daysFromNowLocal = (days) => new Date(Date.now() + days * 86400000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+
+// One deal as students see it (public grid + live preview in the editor).
+function DealCard({ d }) {
+  const expired = d.expires_at && new Date(d.expires_at).getTime() <= Date.now()
+  return (
+    <DCard hover style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ position: 'relative', height: 150, background: 'var(--bg-elevated)' }}>
+        {d.image_url
+          ? <img src={d.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: '1.6rem' }}>🏷</div>}
+        <span style={{ position: 'absolute', top: 8, left: 8, padding: '3px 9px', borderRadius: 100, fontSize: '.68rem', fontWeight: 700, background: expired ? 'rgba(0,0,0,.6)' : 'var(--accent)', color: '#fff' }}>
+          {expired ? 'Expired' : dealTimeLeft(d.expires_at)}
+        </span>
+      </div>
+      <div style={{ padding: 14, flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', margin: 0 }}>{d.title || 'Your deal title'}</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          {d.logo_url && <img src={d.logo_url} alt="" style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'cover' }} />}
+          <Mono style={{ color: 'var(--text-muted)' }}>{d.business_name || 'Your business'}</Mono>
+        </div>
+        {d.description && <p style={{ fontSize: '.82rem', color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>{d.description}</p>}
+        {d.price_cents != null && (
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 'auto' }}>
+            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.15rem', color: 'var(--accent)' }}>{zar(d.price_cents)}</span>
+            {d.original_price_cents != null && d.original_price_cents > d.price_cents &&
+              <span style={{ fontSize: '.85rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>{zar(d.original_price_cents)}</span>}
+          </div>
+        )}
+      </div>
+    </DCard>
+  )
+}
+
+// Create/edit a single deal (business owner). Image via the shared Cloudinary
+// uploader (deals scope); expiry via a future-only datetime picker + presets.
+function DealForm({ biz, deal, onDone, onCancel }) {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const isNew = !deal
+  const [f, setF] = useState({
+    title: deal?.title || '', description: deal?.description || '', imageUrl: deal?.image_url || '',
+    priceRand: deal?.price_cents != null ? String(deal.price_cents / 100) : '',
+    originalRand: deal?.original_price_cents != null ? String(deal.original_price_cents / 100) : '',
+    status: deal?.status === 'draft' ? 'draft' : 'active',
+    expiresLocal: isoToLocalInput(deal?.expires_at),
+  })
+  const set = k => e => setF(p => ({ ...p, [k]: e.target.value }))
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    if (!f.title.trim()) { toast('Title is required', 'error'); return }
+    if (!f.expiresLocal) { toast('Pick an expiry date & time', 'error'); return }
+    const expiresAt = new Date(f.expiresLocal).toISOString()
+    if (new Date(expiresAt).getTime() <= Date.now()) { toast('Expiry must be in the future', 'error'); return }
+    setSaving(true)
+    try {
+      const payload = {
+        title: f.title, description: f.description || null, imageUrl: f.imageUrl || null,
+        priceCents: f.priceRand === '' ? null : Math.round(parseFloat(f.priceRand) * 100),
+        originalPriceCents: f.originalRand === '' ? null : Math.round(parseFloat(f.originalRand) * 100),
+        status: f.status, expiresAt,
+      }
+      const res = await fetch(API_BASE + (isNew ? '/deals' : `/deals/${deal.deal_id}`), {
+        method: isNew ? 'POST' : 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify(payload),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.message || d.errors?.[0]?.msg || 'Save failed')
+      toast(isNew ? 'Deal posted' : 'Deal updated', 'success'); onDone()
+    } catch (e) { toast(e.message, 'error') } finally { setSaving(false) }
+  }
+
+  const preview = {
+    title: f.title, image_url: f.imageUrl, description: f.description,
+    price_cents: f.priceRand === '' ? null : Math.round(parseFloat(f.priceRand) * 100),
+    original_price_cents: f.originalRand === '' ? null : Math.round(parseFloat(f.originalRand) * 100),
+    expires_at: f.expiresLocal ? new Date(f.expiresLocal).toISOString() : null,
+    business_name: biz.name, logo_url: biz.logo_url,
+  }
+
+  return (
+    <div className="page-enter">
+      <button onClick={onCancel} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', cursor: 'pointer', marginBottom: 16 }}>← Back to deals</button>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 24, alignItems: 'start' }}>
+        <DCard hover={false} style={{ padding: 22 }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.25rem', marginBottom: 16 }}>{isNew ? 'New deal' : 'Edit deal'}</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <Input label="Title" value={f.title} onChange={set('title')} placeholder="e.g. 2-for-1 burgers, Tuesdays only" />
+            <Textarea label="Description" value={f.description} onChange={set('description')} hint="What's the special?" />
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 120 }}><Input label="Price (R)" type="number" value={f.priceRand} onChange={set('priceRand')} placeholder="45" /></div>
+              <div style={{ flex: 1, minWidth: 120 }}><Input label="Was (R, optional)" type="number" value={f.originalRand} onChange={set('originalRand')} placeholder="90" /></div>
+            </div>
+            <div>
+              <span style={{ display: 'block', fontSize: '.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 5 }}>Deal image</span>
+              {f.imageUrl && (
+                <div style={{ position: 'relative', width: '100%', height: 120, borderRadius: 8, overflow: 'hidden', marginBottom: 8, background: 'var(--bg-elevated)' }}>
+                  <img src={f.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <button type="button" onClick={() => setF(p => ({ ...p, imageUrl: '' }))} style={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,.6)', color: '#fff', cursor: 'pointer' }}>×</button>
+                </div>
+              )}
+              <ImageUpload businessId={biz.business_id} scope="deals" label="⬆ Upload deal image" onUploaded={url => setF(p => ({ ...p, imageUrl: url }))} />
+            </div>
+            <div>
+              <span style={{ display: 'block', fontSize: '.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 5 }}>Expires</span>
+              <input type="datetime-local" value={f.expiresLocal} min={daysFromNowLocal(0)} onChange={set('expiresLocal')} style={{ ...bizTaStyle, width: '100%' }} />
+              <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                {[['24 hours', 1], ['3 days', 3], ['1 week', 7]].map(([lbl, dys]) =>
+                  <button key={dys} type="button" onClick={() => setF(p => ({ ...p, expiresLocal: daysFromNowLocal(dys) }))} style={{ padding: '5px 11px', borderRadius: 100, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '.74rem', cursor: 'pointer' }}>+{lbl}</button>)}
+              </div>
+            </div>
+            <SelectField label="Status" value={f.status} onChange={set('status')}>
+              <option value="active">Active (visible now)</option>
+              <option value="draft">Draft (hidden)</option>
+            </SelectField>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <Btn loading={saving} onClick={save}>{isNew ? 'Post deal' : 'Save changes'}</Btn>
+              <Btn variant="secondary" onClick={onCancel}>Cancel</Btn>
+            </div>
+          </div>
+        </DCard>
+        <div>
+          <Mono style={{ display: 'block', marginBottom: 10 }}>Live preview — how students see it</Mono>
+          <div style={{ maxWidth: 280 }}><DealCard d={preview} /></div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Business dashboard "Deals" tab — list + create/edit/delete the owner's deals.
+function BusinessDeals({ biz }) {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [deals, setDeals] = useState(null)
+  const [view, setView] = useState('list')   // 'list' | 'form'
+  const [editing, setEditing] = useState(null)
+
+  const load = () => fetch(API_BASE + '/deals/mine', { headers: { Authorization: `Bearer ${token()}` } })
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('load')))
+    .then(d => setDeals(d.deals || []))
+    .catch(() => setDeals([]))
+  useEffect(() => { load() }, [])
+
+  async function remove(id) {
+    if (!window.confirm('Delete this deal permanently?')) return
+    const res = await fetch(API_BASE + `/deals/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token()}` } })
+    if (res.ok) { toast('Deal deleted', 'success'); load() } else toast('Delete failed', 'error')
+  }
+
+  if (view === 'form') return <DealForm biz={biz} deal={editing} onCancel={() => { setView('list'); setEditing(null) }} onDone={() => { setView('list'); setEditing(null); load() }} />
+
+  return (
+    <div className="page-enter">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
+        <div>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.4rem', margin: 0 }}>Campus Deals</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '.88rem', marginTop: 4 }}>Post a limited-time special. It appears on the public Deals page and auto-hides the moment it expires.</p>
+        </div>
+        <Btn onClick={() => { setEditing(null); setView('form') }}>＋ New deal</Btn>
+      </div>
+      {deals === null ? <div style={{ padding: 50, textAlign: 'center' }}><Spinner /></div>
+        : deals.length === 0 ? <EmptyState icon="🏷" message="No deals yet — post your first special" action={<Btn size="sm" onClick={() => setView('form')}>＋ New deal</Btn>} />
+          : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {deals.map(d => {
+              const expired = d.status === 'expired' || new Date(d.expires_at).getTime() <= Date.now()
+              const chip = d.status === 'draft' ? ['Draft', 'var(--text-muted)'] : d.status === 'archived' ? ['Archived', 'var(--text-muted)'] : expired ? ['Expired', 'var(--danger)'] : ['Active · ' + dealTimeLeft(d.expires_at), 'var(--accent)']
+              return (
+                <DCard key={d.deal_id} hover={false} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: 12 }}>
+                  <div style={{ width: 56, height: 56, borderRadius: 8, overflow: 'hidden', background: 'var(--bg-elevated)', flexShrink: 0 }}>
+                    {d.image_url ? <img src={d.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>🏷</div>}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: '.95rem' }}>{d.title}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
+                      <span style={{ fontSize: '.7rem', fontWeight: 700, color: chip[1] }}>{chip[0]}</span>
+                      {d.price_cents != null && <Mono style={{ color: 'var(--text-muted)' }}>{zar(d.price_cents)}</Mono>}
+                    </div>
+                  </div>
+                  <Btn variant="secondary" size="sm" onClick={() => { setEditing(d); setView('form') }}>Edit</Btn>
+                  <Btn variant="ghost" size="sm" onClick={() => remove(d.deal_id)}>Delete</Btn>
+                </DCard>
+              )
+            })}
+          </div>}
+    </div>
+  )
+}
+
+// Public, campus-wide Deals page — active (unexpired) deals only.
+function DealsPage() {
+  const [deals, setDeals] = useState(null)
+  useEffect(() => {
+    let alive = true
+    // The endpoint is public (auth ignored), but sending a token if we have one
+    // lets gate-bypassing roles preview the page before the 7-July public launch.
+    const tok = localStorage.getItem('rl_token')
+    fetch(API_BASE + '/deals', tok ? { headers: { Authorization: `Bearer ${tok}` } } : undefined)
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('deals')))
+      .then(d => { if (alive) setDeals(d.deals || []) })
+      .catch(() => { if (alive) setDeals([]) })
+    return () => { alive = false }
+  }, [])
+  return (
+    <div className="page-enter">
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.6rem', margin: 0 }}>Campus Deals</h1>
+        <p style={{ color: 'var(--text-secondary)', marginTop: 6 }}>Limited-time specials from local businesses. Grab them before they expire.</p>
+      </div>
+      {deals === null ? <div style={{ padding: 60, textAlign: 'center' }}><Spinner /></div>
+        : deals.length === 0 ? <EmptyState icon="🏷" message="No live deals right now — check back soon" />
+          : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
+            {deals.map(d => <DealCard key={d.deal_id} d={d} />)}
+          </div>}
+    </div>
+  )
+}
+
+// Admin moderation — every deal, with archive/delete actions.
+function AdminDeals() {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [deals, setDeals] = useState(null)
+  const load = () => fetch(API_BASE + '/deals/admin/all', { headers: { Authorization: `Bearer ${token()}` } })
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('load')))
+    .then(d => setDeals(d.deals || []))
+    .catch(() => setDeals([]))
+  useEffect(() => { load() }, [])
+
+  async function archive(id) {
+    const res = await fetch(API_BASE + `/deals/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ status: 'archived' }) })
+    if (res.ok) { toast('Deal hidden', 'success'); load() } else toast('Action failed', 'error')
+  }
+  async function remove(id) {
+    if (!window.confirm('Delete this deal permanently?')) return
+    const res = await fetch(API_BASE + `/deals/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token()}` } })
+    if (res.ok) { toast('Deal deleted', 'success'); load() } else toast('Delete failed', 'error')
+  }
+
+  return (
+    <div className="page-enter">
+      <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5rem', marginBottom: 16 }}>Deals moderation</h1>
+      {deals === null ? <Spinner />
+        : deals.length === 0 ? <EmptyState icon="🏷" message="No deals posted yet" />
+          : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {deals.map(d => {
+              const expired = d.status === 'expired' || new Date(d.expires_at).getTime() <= Date.now()
+              return (
+                <DCard key={d.deal_id} hover={false} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: 12 }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 8, overflow: 'hidden', background: 'var(--bg-elevated)', flexShrink: 0 }}>
+                    {d.image_url ? <img src={d.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ textAlign: 'center', lineHeight: '48px', color: 'var(--text-muted)' }}>🏷</div>}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: '.92rem' }}>{d.title}</div>
+                    <Mono style={{ color: 'var(--text-muted)' }}>{d.business_name} · {d.status}{expired && d.status === 'active' ? ' (lapsed)' : ''}</Mono>
+                  </div>
+                  {d.status !== 'archived' && <Btn variant="secondary" size="sm" onClick={() => archive(d.deal_id)}>Hide</Btn>}
+                  <Btn variant="ghost" size="sm" onClick={() => remove(d.deal_id)}>Delete</Btn>
+                </DCard>
+              )
+            })}
+          </div>}
+    </div>
   )
 }
 
@@ -5546,7 +5835,9 @@ const DASH_ROUTES = {
   '/notifications':   'notifications',
   '/profile':         'profile',
   '/local':           'local-browse',
+  '/deals':           'deals',
   '/admin/disputes':  'admin-disputes',
+  '/admin/deals':     'admin-deals',
   '/admin/locations': 'admin-locations',
   '/admin/flags':     'admin-flags',
   '/admin/users':     'admin-users',
@@ -5907,6 +6198,8 @@ export default function App() {
       case 'admin-locations':      return <AdminLocations />
       case 'admin-flags':          return <AdminFlags />
       case 'local-browse':         return <LocalBrowse setPage={setDashPage} />
+      case 'deals':                return <DealsPage />
+      case 'admin-deals':          return <AdminDeals />
       case 'admin-businesses':     return <AdminBusinesses />
       default:                     return <Dashboard setPage={setDashPage} setSelectedTask={setSelectedTask} />
     }

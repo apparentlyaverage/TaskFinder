@@ -56,7 +56,11 @@ router.post('/signature', requireAuth, async (req, res) => {
 
     const { cloudName, apiKey, apiSecret, uploadPreset } = cloudinaryConfig()
     const timestamp = Math.floor(Date.now() / 1000)
-    const folder = `relivr/businesses/${folderId}`
+    // Scope keeps each feature's media in its own tree. 'deals' for Campus Deals
+    // images, otherwise the business page media. Owner/admin folder isolation is
+    // unchanged — only the top-level prefix differs.
+    const scope = req.body?.scope === 'deals' ? 'deals' : 'businesses'
+    const folder = `relivr/${scope}/${folderId}`
 
     // These are exactly the params the browser must send back to Cloudinary
     // (besides file/api_key). The signature must cover the same set.

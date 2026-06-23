@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 vi.mock('../email.js', () => ({ sendEmail: vi.fn().mockResolvedValue({ delivered: true }) }))
 
-const { expireDueTasks, sendDigests, sendRecurring } = await import('../jobs.js')
+const { expireDueTasks, sendDigests, sendRecurring, expireDeals } = await import('../jobs.js')
 const { sendEmail } = await import('../email.js')
 
 describe('expireDueTasks', () => {
@@ -19,6 +19,20 @@ describe('expireDueTasks', () => {
   it('returns 0 when nothing is due', async () => {
     const db = { query: vi.fn().mockResolvedValue({ rows: [] }) }
     expect(await expireDueTasks(db)).toBe(0)
+  })
+})
+
+describe('expireDeals', () => {
+  it('expires only active, past-expiry deals and returns the count', async () => {
+    const db = { query: vi.fn().mockResolvedValue({ rows: [{ deal_id: 'd1' }] }) }
+    expect(await expireDeals(db)).toBe(1)
+    const sql = db.query.mock.calls[0][0]
+    expect(sql).toMatch(/status = 'expired'/)
+    expect(sql).toMatch(/status = 'active' AND expires_at <= NOW\(\)/)
+  })
+  it('returns 0 when nothing has lapsed', async () => {
+    const db = { query: vi.fn().mockResolvedValue({ rows: [] }) }
+    expect(await expireDeals(db)).toBe(0)
   })
 })
 
