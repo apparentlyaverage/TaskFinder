@@ -2,7 +2,7 @@
 
 > Persistent state file for the autonomous development agency.
 > **Read this first at the start of every session.**
-> Last updated: 2026-06-23 — *Fixed prod CORS-on-gated-503 (gate now runs after cors()); Cloudinary uploads verified live; adopted 5-role protocol.*
+> Last updated: 2026-06-23 — *PIVOT: Campus Deals system designed (§7.10) — time-limited business specials + public campus-wide page, query-time expiry. Cloudinary uploads done/verified.*
 
 ---
 
@@ -37,12 +37,12 @@ Supplements §0. Engaged at the owner's request to run this project as a self-di
 **Per-response format:** (1) **Team Sync** — the team's current assessment; (2) **Execution** — the coding/debugging/planning; (3) **QA/Security Report** — how the work was validated; (4) **State Update** — this document, refreshed.
 
 **Quick-glance status** (lightweight skeleton kept current alongside the detailed §8 log):
-- **CURRENT SPRINT GOAL:** Ship Cloudinary business-photo uploads to production.
-- **STATUS:** ✅ Done — live and verified end-to-end in prod (2026-06-23).
+- **CURRENT SPRINT GOAL:** PIVOT → build the **Campus Deals** system (business-posted limited-time specials + public campus-wide Deals page with query-time expiry). Design in §7.10.
+- **STATUS:** 📐 Design complete (§7.10), awaiting owner go-ahead to implement. (Prior sprint — Cloudinary uploads — ✅ done/verified in prod.)
 - **COMPLETED (recent):** signed `/uploads/signature` endpoint (auth + ownership-locked folder + signed `allowed_formats`); upload UI wired into owner + admin editors; `cover_image_url` made public; prod end-to-end upload verified via a `@relivr.test` business account.
-- **PENDING (backlog top):** MVP-3 payments / escrow wiring (TD-3, parked on company registration); UI redesign **pass 2** (in-app surfaces); launch-day TODOs (flip `beta_founder` default → FALSE, email the waitlist, clean leftover test records).
+- **PENDING (backlog top):** 🆕 **Campus Deals** implementation (§7.10, 6-step build order); MVP-3 payments / escrow wiring (TD-3, parked on company registration); UI redesign **pass 2** (in-app surfaces); launch-day TODOs (flip `beta_founder` default → FALSE, email the waitlist, clean leftover test records).
 - **SECURITY AUDIT LOG:** uploads endpoint — `requireAuth`, folder derived server-side (no cross-tenant write), `allowed_formats` signed (client can't widen), path-injection `businessId` rejected to scratch folder, 503 when unconfigured. No new runtime deps (crypto-only signing). **CORS fix:** gate now runs after `cors()` so gated 503s carry `Access-Control-Allow-Origin` (no header leakage/security change — same origin allowlist). Backend **171 tests** green.
-- **NEXT ACTION:** Business gallery rewritten to match admin + verified in-browser; awaiting owner confirmation it's resolved on their end (hard-refresh to get bundle `42220ab`). Then await direction — UI redesign **pass 2** vs. **MVP-3 payments**. Gate stays until 7 July (owner confirmed).
+- **NEXT ACTION:** Campus Deals design integrated (§7.10). Awaiting owner **go-ahead to implement** (and the one open decision: is `/deals` public pre-launch, or gated until 7 July?). Build order in §7.10. Gate stays until 7 July (owner confirmed).
 
 ---
 
@@ -468,8 +468,113 @@ sprints — nothing here is committed to a sprint yet. **Blocker legend:**
 
 ---
 
+## 7.10 — Campus Deals (PIVOT) — Feature Design & Stack (2026-06-23)
+
+**Owner pivot:** add a **Campus Deals** system — businesses post time-limited "Limited Time Specials" (title, description, image, price, expiry); a public, **campus-wide, responsive** Deals page shows only **active** (un-expired) deals. Deliberately **reuses existing infra** — the `business` role, `businesses.owner_id` ownership-gating, Cloudinary signed uploads, the `locations` campus taxonomy, RBAC middleware, and the `jobs.js` scheduler — so **no new technical stack is required.**
+
+### RBAC matrix
+| Capability | Public | Business (owner) | Admin |
+|---|---|---|---|
+| View **active** deals (public page) | ✅ | ✅ | ✅ |
+| Create / edit / archive **own** deals | ❌ | ✅ own only | ✅ any |
+| See own draft/expired deals | ❌ | ✅ own | ✅ all |
+| Moderate / remove **any** deal | ❌ | ❌ | ✅ |
+| Manage main site / static content | ❌ | ❌ | ✅ |
+
+Enforcement reuses the proven `businesses.js` pattern: `requireAuth` + **ownership gate** (`business_owner_id = req.userId`), never role alone — a business can never write another owner's deal, set `status`/`location` beyond its allowance, or touch static content. Admin paths via `requireAdmin`.
+
+### Schema — migration `db/init/32_campus_deals.sql` (idempotent)
+```sql
+CREATE TABLE IF NOT EXISTS campus_deals (
+  deal_id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id          UUID NOT NULL REFERENCES businesses(business_id) ON DELETE CASCADE,
+  business_owner_id    UUID NOT NULL REFERENCES users(user_id)          ON DELETE CASCADE,
+  location_id          UUID REFERENCES locations(location_id) ON DELETE SET NULL, -- NULL = all campuses
+  title                VARCHAR(120) NOT NULL,
+  description          TEXT,
+  image_url            TEXT,
+  price_cents          INTEGER CHECK (price_cents IS NULL OR price_cents >= 0),  -- ZAR cents
+  original_price_cents INTEGER CHECK (original_price_cents IS NULL OR original_price_cents >= 0),
+  status               VARCHAR(16) NOT NULL DEFAULT 'active'
+                         CHECK (status IN ('draft','active','expired','archived')),
+  starts_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at           TIMESTAMPTZ NOT NULL,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_deal_window CHECK (expires_at > starts_at)
+);
+-- Hot path (public page): only live rows, ordered soonest-ending. Partial index stays tiny.
+CREATE INDEX IF NOT EXISTS idx_deals_live     ON campus_deals (expires_at) WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_deals_owner    ON campus_deals (business_owner_id);
+CREATE INDEX IF NOT EXISTS idx_deals_business ON campus_deals (business_id);
+```
+`business_owner_id` is denormalised from `businesses.owner_id` (set server-side at create) for O(1) ownership checks + audit, mirroring the business-dashboard ownership model. `location_id` reuses the existing UUID `locations` taxonomy (NULL = visible on every campus).
+
+### Retrieval — "active" is enforced at QUERY time (the safety guarantee)
+```sql
+SELECT d.deal_id, d.title, d.description, d.image_url, d.price_cents, d.original_price_cents,
+       d.expires_at, b.business_id, b.name AS business_name, b.logo_url, b.category
+  FROM campus_deals d
+  JOIN businesses b ON b.business_id = d.business_id
+ WHERE d.status = 'active'
+   AND d.expires_at > NOW()          -- ← DB SERVER CLOCK; cannot be bypassed by any client
+   AND b.status = 'active'
+   AND ($1::uuid IS NULL OR d.location_id = $1 OR d.location_id IS NULL)  -- optional campus filter
+ ORDER BY d.expires_at ASC
+ LIMIT 100;
+```
+**Why this is safe:** the `expires_at > NOW()` predicate uses the **database server clock**, is **atomic**, and runs on **every read** — an expired deal becomes invisible the instant it lapses, independent of any background job, client clock, or cached state. A client-side countdown is display-only and never trusted for access.
+
+### Background sweep — housekeeping only (NOT relied on for hiding)
+`server/jobs.js` gains `expireDeals()` (mirrors `expireDueTasks`): `UPDATE campus_deals SET status='expired', updated_at=NOW() WHERE status='active' AND expires_at <= NOW()`, wired into `startScheduler` (5-min tick). Purpose: keep `status` truthful for owner dashboards/analytics. Correctness does **not** depend on it — the query filter already hides expired rows even if the job never runs.
+
+### API surface — `server/routes/deals.js` (mounted `/deals`)
+- `GET /deals` (public) — active deals, optional `?campus=<location_id>`.
+- `GET /deals/:id` (public) — single active deal (404 if expired/inactive, same as `/businesses/:id`).
+- `GET /deals/mine` (business) — all own deals incl. draft/expired.
+- `POST /deals` (business) — create; `business_id`/`business_owner_id` derived server-side from the caller's business; `expiresAt` must be a future ISO datetime (express-validator).
+- `PATCH /deals/:id` (business own) — whitelist: title/description/image/price/expiresAt/status∈{active,draft,archived}; never owner/business_id.
+- `DELETE /deals/:id` (business own | admin any) — or soft `archived`.
+- `GET /admin/deals` + moderation (admin).
+- Image upload reuses `POST /uploads/signature` with a new `deals` folder scope (`relivr/deals/<businessId>`).
+- Gate note: `business` role already bypasses the pre-launch gate, so owners can create deals before 7 July. **Open decision:** is the public `/deals` page open pre-launch (add to `PRE_LAUNCH_OPEN`) or gated until 7 July?
+
+### UI/UX flow
+**Business Dashboard → new "Deals" tab** (beside My Page / Analytics):
+1. List of the owner's deals with status chips (Active · "Ends in 2d 4h" · Expired · Draft) + thumbnail + price.
+2. "＋ New deal" → form: title, description, price (ZAR), **image upload** (existing `ImageUpload`), **expiry date-time picker** validated future-only with quick presets (24h / 3 days / 1 week), optional campus. Live preview of the deal card.
+3. Per-card Edit / Archive / Duplicate. Expired deals are read-only with a "Repost" action (clone + new expiry).
+
+**Public Deals page** (`/deals`, nav "Campus Deals"):
+- Responsive card grid (image, title, business name+logo, price + optional struck-through original, "Ends in …" countdown).
+- Campus filter chips (reuse `useLocations()`); empty state ("No live deals right now").
+- Card → deal detail / business page; fires a lightweight view beacon (reuse the `business_page_events` pattern).
+
+**Admin → AdminDeals**: table of all deals, filter by status/business, hide/remove any.
+
+### Technical stack — no new infrastructure
+- **PostgreSQL `TIMESTAMPTZ` + query-time `WHERE expires_at > NOW()`** — authoritative, server-clock, atomic expiry (THE safety mechanism).
+- **Partial index** `WHERE status='active'` + **`CHECK (expires_at > starts_at)`** DB constraint.
+- **express-validator** future-date check on create/update (defence-in-depth; the query is the real guard).
+- **`jobs.js` scheduler** sweep for status hygiene/analytics (not correctness).
+- **RBAC middleware** (`requireAuth` + ownership gate; `requireAdmin`) reused from `businesses.js`.
+- **Cloudinary signed uploads** reused (new `deals` folder scope).
+- **React 18 + Vite** frontend; countdown display-only.
+- **Vitest + Supertest** tests — RBAC (owner-only writes, admin moderation, public read) + a critical **expiry test** (a deal with `expires_at` in the past is absent from `GET /deals`).
+
+### Proposed build order (each step tested before the next)
+1. Migration 32 + `expireDeals()` job + scheduler wiring.
+2. `routes/deals.js` (public active-filtered read + owner CRUD) + mount + tests (incl. the expiry test).
+3. Admin moderation endpoint + tests.
+4. Frontend: Business Dashboard "Deals" tab (list + create/edit form + image upload + expiry picker).
+5. Frontend: public `/deals` page + nav + campus filter; AdminDeals page.
+6. Verify in-browser (local full-stack, `@relivr.test` business) + deploy.
+
+---
+
 ## 8. Session Log
 
+- **2026-06-23 — PIVOT: Campus Deals system designed + integrated (§7.10):** Owner is pivoting the feature set to **Campus Deals** — businesses post time-limited "Limited Time Specials" (title/description/image/price/expiry); a public, campus-wide, responsive Deals page shows only active (un-expired) deals. **Four-persona design (no code yet):** *PM* — RBAC matrix (public read active; business CRUD own only; admin moderates any + owns static content). *Architect* — reuse existing infra (no new stack): new `campus_deals` table (migration 32) with `business_owner_id` + `expires_at TIMESTAMPTZ` + `location_id` (UUID, existing `locations` taxonomy); ownership-gated `routes/deals.js`; image upload via the existing Cloudinary signature endpoint; `expireDeals()` sweep added to `jobs.js`. *Security* — **expiry enforced at QUERY time** (`WHERE status='active' AND expires_at > NOW()` using the DB server clock — atomic, on every read, cannot be bypassed by client clock/cache/job failure); the background sweep is housekeeping only; partial index `WHERE status='active'`; `CHECK (expires_at > starts_at)`; express-validator future-date; ownership gate so no cross-tenant writes. *QA* — Vitest/Supertest plan incl. a critical test that a past-`expires_at` deal is absent from `GET /deals`. Full schema, retrieval SQL, API surface, UI/UX flow (Business Dashboard "Deals" tab + public `/deals` page + AdminDeals), tech stack, and a 6-step build order recorded in **§7.10**. **One open decision for owner:** is the public `/deals` page open pre-launch, or gated until 7 July? **No code changes this turn** — design + doc only; awaiting go-ahead to implement.
 - **2026-06-23 — Business page-editor gallery rewritten to array state + VERIFIED in-browser (🐞 "deletes oldest on upload"):** Owner reported the business side still deleted the oldest image on upload (admin panel works perfectly). **Root cause:** the business `BusinessPageEditor` stored the gallery as a newline-joined **string** (`f.gallery` split/join) and the thumbnail-remove used a **stale closure** (`galleryArr()` captured at render, not the updater's `p`) — fragile vs. the admin `BusinessForm`, which uses a clean **array** and works. **Fix:** aligned business with admin — gallery is now a plain array; `addGalleryImage`/`removeGalleryImage` go through functional updaters (`p`); uploads append; the newline textarea was replaced with a paste-input + **Add** button (same control as admin); upload + paste now share one `addGalleryImage` path. **Verified live in a real browser** (ran frontend+backend locally, logged in as `biz01@relivr.test`): adding images went 2→3→4 with the **oldest always preserved**, and remove targeted the correct image. Nothing persisted (never clicked Save) so biz01's real data is intact. Frontend builds clean. Pushed (`42220ab`). **This supersedes the open clarification in the entry below — the business gallery now behaves like the admin panel.**
 - **2026-06-23 — Fixed business-page live-preview hiding the gallery ("deletes oldest image" 🐞):** Owner reported that uploading an image "deletes the oldest image" + 503s in console. **Diagnosis (data layer is fine):** verified via prod API as `biz01@relivr.test` — `GET /businesses/mine`, `/notifications`, `/uploads/signature` all 200; a PATCH round-trip appending a 3rd image persisted all 3 with the oldest intact. So nothing is deleted server-side, and the frontend gallery handler appends (caps at 8, never drops). **Root cause:** `BusinessPreviewCard` rendered cover **OR** gallery (`cover ? cover : gallery`), so uploading a cover photo *hid* the gallery (incl. its first image) in the "how students see you" preview — read as "deleted the oldest." Also inconsistent with the public detail page (which shows cover **and** gallery). **Fix:** preview card now shows cover **and** gallery together (matches public page). **Re the 503s:** not a systematic block — a valid business token gets 200 everywhere; they're transient cold-Neon blips on the notifications poller (`requireAuth` token_version lookup → 503 on a cold connection), which the browser logs as a failed resource. Frontend builds clean. Pushed. **Open clarification:** confirming with owner whether their case was the cover-uploader (single-slot, replaces) vs the gallery (adds) — cover/logo are intentionally one-image slots.
 - **2026-06-23 — Fixed prod CORS error on gated routes (🐞 real incident):** Owner reported `www.relivr.co.za` console flooded with "No 'Access-Control-Allow-Origin' header is present" on `/notifications`, `/uploads/signature`, etc. **Diagnosed via curl against prod:** OPTIONS preflight returned 204 *with* ACAO (so `www` is correctly allowed), but the **actual GET returned 503 with NO ACAO**. **Root cause:** the pre-launch gate middleware was registered *before* `cors()`, so a gated 503 was sent before any CORS header was set — the browser then reported a CORS error masking the real 503. (The earlier OPTIONS-bypass commit fixed only preflight, not the actual response.) **Fix:** moved the gate to run *after* `cors()` in `app.js` (kept a defensive OPTIONS short-circuit). No change to the origin allowlist — purely ordering. **Regression test:** new `server/test/launch-gate-cors.test.js` activates the gate (non-test env) and asserts the gated 503 carries `Access-Control-Allow-Origin` + that OPTIONS still answers 204 with CORS. **Backend 171 tests** (was 169). **Verified live on prod after redeploy:** anon `/notifications` → 503 *with* `access-control-allow-origin: https://www.relivr.co.za`; `biz01@relivr.test` → `/uploads/signature` → 200 (bypass intact). Note: this makes the 503 *readable* — non-bypassing users still get the launch gate (by design); business/admin/`@relivr.test` users bypass and work. **Product decision (owner, 2026-06-23):** keep the gate until **7 July 2026** — only business/admin (+`@relivr.test`) in pre-launch; regular users stay on the founding-member countdown by design. The CORS fix resolves the reported errors regardless. So "we have launched" = business onboarding is open, public marketplace opens 7 July.
