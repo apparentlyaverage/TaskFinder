@@ -2,7 +2,7 @@
 
 > Persistent state file for the autonomous development agency.
 > **Read this first at the start of every session.**
-> Last updated: 2026-06-22 — *Cloudinary signed image uploads for business photos (owner + admin editors); cover_image_url now public.*
+> Last updated: 2026-06-23 — *Cloudinary uploads VERIFIED LIVE in prod (end-to-end); adopted the 5-role Autonomous Team Operating Protocol.*
 
 ---
 
@@ -16,6 +16,33 @@
 | **Product Manager** | Backlog prioritisation by user value, roadmap coherence. |
 
 **Workflow loop for every task:** Analyze & Plan (all 4 personas) → Implement → Self-Correction (QA/Security critique) → Document outcome here.
+
+---
+
+## 0.1 — Autonomous Team Operating Protocol (adopted 2026-06-23)
+
+Supplements §0. Engaged at the owner's request to run this project as a self-directing full-stack team. **Mandate:**
+1. **Persistence** — read this file at the start of every session/turn for context, current tasks, and blockers.
+2. **State management** — after *every* development or planning action, update this document **in its existing format** (the rich log below — not a skeleton) so it always reflects reality.
+3. **Role adoption** — simulate five roles on each task (splits the combined QA & Security persona above into two):
+
+| Role | Responsibility |
+|---|---|
+| **Product Manager** | Defines the goal + user requirements. |
+| **Architect** | System/microservice design integrity, scalability. |
+| **Lead Developer** | Clean, modular code. |
+| **QA Engineer** | Test cases, mocks, edge-case scenarios. |
+| **Security Officer** | Vulnerabilities, injection risks, dependency security. |
+
+**Per-response format:** (1) **Team Sync** — the team's current assessment; (2) **Execution** — the coding/debugging/planning; (3) **QA/Security Report** — how the work was validated; (4) **State Update** — this document, refreshed.
+
+**Quick-glance status** (lightweight skeleton kept current alongside the detailed §8 log):
+- **CURRENT SPRINT GOAL:** Ship Cloudinary business-photo uploads to production.
+- **STATUS:** ✅ Done — live and verified end-to-end in prod (2026-06-23).
+- **COMPLETED (recent):** signed `/uploads/signature` endpoint (auth + ownership-locked folder + signed `allowed_formats`); upload UI wired into owner + admin editors; `cover_image_url` made public; prod end-to-end upload verified via a `@relivr.test` business account.
+- **PENDING (backlog top):** MVP-3 payments / escrow wiring (TD-3, parked on company registration); UI redesign **pass 2** (in-app surfaces); launch-day TODOs (flip `beta_founder` default → FALSE, email the waitlist, clean leftover test records).
+- **SECURITY AUDIT LOG:** uploads endpoint — `requireAuth`, folder derived server-side (no cross-tenant write), `allowed_formats` signed (client can't widen), path-injection `businessId` rejected to scratch folder, 503 when unconfigured. No new runtime deps (crypto-only signing). Backend **169 tests** green.
+- **NEXT ACTION:** Await owner direction (UI pass 2 vs. payments); keep this doc updated after each action per §0.1.
 
 ---
 
@@ -443,6 +470,7 @@ sprints — nothing here is committed to a sprint yet. **Blocker legend:**
 
 ## 8. Session Log
 
+- **2026-06-23 — Cloudinary uploads VERIFIED LIVE in prod + adopted §0.1 protocol:** Owner confirmed the `CLOUDINARY_*` vars are set in Railway. Ran a full end-to-end production check against `https://api.relivr.co.za` with a throwaway `@relivr.test` business account (gate-bypassing): **(1)** login → 200 + token; **(2)** `POST /uploads/signature` → 200, `cloud=dqqr8svsf`, folder correctly locked to the owner's business UUID, `allowed_formats=jpg,jpeg,png,webp,gif`, **preset `relivr_business` is live** (owner created it); **(3)** real upload to Cloudinary with a 1×1 test PNG → **200 + genuine `secure_url`** (proves the Railway creds are valid, not just present); **(4)** public GET of the `f_auto,q_auto` delivery URL → 200 `image/png`. The entire browser→Cloudinary→public chain works in production. Verification script was throwaway (deleted); it left one orphaned 1×1 px asset in the `biz01` test business's Cloudinary folder — harmless, not linked to any listing. Also **adopted the 5-role Autonomous Team Operating Protocol (§0.1)** at the owner's request (Product Manager / Architect / Lead Developer / QA Engineer / Security Officer; read-state-first; update this doc after every action; per-response Team Sync → Execution → QA/Security → State Update) and added a quick-glance status skeleton. No code changes this turn — feature was already committed (`386ef3b`/`9814d43`); this entry + §0.1 are the only diffs.
 - **2026-06-22 — Cloudinary image uploads (business photos) BUILT + TESTED:** Businesses can now upload photos from their own device instead of pasting URLs. **Architecture:** signed, direct browser→Cloudinary uploads — the server never proxies image bytes. New `server/cloudinary.js` (env config + `isConfigured()` + `signParams()` via `node:crypto`, no SDK dependency) and `server/routes/uploads.js` → `POST /uploads/signature` (mounted in `app.js`). The endpoint is **auth-gated** (no anonymous signatures → no credit-burning) and **ownership-locked**: an owner's upload folder is derived server-side as `relivr/businesses/<their-business-id>` (they cannot target another business); admins may pass `businessId` or fall back to an `_admin` scratch folder for new listings; a path-injection `businessId` is rejected to the scratch folder. Returns 503 when Cloudinary env is unset (owners can still paste URLs). **Frontend** (`App.jsx`): new `ImageUpload` component (drag/drop + tap-to-pick, `accept="image/*"` so mobile offers camera OR library, 10 MB + JPG/PNG/WebP/GIF client pre-check, XHR progress) + `fetchUploadSignature`/`postToCloudinary` helpers; returned URLs get `f_auto,q_auto` injected (`optimizeCldUrl`) so every render site serves optimised images. Wired into **both** the owner `BusinessPageEditor` (cover/logo/gallery with thumbnail strips + remove) and the admin `BusinessForm` (logo + gallery). **Also fixed a latent gap:** `cover_image_url` was editable + shown in the owner's "how students see you" preview but was never returned by the public `GET /businesses` / `GET /businesses/:id` nor rendered on the public detail page — added it to both SELECTs and the public detail view (cover banner, then gallery). `/uploads` added to the Vite dev proxy. **Env:** `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` (+ optional `_UPLOAD_PRESET`) added to `env.js` OPTIONAL (warn, non-fatal) and `server/.env.example`. **Hardening (added):** `allowed_formats` (default `jpg,jpeg,png,webp,gif`, env `CLOUDINARY_ALLOWED_FORMATS`) is **signed into every upload**, so format is enforced by Cloudinary even without a preset and can't be widened by the client. Honest limit: a hard byte-size cap can't be signed onto a direct upload — size stays client-side (10 MB) + Cloudinary account/preset limit. **Tests:** new `server/test/uploads.test.js` (7) → **backend 169 tests** (was 162), all green; frontend builds clean. **Committed + pushed to `main` (`386ef3b`)** → Vercel/Railway redeploy. **NOT yet verified live end-to-end** (needs the owner's real Cloudinary creds in Railway). **To go live:** set `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` in Railway (the `_UPLOAD_PRESET` is now optional since format is signed). Without them, `/uploads/signature` 503s and owners can still paste URLs.
 - **2026-06-21 — Payments foundation + monetisation/trust migrations + QA enablement + UI pass 1 + pitch decks (committed & pushed to `main`):** Large multi-thread session.
   - **DB migrations 23–30** (applied + idempotent on Neon): Paystack/ZAR escrow; business subscriptions (R750 setup + R75/mo); **Reliability Score** (`score_events` + `reliability_scores`); referrals/ambassadors; **multi-campus seed** (13 SA universities); B2B foundation (FMCG/credit/consent); POPIA compliance. (Migration 31 — `business` role + owner dashboard — is logged under 2026-06-19 below.)
