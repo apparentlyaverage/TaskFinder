@@ -1983,6 +1983,7 @@ const NAV = {
     { id:'messages',      label:'Messages',  icon:'◎' },
     { id:'profile',       label:'Profile',   icon:'◷' },
     { id:'local-browse',  label:'Local',     icon:'◇' },
+    { id:'following',     label:'Following', icon:'♡' },
     { id:'my-bids',       label:'My Bids',   icon:'◈' },
     { id:'dashboard',     label:'Stats',     icon:'⊞' },
     { id:'notifications', label:'Alerts',    icon:'◉' },
@@ -2011,6 +2012,7 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch 
         { id:'tasks-browse', label:'Browse' },
         { id:'local-browse', label:'Local' },
         { id:'deals',        label:'Deals' },
+        { id:'following',    label:'Following' },
         { id:'tasks-mine',   label:'My Tasks' },
         { id:'my-bids',      label:'My Bids' },
       ]
@@ -3618,6 +3620,86 @@ function useLocations() {
 }
 
 // Small image gallery used on business cards/detail
+// ─── SOCIAL GRAPH ──────────────────────────────────────────────────────────────
+// Follow/unfollow a user or business. Shows follower count + the viewer's state.
+// Renders nothing for logged-out viewers (following is a signed-in action).
+function FollowButton({ targetType, targetId, size }) {
+  const [state, setState] = useState(null)   // { following, followers }
+  const [busy, setBusy] = useState(false)
+  const token = () => localStorage.getItem('rl_token')
+  useEffect(() => {
+    if (!token() || !targetId) { setState(null); return }
+    let alive = true
+    fetch(`${API_BASE}/follows/state/${targetType}/${targetId}`, { headers: { Authorization: `Bearer ${token()}` } })
+      .then(r => r.ok ? r.json() : null).then(d => { if (alive && d) setState(d) }).catch(() => {})
+    return () => { alive = false }
+  }, [targetType, targetId])
+  if (!token() || !state) return null
+  async function toggle() {
+    setBusy(true)
+    const was = state.following
+    try {
+      const res = was
+        ? await fetch(`${API_BASE}/follows/${targetType}/${targetId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token()}` } })
+        : await fetch(`${API_BASE}/follows`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ targetType, targetId }) })
+      if (res.ok) setState(s => ({ following: !was, followers: Math.max(0, (s.followers || 0) + (was ? -1 : 1)) }))
+    } catch { /* ignore */ } finally { setBusy(false) }
+  }
+  return (
+    <Btn variant={state.following ? 'secondary' : 'primary'} size={size} loading={busy} onClick={toggle}>
+      {state.following ? '✓ Following' : '+ Follow'}{state.followers > 0 ? ` · ${state.followers}` : ''}
+    </Btn>
+  )
+}
+
+// "Following" page — the users and businesses the current user follows.
+function FollowingPage({ openProfile, setPage }) {
+  const token = () => localStorage.getItem('rl_token')
+  const [data, setData] = useState(null)
+  useEffect(() => {
+    let alive = true
+    fetch(API_BASE + '/follows/me', { headers: { Authorization: `Bearer ${token()}` } })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('follows')))
+      .then(d => { if (alive) setData(d) })
+      .catch(() => { if (alive) setData({ users: [], businesses: [] }) })
+    return () => { alive = false }
+  }, [])
+  if (!data) return <div style={{ padding: 50, textAlign: 'center' }}><Spinner /></div>
+  const empty = data.users.length === 0 && data.businesses.length === 0
+  return (
+    <div className="page-enter">
+      <PageTitle sub="People and businesses you follow">Following</PageTitle>
+      {empty ? <EmptyState icon="👥" message="You're not following anyone yet — follow people and businesses to see them here" />
+        : <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+          {data.users.length > 0 && <div>
+            <Mono style={{ display: 'block', marginBottom: 10 }}>People ({data.users.length})</Mono>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {data.users.map(u => (
+                <DCard key={u.user_id} hover onClick={() => openProfile(u.user_id)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', cursor: 'pointer' }}>
+                  {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover' }} />
+                    : <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{(u.display_name || '?').charAt(0).toUpperCase()}</div>}
+                  <span style={{ fontWeight: 600 }}>{u.display_name || 'ReLivR user'}</span>
+                </DCard>
+              ))}
+            </div>
+          </div>}
+          {data.businesses.length > 0 && <div>
+            <Mono style={{ display: 'block', marginBottom: 10 }}>Businesses ({data.businesses.length})</Mono>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {data.businesses.map(b => (
+                <DCard key={b.business_id} hover onClick={() => setPage('local-browse')} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', cursor: 'pointer' }}>
+                  {b.logo_url ? <img src={b.logo_url} alt="" style={{ width: 38, height: 38, borderRadius: 9, objectFit: 'cover' }} />
+                    : <div style={{ width: 38, height: 38, borderRadius: 9, background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>◇</div>}
+                  <div><div style={{ fontWeight: 600 }}>{b.name || 'Business'}</div><Mono style={{ color: 'var(--text-muted)' }}>{b.category}</Mono></div>
+                </DCard>
+              ))}
+            </div>
+          </div>}
+        </div>}
+    </div>
+  )
+}
+
 function BizGallery({ images = [], height = 160 }) {
   const [idx, setIdx] = useState(0)
   if (!images || images.length === 0) {
@@ -3684,6 +3766,7 @@ function LocalBrowse({ setPage }) {
               {b.hours   && <Mono>🕒 {b.hours}</Mono>}
             </div>
             <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginTop:18 }}>
+              <FollowButton targetType="business" targetId={b.business_id} size="sm" />
               {b.phone    && <a href={`tel:${b.phone}`} onClick={() => trackBizEvent(b.business_id, 'phone_click')} style={{ textDecoration:'none' }}><Btn variant="secondary" size="sm">📞 Call</Btn></a>}
               {b.whatsapp && <a href={`https://wa.me/${b.whatsapp.replace(/[^0-9]/g,'')}`} onClick={() => trackBizEvent(b.business_id, 'whatsapp_click')} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}><Btn variant="secondary" size="sm">💬 WhatsApp</Btn></a>}
               {b.link_url && <a href={b.link_url} onClick={() => trackBizEvent(b.business_id, 'link_click')} target="_blank" rel="noopener noreferrer nofollow" style={{ textDecoration:'none' }}><Btn variant="ghost" size="sm">🔗 Website</Btn></a>}
@@ -4260,8 +4343,9 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
           )}
 
           {!isMe && (
-            <div style={{ marginTop:16 }}>
+            <div style={{ marginTop:16, display:'flex', gap:10, flexWrap:'wrap' }}>
               <Btn onClick={() => openChat(userId, name)}>💬 Message {name.split(' ')[0]}</Btn>
+              <FollowButton targetType="user" targetId={userId} />
             </div>
           )}
         </div>
@@ -6039,6 +6123,7 @@ const DASH_ROUTES = {
   '/profile':         'profile',
   '/local':           'local-browse',
   '/deals':           'deals',
+  '/following':       'following',
   '/admin/disputes':  'admin-disputes',
   '/admin/deals':     'admin-deals',
   '/admin/tasks':     'admin-tasks',
@@ -6404,6 +6489,7 @@ export default function App() {
       case 'admin-flags':          return <AdminFlags />
       case 'local-browse':         return <LocalBrowse setPage={setDashPage} />
       case 'deals':                return <DealsPage />
+      case 'following':            return <FollowingPage openProfile={(uid) => { setSelectedUser(uid); setDashPage('public-profile') }} setPage={setDashPage} />
       case 'admin-deals':          return <AdminDeals />
       case 'admin-tasks':          return <AdminTasks />
       case 'admin-audit':          return <AdminAudit />
