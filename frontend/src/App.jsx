@@ -4860,6 +4860,7 @@ function BusinessDashboard({ onLogout, onViewLanding }) {
           </div>
           <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
             <span style={{ fontFamily:'var(--font-mono)', fontSize:'.72rem', color:'var(--text-muted)' }}>{biz?.name || user?.email}</span>
+            {biz?.follower_count > 0 && <span style={{ fontFamily:'var(--font-mono)', fontSize:'.72rem', color:'var(--accent)' }}>♡ {biz.follower_count} follower{biz.follower_count===1?'':'s'}</span>}
             {onViewLanding && <button onClick={onViewLanding} style={bizGhostBtn}>Public site</button>}
             <button onClick={onLogout} style={{ ...bizGhostBtn, color:'var(--danger)' }}>Sign out</button>
           </div>
