@@ -19,6 +19,32 @@ export async function expireDueTasks(db = pool) {
   return rows.length
 }
 
+// Re-activate expired recurring deals for another cycle (§7.11.2). Refresh-in-
+// place: new window = active_window_s (captured at create) or, if null, the
+// recurrence interval. Stops at recurrence_until. Runs AFTER expireDeals each
+// tick, so a just-expired recurring deal comes straight back with minimal gap.
+export async function refreshRecurringDeals(db = pool) {
+  const { rows } = await db.query(
+    `UPDATE campus_deals
+        SET status = 'active',
+            starts_at = NOW(),
+            expires_at = NOW() + COALESCE(
+              make_interval(secs => active_window_s),
+              CASE recurrence
+                WHEN 'daily'   THEN INTERVAL '1 day'
+                WHEN 'weekly'  THEN INTERVAL '7 days'
+                WHEN 'monthly' THEN INTERVAL '1 month'
+              END),
+            updated_at = NOW()
+      WHERE status = 'expired'
+        AND recurrence <> 'none'
+        AND (recurrence_until IS NULL OR NOW() < recurrence_until)
+      RETURNING deal_id`
+  )
+  if (rows.length) log.info('jobs.deals_refreshed', { count: rows.length })
+  return rows.length
+}
+
 // Mark lapsed Campus Deals 'expired'. HOUSEKEEPING ONLY — the public Deals query
 // already hides anything past expires_at via `WHERE status='active' AND
 // expires_at > NOW()`, so correctness never depends on this running. This just
@@ -114,9 +140,11 @@ export async function sendRecurring(db = pool) {
 // Start the periodic scheduler. Called from index.js (never from app.js, so
 // tests don't spawn timers). Runs once on boot, then on intervals.
 export function startScheduler({ expiryMs = 5 * 60 * 1000, digestMs = 60 * 60 * 1000, recurringMs = 60 * 60 * 1000 } = {}) {
-  const runExpiry = () => {
-    expireDueTasks().catch(err => log.error('jobs.expire_failed', { msg: err.message }))
-    expireDeals().catch(err => log.error('jobs.deals_expire_failed', { msg: err.message }))
+  const runExpiry = async () => {
+    await expireDueTasks().catch(err => log.error('jobs.expire_failed', { msg: err.message }))
+    // expire first, then refresh — a just-expired recurring deal comes straight back.
+    await expireDeals().catch(err => log.error('jobs.deals_expire_failed', { msg: err.message }))
+    await refreshRecurringDeals().catch(err => log.error('jobs.deals_refresh_failed', { msg: err.message }))
     archiveExpiredTasks().catch(err => log.error('jobs.archive_failed', { msg: err.message }))
   }
   const runDigest = () => sendDigests().catch(err => log.error('jobs.digest_failed', { msg: err.message }))

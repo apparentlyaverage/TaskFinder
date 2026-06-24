@@ -170,7 +170,9 @@ router.get('/admin/all', requireAuth, requireAdmin, async (req, res) => {
 router.get('/mine', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT * FROM businesses WHERE owner_id = $1 ORDER BY created_at ASC LIMIT 1`,
+      `SELECT *,
+              (SELECT COUNT(*)::int FROM follows WHERE target_type = 'business' AND target_id = businesses.business_id) AS follower_count
+         FROM businesses WHERE owner_id = $1 ORDER BY created_at ASC LIMIT 1`,
       [req.userId])
     if (rows.length === 0) {
       return res.status(404).json({ message: 'No business is linked to your account yet.' })

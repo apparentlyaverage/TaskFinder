@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 vi.mock('../email.js', () => ({ sendEmail: vi.fn().mockResolvedValue({ delivered: true }) }))
 
-const { expireDueTasks, sendDigests, sendRecurring, expireDeals, archiveExpiredTasks } = await import('../jobs.js')
+const { expireDueTasks, sendDigests, sendRecurring, expireDeals, archiveExpiredTasks, refreshRecurringDeals } = await import('../jobs.js')
 const { sendEmail } = await import('../email.js')
 
 describe('expireDueTasks', () => {
@@ -33,6 +33,22 @@ describe('expireDeals', () => {
   it('returns 0 when nothing has lapsed', async () => {
     const db = { query: vi.fn().mockResolvedValue({ rows: [] }) }
     expect(await expireDeals(db)).toBe(0)
+  })
+})
+
+describe('refreshRecurringDeals', () => {
+  it('re-activates expired recurring deals within their series and returns the count', async () => {
+    const db = { query: vi.fn().mockResolvedValue({ rows: [{ deal_id: 'd1' }] }) }
+    expect(await refreshRecurringDeals(db)).toBe(1)
+    const sql = db.query.mock.calls[0][0]
+    expect(sql).toMatch(/SET status = 'active'/)
+    expect(sql).toMatch(/status = 'expired'/)
+    expect(sql).toMatch(/recurrence <> 'none'/)
+    expect(sql).toMatch(/recurrence_until IS NULL OR NOW\(\) < recurrence_until/)
+  })
+  it('returns 0 when no recurring deals are due', async () => {
+    const db = { query: vi.fn().mockResolvedValue({ rows: [] }) }
+    expect(await refreshRecurringDeals(db)).toBe(0)
   })
 })
 

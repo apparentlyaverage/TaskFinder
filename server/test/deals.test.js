@@ -84,6 +84,17 @@ describe('POST /deals (owner)', () => {
     expect(res.status).toBe(201)
     expect(res.body.deal.deal_id).toBe(DEAL)
   })
+  it('accepts a recurring deal (201)', async () => {
+    let insertSql = ''
+    mockDb(pool, s => {
+      if (/FROM businesses WHERE owner_id/.test(s)) return { rows: [{ business_id: BIZ }] }
+      if (/INSERT INTO campus_deals/.test(s)) { insertSql = s; return { rows: [{ deal_id: DEAL, recurrence: 'weekly' }] } }
+    })
+    const res = await request(app).post('/deals').set('Authorization', `Bearer ${ownerToken}`)
+      .send({ title: 'Taco Tuesday', priceCents: 3000, expiresAt: future, recurrence: 'weekly' })
+    expect(res.status).toBe(201)
+    expect(insertSql).toMatch(/recurrence/)
+  })
   it('rejects a past expiry date (422)', async () => {
     setup()
     const res = await request(app).post('/deals').set('Authorization', `Bearer ${ownerToken}`)

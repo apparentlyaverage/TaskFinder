@@ -50,7 +50,7 @@ function cleanImageUrl(value) {
 const futureDate = v => { if (new Date(v).getTime() <= Date.now()) throw new Error('expiresAt must be in the future.'); return true }
 
 const PUBLIC_COLS = `d.deal_id, d.title, d.description, d.image_url, d.price_cents,
-  d.original_price_cents, d.starts_at, d.expires_at, d.location_id, d.created_at,
+  d.original_price_cents, d.starts_at, d.expires_at, d.location_id, d.recurrence, d.created_at,
   b.business_id, b.name AS business_name, b.logo_url, b.category`
 
 // ── PUBLIC: active, campus-wide deals ──
@@ -138,6 +138,8 @@ router.post('/',
     body('originalPriceCents').optional({ nullable: true }).isInt({ min: 0 }),
     body('locationId').optional({ nullable: true }).isUUID(),
     body('status').optional().isIn(['draft', 'active']),
+    body('recurrence').optional().isIn(['none', 'daily', 'weekly', 'monthly']),
+    body('recurrenceUntil').optional({ nullable: true }).isISO8601(),
     body('expiresAt').isISO8601().bail().custom(futureDate),
   ],
   check,
@@ -147,13 +149,20 @@ router.post('/',
       if (!biz) return res.status(403).json({ message: 'No business is linked to your account.' })
       const imageUrl = cleanImageUrl(req.body.imageUrl)
       const b = req.body
+      const recurrence = b.recurrence || 'none'
+      // Capture the first window's length so every recurring cycle matches it.
+      const activeWindowS = recurrence !== 'none'
+        ? Math.max(60, Math.round((new Date(b.expiresAt).getTime() - Date.now()) / 1000))
+        : null
       const { rows } = await pool.query(
         `INSERT INTO campus_deals
            (business_id, business_owner_id, location_id, title, description, image_url,
-            price_cents, original_price_cents, status, expires_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+            price_cents, original_price_cents, status, expires_at,
+            recurrence, recurrence_until, active_window_s)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
         [biz.business_id, req.userId, b.locationId || null, b.title, b.description || null,
-         imageUrl, b.priceCents ?? null, b.originalPriceCents ?? null, b.status || 'active', b.expiresAt])
+         imageUrl, b.priceCents ?? null, b.originalPriceCents ?? null, b.status || 'active', b.expiresAt,
+         recurrence, b.recurrenceUntil || null, activeWindowS])
       return res.status(201).json({ deal: rows[0] })
     } catch (err) {
       if (/image URL|future/i.test(err.message)) return res.status(422).json({ message: err.message })
@@ -175,6 +184,8 @@ router.patch('/:id',
     body('originalPriceCents').optional({ nullable: true }).isInt({ min: 0 }),
     body('locationId').optional({ nullable: true }).isUUID(),
     body('status').optional().isIn(['draft', 'active', 'archived']),
+    body('recurrence').optional().isIn(['none', 'daily', 'weekly', 'monthly']),
+    body('recurrenceUntil').optional({ nullable: true }).isISO8601(),
     body('expiresAt').optional().isISO8601().bail().custom(futureDate),
   ],
   check,
@@ -196,6 +207,15 @@ router.patch('/:id',
       if (req.body.locationId !== undefined)         { sets.push(`location_id = $${i++}`);          vals.push(req.body.locationId || null) }
       if (req.body.expiresAt !== undefined)          { sets.push(`expires_at = $${i++}`);           vals.push(req.body.expiresAt) }
       if (req.body.imageUrl !== undefined)           { sets.push(`image_url = $${i++}`);            vals.push(cleanImageUrl(req.body.imageUrl)) }
+      if (req.body.recurrence !== undefined)         { sets.push(`recurrence = $${i++}`);           vals.push(req.body.recurrence) }
+      if (req.body.recurrenceUntil !== undefined)    { sets.push(`recurrence_until = $${i++}`);     vals.push(req.body.recurrenceUntil || null) }
+      // Keep the recurring window in sync with the edited expiry (null for 'none').
+      if (req.body.expiresAt !== undefined && req.body.recurrence !== undefined) {
+        const aws = req.body.recurrence !== 'none'
+          ? Math.max(60, Math.round((new Date(req.body.expiresAt).getTime() - Date.now()) / 1000))
+          : null
+        sets.push(`active_window_s = $${i++}`); vals.push(aws)
+      }
       if (sets.length === 0) return res.status(400).json({ message: 'Nothing to update.' })
       sets.push('updated_at = NOW()'); vals.push(req.params.id)
       const { rows } = await pool.query(

@@ -4955,6 +4955,9 @@ function DealCard({ d, onRedeem, claimed }) {
         <span style={{ position: 'absolute', top: 8, left: 8, padding: '3px 9px', borderRadius: 100, fontSize: '.68rem', fontWeight: 700, background: expired ? 'rgba(0,0,0,.6)' : 'var(--accent)', color: '#fff' }}>
           {expired ? 'Expired' : dealTimeLeft(d.expires_at)}
         </span>
+        {d.recurrence && d.recurrence !== 'none' && (
+          <span style={{ position: 'absolute', top: 8, right: 8, padding: '3px 9px', borderRadius: 100, fontSize: '.64rem', fontWeight: 700, background: 'rgba(0,0,0,.55)', color: '#fff' }}>↻ {d.recurrence}</span>
+        )}
       </div>
       <div style={{ padding: 14, flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', margin: 0 }}>{d.title || 'Your deal title'}</h3>
@@ -4992,6 +4995,7 @@ function DealForm({ biz, deal, onDone, onCancel }) {
     priceRand: deal?.price_cents != null ? String(deal.price_cents / 100) : '',
     originalRand: deal?.original_price_cents != null ? String(deal.original_price_cents / 100) : '',
     status: deal?.status === 'draft' ? 'draft' : 'active',
+    recurrence: deal?.recurrence || 'none',
     expiresLocal: isoToLocalInput(deal?.expires_at),
   })
   const set = k => e => setF(p => ({ ...p, [k]: e.target.value }))
@@ -5008,7 +5012,7 @@ function DealForm({ biz, deal, onDone, onCancel }) {
         title: f.title, description: f.description || null, imageUrl: f.imageUrl || null,
         priceCents: f.priceRand === '' ? null : Math.round(parseFloat(f.priceRand) * 100),
         originalPriceCents: f.originalRand === '' ? null : Math.round(parseFloat(f.originalRand) * 100),
-        status: f.status, expiresAt,
+        status: f.status, expiresAt, recurrence: f.recurrence,
       }
       const res = await fetch(API_BASE + (isNew ? '/deals' : `/deals/${deal.deal_id}`), {
         method: isNew ? 'POST' : 'PATCH',
@@ -5060,6 +5064,12 @@ function DealForm({ biz, deal, onDone, onCancel }) {
                   <button key={dys} type="button" onClick={() => setF(p => ({ ...p, expiresLocal: daysFromNowLocal(dys) }))} style={{ padding: '5px 11px', borderRadius: 100, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '.74rem', cursor: 'pointer' }}>+{lbl}</button>)}
               </div>
             </div>
+            <SelectField label="Repeat" value={f.recurrence} onChange={set('recurrence')} hint={f.recurrence !== 'none' ? 'Auto-renews each cycle when it expires.' : undefined}>
+              <option value="none">One-off (no repeat)</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </SelectField>
             <SelectField label="Status" value={f.status} onChange={set('status')}>
               <option value="active">Active (visible now)</option>
               <option value="draft">Draft (hidden)</option>
@@ -5125,6 +5135,7 @@ function BusinessDeals({ biz }) {
                     <div style={{ fontWeight: 700, fontSize: '.95rem' }}>{d.title}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
                       <span style={{ fontSize: '.7rem', fontWeight: 700, color: chip[1] }}>{chip[0]}</span>
+                      {d.recurrence && d.recurrence !== 'none' && <Mono style={{ color: 'var(--accent)' }}>↻ {d.recurrence}</Mono>}
                       {d.price_cents != null && <Mono style={{ color: 'var(--text-muted)' }}>{zar(d.price_cents)}</Mono>}
                     </div>
                   </div>
