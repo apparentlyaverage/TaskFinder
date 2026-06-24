@@ -34,6 +34,24 @@ export async function expireDeals(db = pool) {
   return rows.length
 }
 
+// Archive tasks that have outlived their usefulness (§7.11.2). HOUSEKEEPING +
+// retention — default feeds already filter `archived_at IS NULL`, so this stamps
+// the timestamp rather than being the sole gate. Two triggers: a hard TTL
+// (expires_at passed), or a terminal task older than the retention window.
+export async function archiveExpiredTasks(db = pool, { retentionDays = 90 } = {}) {
+  const { rows } = await db.query(
+    `UPDATE tasks
+        SET archived_at = NOW()
+      WHERE archived_at IS NULL
+        AND ( (expires_at IS NOT NULL AND expires_at < NOW())
+              OR (status IN ('completed','cancelled','expired')
+                  AND updated_at < NOW() - ($1 || ' days')::interval) )
+      RETURNING task_id`,
+    [retentionDays])
+  if (rows.length) log.info('jobs.tasks_archived', { count: rows.length })
+  return rows.length
+}
+
 // Email a batched digest to 'daily' users who have new notifications since their
 // last digest. The ≥20h gate enforces a roughly-daily cadence regardless of how
 // often this runs, so the scheduler can tick more frequently safely.
@@ -99,6 +117,7 @@ export function startScheduler({ expiryMs = 5 * 60 * 1000, digestMs = 60 * 60 * 
   const runExpiry = () => {
     expireDueTasks().catch(err => log.error('jobs.expire_failed', { msg: err.message }))
     expireDeals().catch(err => log.error('jobs.deals_expire_failed', { msg: err.message }))
+    archiveExpiredTasks().catch(err => log.error('jobs.archive_failed', { msg: err.message }))
   }
   const runDigest = () => sendDigests().catch(err => log.error('jobs.digest_failed', { msg: err.message }))
   const runRecurring = () => sendRecurring().catch(err => log.error('jobs.recurring_failed', { msg: err.message }))

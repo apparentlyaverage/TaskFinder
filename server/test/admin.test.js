@@ -130,3 +130,75 @@ describe('PATCH /admin/users/:id (moderation)', () => {
     expect(res.status).toBe(400)
   })
 })
+
+const GTARGET = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+const GTASK = 'ffffffff-ffff-4fff-8fff-ffffffffffff'
+
+describe('god-mode: DELETE /admin/users/:id', () => {
+  it('soft-deletes a user and writes an audit row (200)', async () => {
+    let audited = false
+    mockDb(pool, sql => {
+      if (/SELECT email, role FROM users/.test(sql)) return { rows: [{ email: 'x@y.com', role: 'member' }] }
+      if (/UPDATE\s+users[\s\S]*email = 'deleted/.test(sql)) return { rows: [{ user_id: GTARGET }] }
+      if (/INSERT INTO activity_logs/.test(sql)) { audited = true; return { rows: [] } }
+    })
+    const res = await request(app).delete(`/admin/users/${GTARGET}`).set('Authorization', `Bearer ${adminToken}`).send({ reason: 'spam' })
+    expect(res.status).toBe(200)
+    expect(audited).toBe(true)
+  })
+  it('refuses to delete your own account (400)', async () => {
+    mockDb(pool)
+    const res = await request(app).delete(`/admin/users/${ADMIN_ID}`).set('Authorization', `Bearer ${adminToken}`)
+    expect(res.status).toBe(400)
+  })
+  it('forbids a non-admin (403)', async () => {
+    mockDb(pool)
+    const res = await request(app).delete(`/admin/users/${GTARGET}`).set('Authorization', `Bearer ${memberToken}`)
+    expect(res.status).toBe(403)
+  })
+})
+
+describe('god-mode: tasks', () => {
+  it('GET /admin/tasks lists tasks (200)', async () => {
+    mockDb(pool, sql => { if (/FROM tasks t LEFT JOIN user_profiles/.test(sql)) return { rows: [{ task_id: GTASK, title: 'T', status: 'open' }] } })
+    const res = await request(app).get('/admin/tasks').set('Authorization', `Bearer ${adminToken}`)
+    expect(res.status).toBe(200)
+    expect(res.body.tasks).toHaveLength(1)
+  })
+  it('PATCH /admin/tasks/:id overrides + audits (200)', async () => {
+    let audited = false
+    mockDb(pool, sql => {
+      if (/SELECT status, title, expires_at, archived_at FROM tasks/.test(sql)) return { rows: [{ status: 'open', title: 'T' }] }
+      if (/^UPDATE tasks SET/.test(sql.trim())) return { rows: [{ task_id: GTASK, status: 'cancelled' }] }
+      if (/INSERT INTO activity_logs/.test(sql)) { audited = true; return { rows: [] } }
+    })
+    const res = await request(app).patch(`/admin/tasks/${GTASK}`).set('Authorization', `Bearer ${adminToken}`).send({ status: 'cancelled', reason: 'policy' })
+    expect(res.status).toBe(200)
+    expect(audited).toBe(true)
+  })
+  it('PATCH /admin/tasks/:id 404 for an unknown task', async () => {
+    mockDb(pool, sql => { if (/SELECT status, title, expires_at, archived_at FROM tasks/.test(sql)) return { rows: [] } })
+    const res = await request(app).patch(`/admin/tasks/${GTASK}`).set('Authorization', `Bearer ${adminToken}`).send({ status: 'cancelled' })
+    expect(res.status).toBe(404)
+  })
+  it('DELETE /admin/tasks/:id removes + audits (200)', async () => {
+    let audited = false
+    mockDb(pool, sql => {
+      if (/SELECT title, status, creator_id FROM tasks/.test(sql)) return { rows: [{ title: 'T', status: 'open' }] }
+      if (/DELETE FROM tasks/.test(sql)) return { rows: [] }
+      if (/INSERT INTO activity_logs/.test(sql)) { audited = true; return { rows: [] } }
+    })
+    const res = await request(app).delete(`/admin/tasks/${GTASK}`).set('Authorization', `Bearer ${adminToken}`)
+    expect(res.status).toBe(200)
+    expect(audited).toBe(true)
+  })
+})
+
+describe('god-mode: GET /admin/audit', () => {
+  it('returns the audit feed with metadata (200)', async () => {
+    mockDb(pool, sql => { if (/FROM activity_logs a/.test(sql)) return { rows: [{ activity_id: '1', action: 'admin.task.update', metadata: { reason: 'x' } }] } })
+    const res = await request(app).get('/admin/audit?entityType=task').set('Authorization', `Bearer ${adminToken}`)
+    expect(res.status).toBe(200)
+    expect(res.body.audit).toHaveLength(1)
+  })
+})

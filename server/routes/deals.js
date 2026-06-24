@@ -16,6 +16,7 @@ import { pool } from '../db.js'
 import log from '../log.js'
 import { requireAuth, requireAdmin } from '../middleware.js'
 import { createNotification } from '../notify.js'
+import { writeAudit } from '../audit.js'
 
 const router = Router()
 
@@ -199,6 +200,10 @@ router.patch('/:id',
       sets.push('updated_at = NOW()'); vals.push(req.params.id)
       const { rows } = await pool.query(
         `UPDATE campus_deals SET ${sets.join(', ')} WHERE deal_id = $${i} RETURNING *`, vals)
+      if (req.userRole === 'admin') {
+        await writeAudit({ actorId: req.userId, actorRole: req.userRole, action: 'admin.deal.update',
+          entityType: 'deal', entityId: req.params.id, after: { status: rows[0]?.status }, reqId: req.id })
+      }
       return res.status(200).json({ deal: rows[0] })
     } catch (err) {
       if (/image URL|future/i.test(err.message)) return res.status(422).json({ message: err.message })
@@ -219,6 +224,10 @@ router.delete('/:id', requireAuth, [ param('id').isUUID() ], check, async (req, 
       return res.status(403).json({ message: 'You can only delete your own deals.' })
     }
     await pool.query('DELETE FROM campus_deals WHERE deal_id = $1', [req.params.id])
+    if (req.userRole === 'admin') {
+      await writeAudit({ actorId: req.userId, actorRole: req.userRole, action: 'admin.deal.delete',
+        entityType: 'deal', entityId: req.params.id, reqId: req.id })
+    }
     return res.status(200).json({ message: 'Deal deleted.' })
   } catch (err) {
     log.error('DELETE /deals/:id', { reqId: req.id, msg: err.message })

@@ -2006,7 +2006,7 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch 
   // wide enough to fit them, so navigation never depends on the mobile bottom bar.
   const isAdmin = user.role === 'admin'
   const navLinks = isAdmin
-    ? [ { id:'dashboard', label:'Dashboard' }, { id:'admin-disputes', label:'Disputes' }, { id:'admin-users', label:'Users' }, { id:'admin-businesses', label:'Businesses' }, { id:'admin-deals', label:'Deals' }, { id:'admin-locations', label:'Locations' }, { id:'admin-flags', label:'Flags' } ]
+    ? [ { id:'dashboard', label:'Dashboard' }, { id:'admin-disputes', label:'Disputes' }, { id:'admin-users', label:'Users' }, { id:'admin-tasks', label:'Tasks' }, { id:'admin-businesses', label:'Businesses' }, { id:'admin-deals', label:'Deals' }, { id:'admin-locations', label:'Locations' }, { id:'admin-flags', label:'Flags' }, { id:'admin-audit', label:'Audit' } ]
     : [
         { id:'tasks-browse', label:'Browse' },
         { id:'local-browse', label:'Local' },
@@ -5671,6 +5671,117 @@ function AdminDisputeDetail({ disputeId, setPage }) {
   )
 }
 
+// God-mode: full task oversight — override status, archive, or delete any task.
+const ADMIN_TASK_STATUSES = ['open', 'in_progress', 'submitted', 'completed', 'cancelled', 'expired', 'disputed']
+function AdminTasks() {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [tasks, setTasks] = useState(null)
+  const [statusFilter, setStatusFilter] = useState('all')
+  const th = { padding:'10px 14px', textAlign:'left', fontFamily:'var(--font-mono)', fontSize:'0.65rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.08em', fontWeight:400 }
+
+  const load = () => {
+    const qs = statusFilter === 'all' ? '' : `?status=${statusFilter}`
+    fetch(API_BASE + '/admin/tasks' + qs, { headers:{ Authorization:`Bearer ${token()}` } })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('load')))
+      .then(d => setTasks(d.tasks || [])).catch(() => setTasks([]))
+  }
+  useEffect(() => { load() }, [statusFilter]) // eslint-disable-line
+
+  async function override(id, body, label) {
+    const res = await fetch(`${API_BASE}/admin/tasks/${id}`, { method:'PATCH', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` }, body: JSON.stringify(body) })
+    if (res.ok) { toast(label || 'Task updated', 'success'); load() } else toast('Action failed', 'error')
+  }
+  async function remove(id) {
+    if (!window.confirm('Delete this task permanently?')) return
+    const res = await fetch(`${API_BASE}/admin/tasks/${id}`, { method:'DELETE', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` }, body: JSON.stringify({ reason: 'admin console' }) })
+    if (res.ok) { toast('Task deleted', 'success'); load() } else toast('Delete failed', 'error')
+  }
+
+  return (
+    <div className="page-enter">
+      <PageTitle sub="God-mode — override status, archive, or delete any task">Task Management</PageTitle>
+      <div style={{ marginBottom:16 }}>
+        <SelectField value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} style={{ minWidth:160 }}>
+          <option value="all">All statuses</option>
+          {ADMIN_TASK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+        </SelectField>
+      </div>
+      {tasks === null ? <div style={{ padding:40, textAlign:'center' }}><Spinner /></div>
+        : tasks.length === 0 ? <EmptyState icon="▤" message="No tasks match" />
+          : <DCard hover={false} style={{ padding:0, overflow:'hidden' }}>
+            <div style={{ overflowX:'auto' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', minWidth:720 }}>
+                <thead><tr style={{ borderBottom:'1px solid var(--border)', background:'var(--bg-elevated)' }}>
+                  {['Task','Creator','Status','Archived','Actions'].map(h => <th key={h} style={th}>{h}</th>)}
+                </tr></thead>
+                <tbody>
+                  {tasks.map((t, i) => (
+                    <tr key={t.task_id} style={{ borderBottom:i<tasks.length-1?'1px solid var(--border)':'none', opacity:t.archived_at?0.55:1 }}>
+                      <td style={{ padding:'10px 14px', fontWeight:600, fontSize:'.86rem' }}>{t.title}</td>
+                      <td style={{ padding:'10px 14px' }}><Mono>{t.creator_name || '—'}</Mono></td>
+                      <td style={{ padding:'10px 14px' }}>
+                        <select value={t.status} onChange={e=>override(t.task_id, { status:e.target.value }, 'Status changed')}
+                          style={{ fontSize:'.8rem', padding:'4px 6px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg-surface)' }}>
+                          {ADMIN_TASK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </td>
+                      <td style={{ padding:'10px 14px' }}><Mono>{t.archived_at ? 'yes' : '—'}</Mono></td>
+                      <td style={{ padding:'10px 14px', whiteSpace:'nowrap' }}>
+                        <Btn variant="secondary" size="sm" onClick={()=>override(t.task_id, { archived: !t.archived_at }, t.archived_at?'Unarchived':'Archived')}>{t.archived_at?'Unarchive':'Archive'}</Btn>
+                        <Btn variant="ghost" size="sm" onClick={()=>remove(t.task_id)} style={{ marginLeft:6 }}>Delete</Btn>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </DCard>}
+    </div>
+  )
+}
+
+// God-mode: the append-only audit log of every admin action.
+function AdminAudit() {
+  const token = () => localStorage.getItem('rl_token')
+  const [rows, setRows] = useState(null)
+  const [entity, setEntity] = useState('all')
+  const load = () => {
+    const qs = entity === 'all' ? '' : `?entityType=${entity}`
+    fetch(API_BASE + '/admin/audit' + qs, { headers:{ Authorization:`Bearer ${token()}` } })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('load')))
+      .then(d => setRows(d.audit || [])).catch(() => setRows([]))
+  }
+  useEffect(() => { load() }, [entity]) // eslint-disable-line
+  return (
+    <div className="page-enter">
+      <PageTitle sub="Every administrative action, append-only">Audit Log</PageTitle>
+      <div style={{ marginBottom:16 }}>
+        <SelectField value={entity} onChange={e=>setEntity(e.target.value)} style={{ minWidth:160 }}>
+          <option value="all">All entities</option>
+          {['user','task','deal','feature_flag','location'].map(s => <option key={s} value={s}>{s}</option>)}
+        </SelectField>
+      </div>
+      {rows === null ? <div style={{ padding:40, textAlign:'center' }}><Spinner /></div>
+        : rows.length === 0 ? <EmptyState icon="▦" message="No audit entries yet" />
+          : <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {rows.map(a => (
+              <DCard key={a.activity_id} hover={false} style={{ padding:'10px 14px' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', gap:12, flexWrap:'wrap' }}>
+                  <div>
+                    <span style={{ fontWeight:700, fontSize:'.86rem' }}>{a.action}</span>
+                    <Mono style={{ color:'var(--text-muted)', marginLeft:8 }}>{a.entity_type || '—'}{a.entity_id ? ` · ${String(a.entity_id).slice(0,8)}` : ''}</Mono>
+                  </div>
+                  <Mono style={{ color:'var(--text-muted)' }}>{a.actor_name || a.actor_role || 'system'} · {new Date(a.created_at).toLocaleString()}</Mono>
+                </div>
+                {a.metadata?.reason && <div style={{ fontSize:'.8rem', color:'var(--text-secondary)', marginTop:4 }}>Reason: {a.metadata.reason}</div>}
+              </DCard>
+            ))}
+          </div>}
+    </div>
+  )
+}
+
 function AdminUsers() {
   const toast = useToast()
   const token = () => localStorage.getItem('rl_token')
@@ -5712,6 +5823,20 @@ function AdminUsers() {
     } catch (err) { toast(err.message, 'error') } finally { setBusy(false) }
   }
 
+  async function removeUser(u) {
+    if (!window.confirm(`Permanently delete ${u.display_name || u.email}? This anonymises their data and ends their sessions.`)) return
+    setBusy(true)
+    try {
+      const res = await fetch(`${API_BASE}/admin/users/${u.user_id}`, {
+        method:'DELETE', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
+        body: JSON.stringify({ reason: 'admin console' }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.message || 'Could not delete user')
+      toast('Account deleted', 'success'); load()
+    } catch (err) { toast(err.message, 'error') } finally { setBusy(false) }
+  }
+
   return (
     <div className="page-enter">
       <PageTitle sub={`${users.length} registered users`}>User Management</PageTitle>
@@ -5742,9 +5867,10 @@ function AdminUsers() {
                       <td style={{ padding:'12px 16px' }}><Mono>{u.tasks_posted ?? 0}</Mono></td>
                       <td style={{ padding:'12px 16px' }}><Mono>{u.rating_count > 0 ? `★ ${Number(u.avg_rating).toFixed(1)}` : '—'}</Mono></td>
                       <td style={{ padding:'12px 16px' }}>
-                        {st !== 'deleted' && (
+                        {st !== 'deleted' && (<>
                           <Btn variant={st==='suspended'?'success':'danger'} size="sm" onClick={() => setBanModal(u)}>{st==='suspended'?'Reinstate':'Suspend'}</Btn>
-                        )}
+                          {u.role !== 'admin' && <Btn variant="ghost" size="sm" onClick={() => removeUser(u)} style={{ marginLeft:6 }}>Delete</Btn>}
+                        </>)}
                       </td>
                     </tr>
                   )
@@ -5915,6 +6041,8 @@ const DASH_ROUTES = {
   '/deals':           'deals',
   '/admin/disputes':  'admin-disputes',
   '/admin/deals':     'admin-deals',
+  '/admin/tasks':     'admin-tasks',
+  '/admin/audit':     'admin-audit',
   '/admin/locations': 'admin-locations',
   '/admin/flags':     'admin-flags',
   '/admin/users':     'admin-users',
@@ -6277,6 +6405,8 @@ export default function App() {
       case 'local-browse':         return <LocalBrowse setPage={setDashPage} />
       case 'deals':                return <DealsPage />
       case 'admin-deals':          return <AdminDeals />
+      case 'admin-tasks':          return <AdminTasks />
+      case 'admin-audit':          return <AdminAudit />
       case 'admin-businesses':     return <AdminBusinesses />
       default:                     return <Dashboard setPage={setDashPage} setSelectedTask={setSelectedTask} />
     }

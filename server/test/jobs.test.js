@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 vi.mock('../email.js', () => ({ sendEmail: vi.fn().mockResolvedValue({ delivered: true }) }))
 
-const { expireDueTasks, sendDigests, sendRecurring, expireDeals } = await import('../jobs.js')
+const { expireDueTasks, sendDigests, sendRecurring, expireDeals, archiveExpiredTasks } = await import('../jobs.js')
 const { sendEmail } = await import('../email.js')
 
 describe('expireDueTasks', () => {
@@ -33,6 +33,21 @@ describe('expireDeals', () => {
   it('returns 0 when nothing has lapsed', async () => {
     const db = { query: vi.fn().mockResolvedValue({ rows: [] }) }
     expect(await expireDeals(db)).toBe(0)
+  })
+})
+
+describe('archiveExpiredTasks', () => {
+  it('archives past-TTL or stale terminal tasks and returns the count', async () => {
+    const db = { query: vi.fn().mockResolvedValue({ rows: [{ task_id: 't1' }, { task_id: 't2' }] }) }
+    expect(await archiveExpiredTasks(db)).toBe(2)
+    const sql = db.query.mock.calls[0][0]
+    expect(sql).toMatch(/SET archived_at = NOW\(\)/)
+    expect(sql).toMatch(/archived_at IS NULL/)
+    expect(sql).toMatch(/expires_at < NOW\(\)/)
+  })
+  it('returns 0 when nothing qualifies', async () => {
+    const db = { query: vi.fn().mockResolvedValue({ rows: [] }) }
+    expect(await archiveExpiredTasks(db)).toBe(0)
   })
 })
 

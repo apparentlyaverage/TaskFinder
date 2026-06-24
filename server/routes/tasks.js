@@ -60,14 +60,14 @@ router.get('/', async (req, res) => {
       query = `SELECT t.*, up.display_name AS creator_name,
                       (SELECT COUNT(*) FROM bids b WHERE b.task_id = t.task_id AND b.status != 'withdrawn')::int AS bid_count
                FROM tasks t LEFT JOIN user_profiles up ON t.creator_id = up.user_id
-               WHERE t.status = $1 AND t.skill_tags @> ARRAY[$2]::TEXT[]
+               WHERE t.status = $1 AND t.archived_at IS NULL AND t.skill_tags @> ARRAY[$2]::TEXT[]
                ORDER BY t.created_at DESC LIMIT $3 OFFSET $4`
       params = [status, skill, limit, offset]
     } else {
       query = `SELECT t.*, up.display_name AS creator_name,
                       (SELECT COUNT(*) FROM bids b WHERE b.task_id = t.task_id AND b.status != 'withdrawn')::int AS bid_count
                FROM tasks t LEFT JOIN user_profiles up ON t.creator_id = up.user_id
-               WHERE t.status = $1
+               WHERE t.status = $1 AND t.archived_at IS NULL
                ORDER BY t.created_at DESC LIMIT $2 OFFSET $3`
       params = [status, limit, offset]
     }
