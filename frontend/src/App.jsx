@@ -4783,6 +4783,7 @@ function BusinessDashboard({ onLogout, onViewLanding }) {
         <div style={{ maxWidth:1100, margin:'0 auto', display:'flex', gap:4, padding:'0 20px' }}>
           <button onClick={() => setTab('page')}      style={bizTab(tab==='page')}>My Page</button>
           <button onClick={() => setTab('deals')}     style={bizTab(tab==='deals')}>Deals</button>
+          <button onClick={() => setTab('clients')}   style={bizTab(tab==='clients')}>Clients</button>
           <button onClick={() => setTab('analytics')} style={bizTab(tab==='analytics')}>Analytics</button>
         </div>
       </header>
@@ -4810,6 +4811,7 @@ function BusinessDashboard({ onLogout, onViewLanding }) {
         )
          : tab === 'page' ? <BusinessPageEditor biz={biz} onSaved={setBiz} />
          : tab === 'deals' ? <BusinessDeals biz={biz} />
+         : tab === 'clients' ? <BusinessClients />
          : <BusinessAnalytics />}
       </main>
     </div>
@@ -4858,7 +4860,7 @@ const isoToLocalInput = (iso) => iso ? new Date(new Date(iso).getTime() - new Da
 const daysFromNowLocal = (days) => new Date(Date.now() + days * 86400000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
 
 // One deal as students see it (public grid + live preview in the editor).
-function DealCard({ d }) {
+function DealCard({ d, onRedeem, claimed }) {
   const expired = d.expires_at && new Date(d.expires_at).getTime() <= Date.now()
   return (
     <DCard hover style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -4883,6 +4885,12 @@ function DealCard({ d }) {
             {d.original_price_cents != null && d.original_price_cents > d.price_cents &&
               <span style={{ fontSize: '.85rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>{zar(d.original_price_cents)}</span>}
           </div>
+        )}
+        {onRedeem && !expired && (
+          <button type="button" disabled={claimed} onClick={() => onRedeem(d)}
+            style={{ marginTop: d.price_cents != null ? 8 : 'auto', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: claimed ? 'default' : 'pointer', fontWeight: 700, fontSize: '.82rem', background: claimed ? 'var(--bg-elevated)' : 'var(--accent)', color: claimed ? 'var(--text-muted)' : '#fff' }}>
+            {claimed ? 'Claimed ✓' : 'Claim deal'}
+          </button>
         )}
       </div>
     </DCard>
@@ -5048,7 +5056,9 @@ function BusinessDeals({ biz }) {
 
 // Public, campus-wide Deals page — active (unexpired) deals only.
 function DealsPage() {
+  const toast = useToast()
   const [deals, setDeals] = useState(null)
+  const [claimed, setClaimed] = useState({})
   useEffect(() => {
     let alive = true
     // The endpoint is public (auth ignored), but sending a token if we have one
@@ -5060,6 +5070,20 @@ function DealsPage() {
       .catch(() => { if (alive) setDeals([]) })
     return () => { alive = false }
   }, [])
+
+  async function redeem(d) {
+    const t = localStorage.getItem('rl_token')
+    if (!t) { toast('Sign in to claim deals', 'error'); return }
+    try {
+      const res = await fetch(`${API_BASE}/deals/${d.deal_id}/redeem`, { method: 'POST', headers: { Authorization: `Bearer ${t}` } })
+      if (res.status === 201) { setClaimed(c => ({ ...c, [d.deal_id]: true })); toast('Deal claimed! Show this at the business.', 'success') }
+      else if (res.status === 409) { setClaimed(c => ({ ...c, [d.deal_id]: true })); toast('You already claimed this today.', 'success') }
+      else if (res.status === 400) toast("You can't claim your own deal.", 'error')
+      else if (res.status === 401) toast('Sign in to claim deals', 'error')
+      else toast('Could not claim the deal', 'error')
+    } catch { toast('Could not claim the deal', 'error') }
+  }
+
   return (
     <div className="page-enter">
       <div style={{ marginBottom: 20 }}>
@@ -5069,7 +5093,7 @@ function DealsPage() {
       {deals === null ? <div style={{ padding: 60, textAlign: 'center' }}><Spinner /></div>
         : deals.length === 0 ? <EmptyState icon="🏷" message="No live deals right now — check back soon" />
           : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
-            {deals.map(d => <DealCard key={d.deal_id} d={d} />)}
+            {deals.map(d => <DealCard key={d.deal_id} d={d} onRedeem={redeem} claimed={!!claimed[d.deal_id]} />)}
           </div>}
     </div>
   )
@@ -5119,6 +5143,59 @@ function AdminDeals() {
               )
             })}
           </div>}
+    </div>
+  )
+}
+
+// Business dashboard "Clients" tab — Client History from deal redemptions.
+function BusinessClients() {
+  const token = () => localStorage.getItem('rl_token')
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    let alive = true
+    fetch(API_BASE + '/deals/mine/clients', { headers: { Authorization: `Bearer ${token()}` } })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('clients')))
+      .then(d => { if (alive) { setData(d); setLoading(false) } })
+      .catch(() => { if (alive) { setData(null); setLoading(false) } })
+    return () => { alive = false }
+  }, [])
+
+  if (loading) return <div style={{ padding: 50, textAlign: 'center' }}><Spinner /></div>
+  if (!data) return <EmptyState icon="◷" message="Couldn't load your client history" />
+
+  return (
+    <div className="page-enter">
+      <div style={{ marginBottom: 16 }}>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.4rem', margin: 0 }}>Client History</h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '.88rem', marginTop: 4 }}>Everyone who's claimed your Campus Deals — your repeat-customer base.</p>
+      </div>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
+        <BizStatTile label="Redemptions" value={data.total_redemptions} />
+        <BizStatTile label="Unique clients" value={data.unique_customers} />
+        <BizStatTile label="Repeat clients" value={data.repeat_customers} color="#15803d" />
+        <BizStatTile label="Total value" value={zar(data.total_value_cents) || 'R0'} />
+        <BizStatTile label="Last 30 days" value={data.last_30d} />
+      </div>
+      {data.redemptions_series?.length > 0 && (
+        <DCard hover={false} style={{ marginBottom: 18 }}>
+          <MiniChart data={data.redemptions_series} dataKey="count" label="Redemptions / day (last 30)" />
+        </DCard>
+      )}
+      <Mono style={{ display: 'block', marginBottom: 10 }}>Recent redemptions</Mono>
+      {data.recent.length === 0
+        ? <EmptyState icon="👥" message="No redemptions yet — share your deals to start building your client base" />
+        : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {data.recent.map(r => (
+            <DCard key={r.redemption_id} hover={false} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: '.9rem' }}>{r.customer_name || 'Guest'}</div>
+                <Mono style={{ color: 'var(--text-muted)' }}>{r.deal_title || 'Deal'} · {new Date(r.redeemed_at).toLocaleDateString()}</Mono>
+              </div>
+              {r.amount_cents != null && <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: 'var(--accent)' }}>{zar(r.amount_cents)}</span>}
+            </DCard>
+          ))}
+        </div>}
     </div>
   )
 }

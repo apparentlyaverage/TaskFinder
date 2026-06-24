@@ -15,6 +15,7 @@ import { body, param, query, validationResult } from 'express-validator'
 import { pool } from '../db.js'
 import log from '../log.js'
 import { requireAuth, requireAdmin } from '../middleware.js'
+import { createNotification } from '../notify.js'
 
 const router = Router()
 
@@ -221,6 +222,106 @@ router.delete('/:id', requireAuth, [ param('id').isUUID() ], check, async (req, 
     return res.status(200).json({ message: 'Deal deleted.' })
   } catch (err) {
     log.error('DELETE /deals/:id', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
+
+// ── CUSTOMER: redeem (claim) an active deal — records a transaction ──
+// POST /deals/:id/redeem
+router.post('/:id/redeem', requireAuth, [ param('id').isUUID() ], check, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT deal_id, business_id, business_owner_id, price_cents, status, expires_at
+         FROM campus_deals WHERE deal_id = $1`, [req.params.id])
+    const deal = rows[0]
+    // Same active guard as the public read — can't claim an expired/inactive deal.
+    if (!deal || deal.status !== 'active' || new Date(deal.expires_at).getTime() <= Date.now()) {
+      return res.status(404).json({ message: 'This deal is no longer available.' })
+    }
+    if (deal.business_owner_id === req.userId) {
+      return res.status(400).json({ message: "You can't redeem your own deal." })
+    }
+    let redemption
+    try {
+      const ins = await pool.query(
+        `INSERT INTO deal_redemptions (deal_id, business_id, customer_id, amount_cents)
+         VALUES ($1,$2,$3,$4) RETURNING *`,
+        [deal.deal_id, deal.business_id, req.userId, deal.price_cents ?? null])
+      redemption = ins.rows[0]
+    } catch (err) {
+      // The per-day unique index rejects a repeat claim on the same calendar day.
+      if (/uq_redemption_per_day|duplicate key|unique/i.test(err.message)) {
+        return res.status(409).json({ message: 'You already claimed this deal today.' })
+      }
+      throw err
+    }
+    createNotification({
+      userId: deal.business_owner_id, type: 'deal.redeemed',
+      title: 'A customer claimed your deal', body: 'Someone just redeemed one of your Campus Deals.',
+      referenceId: deal.deal_id,
+    }).catch(() => {})
+    return res.status(201).json({ redemption })
+  } catch (err) {
+    log.error('POST /deals/:id/redeem', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
+
+// ── OWNER: Client History — aggregate of everyone who redeemed my deals ──
+// GET /deals/mine/clients   (the business "Client History" dashboard data)
+router.get('/mine/clients', requireAuth, async (req, res) => {
+  try {
+    const biz = await ownedBusiness(req.userId)
+    if (!biz) return res.status(403).json({ message: 'No business is linked to your account.' })
+    const id = biz.business_id
+
+    const summary = await pool.query(
+      `SELECT COUNT(*)::int AS total_redemptions,
+              COUNT(DISTINCT customer_id)::int AS unique_customers,
+              COALESCE(SUM(amount_cents),0)::int AS total_value_cents,
+              COUNT(*) FILTER (WHERE redeemed_at > NOW() - INTERVAL '30 days')::int AS last_30d
+         FROM deal_redemptions WHERE business_id = $1`, [id])
+
+    const repeat = await pool.query(
+      `SELECT COUNT(*)::int AS repeat_customers FROM (
+          SELECT customer_id FROM deal_redemptions
+           WHERE business_id = $1 AND customer_id IS NOT NULL
+           GROUP BY customer_id HAVING COUNT(*) > 1
+       ) r`, [id])
+
+    const series = await pool.query(
+      `SELECT to_char(d.day,'YYYY-MM-DD') AS day, COALESCE(c.cnt,0)::int AS count
+         FROM generate_series(CURRENT_DATE - 29 * INTERVAL '1 day', CURRENT_DATE, INTERVAL '1 day') AS d(day)
+         LEFT JOIN (
+            SELECT date_trunc('day', redeemed_at)::date AS day, COUNT(*) AS cnt
+              FROM deal_redemptions
+             WHERE business_id = $1 AND redeemed_at >= CURRENT_DATE - 29 * INTERVAL '1 day'
+             GROUP BY 1
+         ) c ON c.day = d.day::date
+        ORDER BY d.day`, [id])
+
+    const recent = await pool.query(
+      `SELECT r.redemption_id, r.redeemed_at, r.amount_cents,
+              d.title AS deal_title, up.display_name AS customer_name
+         FROM deal_redemptions r
+         LEFT JOIN campus_deals d ON d.deal_id = r.deal_id
+         LEFT JOIN user_profiles up ON up.user_id = r.customer_id
+        WHERE r.business_id = $1
+        ORDER BY r.redeemed_at DESC LIMIT 50`, [id])
+
+    const s = summary.rows[0]
+    return res.status(200).json({
+      business_id: id,
+      total_redemptions: s.total_redemptions,
+      unique_customers: s.unique_customers,
+      repeat_customers: repeat.rows[0].repeat_customers,
+      total_value_cents: s.total_value_cents,
+      last_30d: s.last_30d,
+      redemptions_series: series.rows,
+      recent: recent.rows,
+    })
+  } catch (err) {
+    log.error('GET /deals/mine/clients', { reqId: req.id, msg: err.message })
     return res.status(500).json({ message: 'Internal server error.' })
   }
 })

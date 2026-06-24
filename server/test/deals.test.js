@@ -159,3 +159,61 @@ describe('GET /deals/admin/all (admin)', () => {
     expect(res.body.deals).toHaveLength(1)
   })
 })
+
+describe('POST /deals/:id/redeem (customer)', () => {
+  const activeDeal = (owner = OWNER) => ({ deal_id: DEAL, business_id: BIZ, business_owner_id: owner, price_cents: 4500, status: 'active', expires_at: future })
+  it('401s without a token', async () => {
+    const res = await request(app).post(`/deals/${DEAL}/redeem`)
+    expect(res.status).toBe(401)
+  })
+  it('records a redemption (201)', async () => {
+    let inserted = false
+    mockDb(pool, s => {
+      if (/SELECT deal_id, business_id, business_owner_id/.test(s)) return { rows: [activeDeal()] }
+      if (/INSERT INTO deal_redemptions/.test(s)) { inserted = true; return { rows: [{ redemption_id: 'r1', deal_id: DEAL }] } }
+    })
+    const res = await request(app).post(`/deals/${DEAL}/redeem`).set('Authorization', `Bearer ${otherToken}`)
+    expect(res.status).toBe(201)
+    expect(inserted).toBe(true)
+  })
+  it('forbids redeeming your own deal (400)', async () => {
+    mockDb(pool, s => { if (/SELECT deal_id, business_id, business_owner_id/.test(s)) return { rows: [activeDeal(OWNER)] } })
+    const res = await request(app).post(`/deals/${DEAL}/redeem`).set('Authorization', `Bearer ${ownerToken}`)
+    expect(res.status).toBe(400)
+  })
+  it('404s for an expired deal (same NOW() guard as the public read)', async () => {
+    mockDb(pool, s => { if (/SELECT deal_id, business_id, business_owner_id/.test(s)) return { rows: [{ ...activeDeal(), expires_at: past }] } })
+    const res = await request(app).post(`/deals/${DEAL}/redeem`).set('Authorization', `Bearer ${otherToken}`)
+    expect(res.status).toBe(404)
+  })
+  it('409s on a duplicate same-day claim (unique index)', async () => {
+    mockDb(pool, s => {
+      if (/SELECT deal_id, business_id, business_owner_id/.test(s)) return { rows: [activeDeal()] }
+      if (/INSERT INTO deal_redemptions/.test(s)) throw new Error('duplicate key value violates unique constraint "uq_redemption_per_day"')
+    })
+    const res = await request(app).post(`/deals/${DEAL}/redeem`).set('Authorization', `Bearer ${otherToken}`)
+    expect(res.status).toBe(409)
+  })
+})
+
+describe('GET /deals/mine/clients (Client History)', () => {
+  it('403s when no business is linked', async () => {
+    mockDb(pool, s => { if (/FROM businesses WHERE owner_id/.test(s)) return { rows: [] } })
+    const res = await request(app).get('/deals/mine/clients').set('Authorization', `Bearer ${ownerToken}`)
+    expect(res.status).toBe(403)
+  })
+  it('aggregates the client base (200)', async () => {
+    mockDb(pool, s => {
+      if (/FROM businesses WHERE owner_id/.test(s)) return { rows: [{ business_id: BIZ }] }
+      if (/AS total_redemptions/.test(s)) return { rows: [{ total_redemptions: 5, unique_customers: 3, total_value_cents: 22500, last_30d: 4 }] }
+      if (/repeat_customers/.test(s)) return { rows: [{ repeat_customers: 1 }] }
+      if (/generate_series/.test(s)) return { rows: [{ day: '2026-06-23', count: 2 }] }
+      if (/FROM deal_redemptions r/.test(s)) return { rows: [{ redemption_id: 'r1', deal_title: 'Coffee', customer_name: 'Sam', amount_cents: 4500 }] }
+    })
+    const res = await request(app).get('/deals/mine/clients').set('Authorization', `Bearer ${ownerToken}`)
+    expect(res.status).toBe(200)
+    expect(res.body.unique_customers).toBe(3)
+    expect(res.body.repeat_customers).toBe(1)
+    expect(res.body.recent).toHaveLength(1)
+  })
+})
