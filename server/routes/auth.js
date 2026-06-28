@@ -7,7 +7,7 @@ import jwt from 'jsonwebtoken'
 import crypto from 'node:crypto'
 import { body, validationResult } from 'express-validator'
 import { pool } from '../db.js'
-import { sendEmail, EMAIL_FROM_SUPPORT, SUPPORT_REPLY_TO } from '../email.js'
+import { emailVerify, emailPasswordReset, emailPasswordChanged, emailWelcome, emailNewLogin } from '../emails.js'
 import { requireAuth } from '../middleware.js'
 import { validateLocationName, resolveLocationId } from '../locationValidate.js'
 import log from '../log.js'
@@ -66,6 +66,22 @@ async function issueAuthToken(userId, purpose, ttlMs) {
     `INSERT INTO auth_tokens (user_id, token_hash, purpose, expires_at) VALUES ($1, $2, $3, $4)`,
     [userId, hashToken(raw), purpose, new Date(Date.now() + ttlMs)])
   return raw
+}
+
+// Record the signing-in device; email a security alert only when it's a NEW
+// device on an account that already has a known one (so the first-ever sign-in
+// never self-spams). Best-effort — never blocks or fails the login.
+async function maybeAlertNewDevice(userId, email, userAgent) {
+  const ua = (userAgent || '').trim()
+  if (!ua) return
+  const fingerprint = crypto.createHash('sha256').update(ua).digest('hex')
+  const had = await pool.query('SELECT 1 FROM known_logins WHERE user_id = $1 LIMIT 1', [userId])
+  const ins = await pool.query(
+    'INSERT INTO known_logins (user_id, fingerprint) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [userId, fingerprint])
+  if (ins.rowCount === 1 && had.rowCount === 1) {
+    await emailNewLogin(email, { device: ua.slice(0, 120), when: new Date().toUTCString() })
+  }
 }
 
 // ── Google strategy — identical 3-branch logic from the standalone service ───
@@ -252,13 +268,7 @@ router.post('/register',
 
       // Best-effort email verification — must never block registration.
       issueAuthToken(newUser.user_id, 'email_verify', VERIFY_TTL_MS)
-        .then(raw => sendEmail({
-          to: email,
-          subject: 'Verify your ReLivR email',
-          text: `Welcome to ReLivR! Verify your email: ${FRONTEND_URL}/verify-email?token=${raw}`,
-          from: EMAIL_FROM_SUPPORT,
-          replyTo: SUPPORT_REPLY_TO,
-        }))
+        .then(raw => emailVerify(email, `${FRONTEND_URL}/verify-email?token=${raw}`))
         .catch(() => {})
 
       return res.status(201).json({
@@ -325,6 +335,11 @@ router.post('/login',
          VALUES ($1, $2, 'user.login', 'user', $1, $3)`,
         [user.user_id, user.role, JSON.stringify({ provider: 'email' })]
       ).catch(() => {})
+
+      // New-device security alert (best-effort). Fingerprint = sha256(user-agent).
+      // Only alert when the account already had a known device — the first-ever
+      // sign-in just records silently, so we never email right after signup.
+      maybeAlertNewDevice(user.user_id, user.email, req.headers['user-agent']).catch(() => {})
 
       return res.status(200).json({
         token: issueToken(user),
@@ -444,13 +459,7 @@ router.post('/forgot-password',
       // Only email-password accounts can reset (Google-only accounts have no password).
       if (user && user.password_hash) {
         const raw = await issueAuthToken(user.user_id, 'password_reset', RESET_TTL_MS)
-        await sendEmail({
-          to: email,
-          subject: 'Reset your ReLivR password',
-          text: `Reset your password using this link (valid 1 hour): ${FRONTEND_URL}/reset-password?token=${raw}`,
-          from: EMAIL_FROM_SUPPORT,
-          replyTo: SUPPORT_REPLY_TO,
-        })
+        await emailPasswordReset(email, `${FRONTEND_URL}/reset-password?token=${raw}`)
       }
       return res.status(200).json({ message: 'If that email is registered, a reset link is on its way.' })
     } catch (err) {
@@ -492,6 +501,9 @@ router.post('/reset-password',
       } catch (e) { await client.query('ROLLBACK'); throw e } finally { client.release() }
 
       log.info('auth.password_reset', { reqId: req.id, userId: user_id })
+      // Confirm the change (security) — best-effort.
+      pool.query('SELECT email FROM users WHERE user_id = $1', [user_id])
+        .then(r => r.rows[0]?.email && emailPasswordChanged(r.rows[0].email)).catch(() => {})
       return res.status(200).json({ message: 'Password reset. Please sign in with your new password.' })
     } catch (err) {
       log.error('auth.reset_password_failed', { reqId: req.id, msg: err.message })
@@ -516,6 +528,11 @@ router.post('/verify-email',
       }
       await pool.query('UPDATE users SET is_email_verified = TRUE WHERE user_id = $1', [rows[0].user_id])
       await pool.query('UPDATE auth_tokens SET used_at = NOW() WHERE token_id = $1', [rows[0].token_id])
+      // Welcome aboard (best-effort) — now that the email is confirmed.
+      pool.query(
+        `SELECT u.email, up.display_name FROM users u
+           LEFT JOIN user_profiles up ON up.user_id = u.user_id WHERE u.user_id = $1`, [rows[0].user_id])
+        .then(r => r.rows[0]?.email && emailWelcome(r.rows[0].email, r.rows[0].display_name)).catch(() => {})
       return res.status(200).json({ message: 'Email verified.' })
     } catch (err) {
       log.error('auth.verify_email_failed', { reqId: req.id, msg: err.message })

@@ -62,14 +62,14 @@ describe('DELETE /profile/account', () => {
   it('rejects a wrong password for a local account (401)', async () => {
     const hash = await bcrypt.hash('RealPass123', 12)
     mockDb(pool)
-    pool.connect.mockResolvedValue(mockClient(sql => /SELECT password_hash FROM users/.test(sql) ? { rows: [{ password_hash: hash }] } : undefined))
+    pool.connect.mockResolvedValue(mockClient(sql => /SELECT password_hash.*FROM users/.test(sql) ? { rows: [{ password_hash: hash, email: 'a@x.com' }] } : undefined))
     const res = await request(app).delete('/profile/account').set('Authorization', `Bearer ${token}`).send({ password: 'WRONG' })
     expect(res.status).toBe(401)
   })
   it('deletes (anonymises) with the correct password (200)', async () => {
     const hash = await bcrypt.hash('RealPass123', 12)
     mockDb(pool)
-    pool.connect.mockResolvedValue(mockClient(sql => /SELECT password_hash FROM users/.test(sql) ? { rows: [{ password_hash: hash }] } : undefined))
+    pool.connect.mockResolvedValue(mockClient(sql => /SELECT password_hash.*FROM users/.test(sql) ? { rows: [{ password_hash: hash, email: 'a@x.com' }] } : undefined))
     const res = await request(app).delete('/profile/account').set('Authorization', `Bearer ${token}`).send({ password: 'RealPass123' })
     expect(res.status).toBe(200)
     expect(res.body.message).toMatch(/deleted/i)

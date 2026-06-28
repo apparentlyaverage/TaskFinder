@@ -3,6 +3,7 @@ import { Router } from 'express'
 import jwt from 'jsonwebtoken'
 import { body, validationResult } from 'express-validator'
 import { pool } from '../db.js'
+import { emailWaitlistConfirmation } from '../emails.js'
 import log from '../log.js'
 
 const router = Router()
@@ -53,6 +54,7 @@ router.post('/waitlist',
         `INSERT INTO waitlist (email, want_reminder) VALUES ($1, TRUE)
          ON CONFLICT (email) DO UPDATE SET want_reminder = TRUE`,
         [req.body.email])
+      emailWaitlistConfirmation(req.body.email).catch(() => {})
       return res.status(201).json({ message: "You're on the list — we'll email you when ReLivR launches." })
     } catch (err) {
       log.error('beta.waitlist_failed', { reqId: req.id, msg: err.message })

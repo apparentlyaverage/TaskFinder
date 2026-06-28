@@ -6,6 +6,7 @@ import { pool } from '../db.js'
 import log from '../log.js'
 import { requireAuth, requireAdmin } from '../middleware.js'
 import { writeAudit } from '../audit.js'
+import { emailAccountSuspended, emailAccountReinstated, emailAccountDeleted } from '../emails.js'
 
 const router = Router()
 router.use(requireAuth, requireAdmin)
@@ -134,6 +135,9 @@ router.patch('/users/:id',
       await writeAudit({ actorId: req.userId, actorRole: req.userRole, action: 'admin.user.moderate',
         entityType: 'user', entityId: req.params.id, before: before.rows[0] || null,
         after: { role: rows[0].role, suspended_at: rows[0].suspended_at }, reason, reqId: req.id })
+      // Tell the user (best-effort) when their access changes.
+      if (suspended === true && rows[0].email) emailAccountSuspended(rows[0].email).catch(() => {})
+      if (suspended === false && rows[0].email) emailAccountReinstated(rows[0].email).catch(() => {})
       return res.status(200).json({ user: rows[0] })
     } catch (err) {
       log.error('admin.moderate_failed', { reqId: req.id, msg: err.message })
@@ -291,6 +295,7 @@ router.delete('/users/:id',
       if (rows.length === 0) return res.status(404).json({ message: 'User not found (or already deleted).' })
       await writeAudit({ actorId: req.userId, actorRole: req.userRole, action: 'admin.user.delete',
         entityType: 'user', entityId: req.params.id, before: before.rows[0] || null, reason: req.body.reason, reqId: req.id })
+      if (before.rows[0]?.email) emailAccountDeleted(before.rows[0].email).catch(() => {})
       return res.status(200).json({ message: 'Account deleted.' })
     } catch (err) {
       log.error('admin.user_delete_failed', { reqId: req.id, msg: err.message })

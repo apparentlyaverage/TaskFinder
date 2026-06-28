@@ -7,6 +7,7 @@ import { body, param, validationResult } from 'express-validator'
 import { pool } from '../db.js'
 import { requireAuth } from '../middleware.js'
 import { validateLocationName, resolveLocationId } from '../locationValidate.js'
+import { emailPasswordChanged, emailAccountDeleted } from '../emails.js'
 import log from '../log.js'
 
 const router = Router()
@@ -191,7 +192,7 @@ router.patch('/password',
     const { currentPassword, newPassword } = req.body
     try {
       const { rows } = await pool.query(
-        'SELECT password_hash, google_id FROM users WHERE user_id = $1',
+        'SELECT password_hash, google_id, email FROM users WHERE user_id = $1',
         [req.userId]
       )
       if (rows.length === 0) return res.status(404).json({ message: 'User not found.' })
@@ -215,6 +216,7 @@ router.patch('/password',
         [newHash, req.userId]
       )
       log.info('auth.password_changed', { reqId: req.id, userId: req.userId })
+      if (user.email) emailPasswordChanged(user.email).catch(() => {})
       return res.status(200).json({ message: 'Password changed successfully. Please sign in again.' })
     } catch (err) {
       log.error('profile.password_change_failed', { reqId: req.id, msg: err.message })
@@ -368,11 +370,12 @@ router.delete('/account',
     try {
       await client.query('BEGIN')
       const { rows } = await client.query(
-        'SELECT password_hash FROM users WHERE user_id = $1 AND deleted_at IS NULL FOR UPDATE', [req.userId])
+        'SELECT password_hash, email FROM users WHERE user_id = $1 AND deleted_at IS NULL FOR UPDATE', [req.userId])
       if (rows.length === 0) {
         await client.query('ROLLBACK')
         return res.status(404).json({ message: 'Account not found.' })
       }
+      const originalEmail = rows[0].email   // capture before we anonymise it below
       if (rows[0].password_hash) {
         const ok = req.body.password && await bcrypt.compare(req.body.password, rows[0].password_hash)
         if (!ok) {
@@ -397,6 +400,7 @@ router.delete('/account',
       await client.query('COMMIT')
 
       log.info('account.deleted', { reqId: req.id, userId: req.userId })
+      if (originalEmail) emailAccountDeleted(originalEmail).catch(() => {})
       return res.status(200).json({ message: 'Your account has been deleted.' })
     } catch (err) {
       await client.query('ROLLBACK')
