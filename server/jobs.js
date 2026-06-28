@@ -4,7 +4,7 @@
 // (index.js) or an admin/cron endpoint.
 import { pool } from './db.js'
 import log from './log.js'
-import { sendEmail } from './email.js'
+import { sendEmail, EMAIL_FROM_UPDATES } from './email.js'
 
 // Move open tasks whose deadline has passed to 'expired'. In-progress / disputed
 // / completed tasks are left alone — only un-awarded work expires.
@@ -99,6 +99,7 @@ export async function sendDigests(db = pool) {
       to: u.email,
       subject: `Your ReLivR digest — ${notes.length} update${notes.length === 1 ? '' : 's'}`,
       text: `Here's what's new on ReLivR:\n\n${lines}\n\n— ReLivR\nChange your email cadence in Profile → Security.`,
+      from: EMAIL_FROM_UPDATES,
     })
     await db.query('UPDATE users SET last_digest_at = NOW() WHERE user_id = $1', [u.user_id])
     sent++

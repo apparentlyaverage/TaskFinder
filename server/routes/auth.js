@@ -7,7 +7,7 @@ import jwt from 'jsonwebtoken'
 import crypto from 'node:crypto'
 import { body, validationResult } from 'express-validator'
 import { pool } from '../db.js'
-import { sendEmail } from '../email.js'
+import { sendEmail, EMAIL_FROM_SUPPORT, SUPPORT_REPLY_TO } from '../email.js'
 import { requireAuth } from '../middleware.js'
 import { validateLocationName, resolveLocationId } from '../locationValidate.js'
 import log from '../log.js'
@@ -256,6 +256,8 @@ router.post('/register',
           to: email,
           subject: 'Verify your ReLivR email',
           text: `Welcome to ReLivR! Verify your email: ${FRONTEND_URL}/verify-email?token=${raw}`,
+          from: EMAIL_FROM_SUPPORT,
+          replyTo: SUPPORT_REPLY_TO,
         }))
         .catch(() => {})
 
@@ -446,6 +448,8 @@ router.post('/forgot-password',
           to: email,
           subject: 'Reset your ReLivR password',
           text: `Reset your password using this link (valid 1 hour): ${FRONTEND_URL}/reset-password?token=${raw}`,
+          from: EMAIL_FROM_SUPPORT,
+          replyTo: SUPPORT_REPLY_TO,
         })
       }
       return res.status(200).json({ message: 'If that email is registered, a reset link is on its way.' })

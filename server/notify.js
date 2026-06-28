@@ -4,7 +4,7 @@
 // notification or email must never break the main transaction.
 import { pool } from './db.js'
 import log from './log.js'
-import { sendEmail } from './email.js'
+import { sendEmail, EMAIL_FROM_UPDATES } from './email.js'
 
 export async function createNotification({ userId, type, title, body, referenceId = null }) {
   try {
@@ -32,5 +32,6 @@ async function sendActivityEmail({ userId, title, body }) {
     to: u.email,
     subject: title,
     text: `${body}\n\n— ReLivR\nChange how often you get these in Profile → Security.`,
+    from: EMAIL_FROM_UPDATES,
   })
 }

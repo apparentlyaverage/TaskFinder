@@ -1,7 +1,7 @@
 // Background jobs: task expiry + daily email digest.
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
-vi.mock('../email.js', () => ({ sendEmail: vi.fn().mockResolvedValue({ delivered: true }) }))
+vi.mock('../email.js', () => ({ sendEmail: vi.fn().mockResolvedValue({ delivered: true }), EMAIL_FROM_UPDATES: 'x' }))
 
 const { expireDueTasks, sendDigests, sendRecurring, expireDeals, archiveExpiredTasks, refreshRecurringDeals } = await import('../jobs.js')
 const { sendEmail } = await import('../email.js')

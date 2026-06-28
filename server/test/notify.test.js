@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 vi.mock('../db.js', () => ({ pool: { query: vi.fn(), connect: vi.fn() } }))
-vi.mock('../email.js', () => ({ sendEmail: vi.fn().mockResolvedValue({ delivered: true }), EMAIL_FROM: 'x' }))
+vi.mock('../email.js', () => ({ sendEmail: vi.fn().mockResolvedValue({ delivered: true }), EMAIL_FROM: 'x', EMAIL_FROM_UPDATES: 'x' }))
 
 const { pool } = await import('../db.js')
 const { sendEmail } = await import('../email.js')

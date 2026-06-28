@@ -5,7 +5,7 @@ import { mockDb, mockClient } from './helpers.js'
 
 vi.mock('../db.js', () => ({ pool: { query: vi.fn(), connect: vi.fn() } }))
 // The email sender is a stub; assert it's invoked rather than hitting a provider.
-vi.mock('../email.js', () => ({ sendEmail: vi.fn().mockResolvedValue({ stubbed: true }) }))
+vi.mock('../email.js', () => ({ sendEmail: vi.fn().mockResolvedValue({ stubbed: true }), EMAIL_FROM_SUPPORT: 'support', SUPPORT_REPLY_TO: 'support@x', EMAIL_FROM_UPDATES: 'updates' }))
 
 const { pool } = await import('../db.js')
 const { sendEmail } = await import('../email.js')
