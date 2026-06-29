@@ -492,9 +492,9 @@ function PageTitle({ children, sub }) {
 
 function EmptyState({ icon='◻', message, action }) {
   return (
-    <div style={{ textAlign:'center', padding:'60px 20px' }}>
-      <div style={{ fontSize:'2.5rem', marginBottom:12, opacity:0.25 }}>{icon}</div>
-      <Mono style={{ display:'block', marginBottom:action?16:0 }}>{message}</Mono>
+    <div style={{ textAlign:'center', padding:'56px 24px' }}>
+      <div style={{ width:60, height:60, margin:'0 auto 14px', borderRadius:'50%', background:'var(--bg-elevated)', border:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.5rem', color:'var(--text-muted)' }}>{icon}</div>
+      <Mono style={{ display:'block', marginBottom:action?18:0, maxWidth:320, marginLeft:'auto', marginRight:'auto', lineHeight:1.6 }}>{message}</Mono>
       {action && action}
     </div>
   )
@@ -3450,7 +3450,7 @@ function Messages({ target, clearTarget }) {
       <DCard hover={false} className={`msg-shell ${activeId ? 'has-active' : ''}`} style={{ display:'flex', height:580, padding:0, overflow:'hidden' }}>
 
         {/* Conversation list */}
-        <div className="msg-list" style={{ width:220, borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', flexShrink:0 }}>
+        <div className="msg-list" style={{ width:248, borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', flexShrink:0 }}>
           <div style={{ padding:'12px 14px', borderBottom:'1px solid var(--border)' }}><Mono size="0.65rem">Conversations</Mono></div>
           <div style={{ flex:1, overflowY:'auto' }}>
             {loading && <div style={{ padding:20, textAlign:'center' }}><Spinner size={18} /></div>}
@@ -4834,7 +4834,7 @@ function MiniChart({ data, dataKey, label, color='var(--accent)' }) {
 
 const bizTaStyle = { width:'100%', padding:'9px 12px', borderRadius:10, border:'1px solid var(--border)', background:'var(--bg-elevated)', color:'var(--text-primary)', fontSize:'.9rem', fontFamily:'var(--font-body)', resize:'vertical', boxSizing:'border-box' }
 const bizGhostBtn = { padding:'7px 12px', borderRadius:9, border:'1px solid var(--border)', background:'transparent', color:'var(--text-secondary)', fontSize:'.82rem', fontWeight:600, fontFamily:'var(--font-body)', cursor:'pointer' }
-const bizTab = (active) => ({ padding:'10px 16px', border:'none', borderBottom:`2px solid ${active?'var(--accent)':'transparent'}`, background:'transparent', color:active?'var(--accent)':'var(--text-secondary)', fontSize:'.9rem', fontWeight:700, fontFamily:'var(--font-body)', cursor:'pointer' })
+const bizTab = (active) => ({ padding:'10px 16px', border:'none', borderBottom:`2px solid ${active?'var(--accent)':'transparent'}`, borderTopLeftRadius:8, borderTopRightRadius:8, background:active?'var(--accent-glow)':'transparent', color:active?'var(--accent)':'var(--text-secondary)', fontSize:'.9rem', fontWeight:700, fontFamily:'var(--font-body)', cursor:'pointer', transition:'background 140ms var(--ease), color 140ms var(--ease)' })
 
 function BusinessDashboard({ onLogout, onViewLanding }) {
   const { user } = useAuth()
@@ -4881,7 +4881,7 @@ function BusinessDashboard({ onLogout, onViewLanding }) {
           </div>
           <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
             <span style={{ fontFamily:'var(--font-mono)', fontSize:'.72rem', color:'var(--text-muted)' }}>{biz?.name || user?.email}</span>
-            {biz?.follower_count > 0 && <span style={{ fontFamily:'var(--font-mono)', fontSize:'.72rem', color:'var(--accent)' }}>♡ {biz.follower_count} follower{biz.follower_count===1?'':'s'}</span>}
+            {biz?.follower_count > 0 && <span style={{ fontFamily:'var(--font-mono)', fontSize:'.68rem', fontWeight:600, color:'var(--accent)', background:'var(--accent-glow)', borderRadius:999, padding:'3px 10px', whiteSpace:'nowrap' }}>♡ {biz.follower_count} follower{biz.follower_count===1?'':'s'}</span>}
             {onViewLanding && <button onClick={onViewLanding} style={bizGhostBtn}>Public site</button>}
             <button onClick={onLogout} style={{ ...bizGhostBtn, color:'var(--danger)' }}>Sign out</button>
           </div>
