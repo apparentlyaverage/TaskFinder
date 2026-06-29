@@ -21,8 +21,10 @@ describe('Landing page', () => {
     fireEvent.click(cta)
     // Modal mounts with the Google option (no network needed)
     expect(screen.getByText(/with Google/i)).toBeInTheDocument()
-    // a11y: it's a labelled dialog with labelled fields (§7.7)
-    const dialog = screen.getByRole('dialog')
+    // a11y: it's a labelled dialog with labelled fields (§7.7). Scope to the auth
+    // modal by name — the page also renders the (non-modal) cookie-consent banner,
+    // so a bare getByRole('dialog') is ambiguous.
+    const dialog = screen.getByRole('dialog', { name: /create your account|sign in/i })
     expect(dialog).toHaveAttribute('aria-modal', 'true')
     expect(screen.getByLabelText('Email')).toBeInTheDocument()
     expect(screen.getByLabelText('Password')).toBeInTheDocument()
