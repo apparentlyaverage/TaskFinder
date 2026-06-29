@@ -1995,6 +1995,18 @@ function OAuthCallback() {
 // DASHBOARD — SIDEBAR
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Monoline speech-bubble icon for Messages — replaces the ambiguous ◎ that mirrored
+// the Alerts ◉ sitting right beside it. Uses currentColor + sizes to ~1em so it drops
+// straight into the existing glyph nav.
+function ChatIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display:'block' }}>
+      <path d="M21 11.5a8.5 8.5 0 0 1-12.4 7.6L3 21l1.9-5.6A8.5 8.5 0 1 1 21 11.5z" />
+    </svg>
+  )
+}
+
 const NAV = {
   // First 5 = native bottom-tab bar on mobile; the rest stay desktop-only.
   // Roles merged: every member can both post tasks and bid on them.
@@ -2002,7 +2014,7 @@ const NAV = {
     { id:'tasks-browse',  label:'Home',      icon:'⌂' },
     { id:'tasks-new',     label:'Post',      icon:'＋' },
     { id:'tasks-mine',    label:'My Tasks',  icon:'▤' },
-    { id:'messages',      label:'Messages',  icon:'◎' },
+    { id:'messages',      label:'Messages',  icon:<ChatIcon /> },
     { id:'profile',       label:'Profile',   icon:'◷' },
     { id:'local-browse',  label:'Local',     icon:'◇' },
     { id:'following',     label:'Following', icon:'♡' },
@@ -2076,7 +2088,7 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch 
         <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6 }}>
           <button className="btn-p topbar-post" style={{ padding:'9px 18px', fontSize:'.85rem' }} onClick={() => setPage('tasks-new')}>＋ Post a Task</button>
           <button onClick={() => setPage('messages')} aria-label="Messages" title="Messages"
-            style={{ width:38, height:38, borderRadius:'50%', border:'none', background:page==='messages'?'var(--accent-glow)':'transparent', color:page==='messages'?'var(--accent)':'var(--text-secondary)', fontSize:'1.05rem', cursor:'pointer' }}><span aria-hidden="true">◎</span></button>
+            style={{ width:38, height:38, borderRadius:'50%', border:'none', background:page==='messages'?'var(--accent-glow)':'transparent', color:page==='messages'?'var(--accent)':'var(--text-secondary)', fontSize:'1.05rem', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><ChatIcon size={19} /></button>
           <button onClick={() => setPage('notifications')} title="Alerts"
             aria-label={unreadCount > 0 ? `Alerts, ${unreadCount} unread` : 'Alerts'}
             style={{ position:'relative', width:38, height:38, borderRadius:'50%', border:'none', background:page==='notifications'?'var(--accent-glow)':'transparent', color:page==='notifications'?'var(--accent)':'var(--text-secondary)', fontSize:'1.05rem', cursor:'pointer' }}>
@@ -6329,6 +6341,60 @@ function getCookieConsent() {
 }
 function openCookiePrefs() { window.dispatchEvent(new Event('relivr:cookie-prefs')) }
 
+// First-run onboarding walkthrough — a skippable slideshow shown once after a member
+// first reaches the app. Persisted in localStorage; re-openable via the
+// 'relivr:show-walkthrough' window event. Mounted only inside the authed member shell,
+// so it never renders on the public landing (no clash with the auth modal).
+const ONBOARDING_KEY = 'rl_onboarding_seen_v1'
+const ONBOARDING_SLIDES = [
+  { icon:'⌂', title:'Welcome to ReLivR', body:'Your campus marketplace — post what you need done, or earn by helping out. Here’s the 30-second tour.' },
+  { icon:'＋', title:'Post a task in seconds', body:'Describe what you need and set a budget. Students nearby can start sending offers right away.' },
+  { icon:'◈', title:'Bid & get hired', body:'Browse open tasks, send a bid, and message the poster to lock in the details before you start.' },
+  { icon:'◇', title:'Discover Local & Deals', body:'Browse campus businesses Instagram-style and grab student-only deals — all in one place.' },
+]
+function OnboardingWalkthrough() {
+  const [open, setOpen] = useState(false)
+  const [i, setI] = useState(0)
+  useEffect(() => {
+    let seen = true
+    try { seen = !!localStorage.getItem(ONBOARDING_KEY) } catch { /* storage blocked → don't nag */ }
+    if (!seen) setOpen(true)
+    const replay = () => { setI(0); setOpen(true) }
+    window.addEventListener('relivr:show-walkthrough', replay)
+    return () => window.removeEventListener('relivr:show-walkthrough', replay)
+  }, [])
+  useEffect(() => {
+    if (!open) return
+    const onKey = e => { if (e.key === 'Escape') { try { localStorage.setItem(ONBOARDING_KEY, '1') } catch { /* ignore */ } setOpen(false) } }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
+  if (!open) return null
+  const last = i >= ONBOARDING_SLIDES.length - 1
+  const close = () => { try { localStorage.setItem(ONBOARDING_KEY, '1') } catch { /* ignore */ } setOpen(false) }
+  const s = ONBOARDING_SLIDES[i]
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Welcome to ReLivR"
+      style={{ position:'fixed', inset:0, zIndex:1100, background:'rgba(20,16,30,.6)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+      <div style={{ width:'100%', maxWidth:400, background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:'var(--radius-md)', boxShadow:'var(--shadow-xl)', padding:'28px 26px', textAlign:'center' }}>
+        <div style={{ width:64, height:64, margin:'0 auto 18px', borderRadius:'50%', background:'var(--accent-glow)', color:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.8rem' }}>{s.icon}</div>
+        <h2 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.3rem', margin:'0 0 10px' }}>{s.title}</h2>
+        <p style={{ color:'var(--text-secondary)', lineHeight:1.6, margin:'0 0 22px', fontSize:'.95rem' }}>{s.body}</p>
+        <div style={{ display:'flex', justifyContent:'center', gap:6, marginBottom:22 }}>
+          {ONBOARDING_SLIDES.map((_, n) => <span key={n} style={{ width:7, height:7, borderRadius:'50%', background:n===i?'var(--accent)':'var(--border-strong)', transition:'background 160ms var(--ease)' }} />)}
+        </div>
+        <div style={{ display:'flex', gap:10, justifyContent:'center' }}>
+          {!last && <Btn variant="ghost" size="sm" onClick={close}>Skip</Btn>}
+          {i > 0 && <Btn variant="secondary" size="sm" onClick={() => setI(n => n - 1)}>Back</Btn>}
+          {last
+            ? <Btn variant="primary" size="sm" onClick={close}>Get started</Btn>
+            : <Btn variant="primary" size="sm" onClick={() => setI(n => n + 1)}>Next</Btn>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function CookieConsent() {
   const [open, setOpen] = useState(false)
   const [customizing, setCustomizing] = useState(false)
@@ -6780,6 +6846,7 @@ export default function App() {
               <main className="dash-main" style={{ flex:1, width:'100%', maxWidth:1280, margin:'0 auto', padding:'28px 24px 60px' }}>
                 {renderDashPage()}
               </main>
+              <OnboardingWalkthrough />
             </div>
           )}
 
