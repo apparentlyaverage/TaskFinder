@@ -711,8 +711,11 @@ function LandingFooter({ onNav }) {
         </div>
         <Divider style={{ marginBottom:20 }} />
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10 }}>
-          <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em' }}>© 2026 ReLivR (PTY) Ltd · All rights reserved</span>
-          <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em' }}>Registered in South Africa · POPIA Compliant</span>
+          <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em' }}>© 2026 ReLivR · All rights reserved</span>
+          <div style={{ display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
+            <button onClick={openCookiePrefs} className="nav-link" style={{ background:'none', border:'none', padding:0, fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em', cursor:'pointer' }}>Cookie preferences</button>
+            <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em' }}>POPIA Compliant</span>
+          </div>
         </div>
       </div>
     </footer>
@@ -1530,10 +1533,10 @@ function HowItWorksPage({ onNav }) {
   ]
   return (
     <SidebarPage title="How ReLivR Works" subtitle="Product" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>Overview</h2><p>ReLivR is a peer-to-peer service marketplace designed exclusively for Rhodes University students. It connects people who need tasks done (Creators) with people who have the skills to do them (Earners).</p><div className="highlight"><p>🎓 ReLivR is a Rhodes-first platform. Linking your university SSO boosts your trust score significantly.</p></div></div>
+      <div id="overview"><h2>Overview</h2><p>ReLivR is a peer-to-peer service marketplace for students, launching first at Rhodes University. It connects people who need tasks done (Creators) with people who have the skills to do them (Earners).</p><div className="highlight"><p>🎓 ReLivR is launching Rhodes-first. Verifying your Rhodes student email (@ru.ac.za) earns a verified-student badge and boosts your trust.</p></div></div>
       <div id="creators"><h2>For Creators</h2><h3>Posting a Task</h3><p>Creating a task takes less than 60 seconds. Provide a title, description, budget, deadline, and skill tags. Once posted, your task is immediately visible and earners with matching skills are notified automatically.</p><h3>Reviewing Bids</h3><p>Earners submit bids with a proposed price and pitch. You can review all bids, message earners directly, and take as long as you need before accepting.</p><h3>Accepting a Bid</h3><p>When you accept a bid, all other bids are automatically declined and the winning earner is notified. You are then prompted to fund the escrow — this secures the payment without charging you yet.</p><h3>Releasing Payment</h3><p>Once the task is complete to your satisfaction, you release the payment. Funds transfer immediately to the earner's account. You are then prompted to leave a review.</p></div>
-      <div id="earners"><h2>For Earners</h2><h3>Finding Tasks</h3><p>Browse the task feed by skill, keyword, or campus zone. The Suggestions tab surfaces tasks specifically matched to your skill profile using our Jaccard similarity algorithm.</p><h3>Submitting a Bid</h3><p>Write a pitch explaining why you're the right person for the task and propose your price. You can bid on multiple tasks simultaneously and withdraw a bid at any time before it's accepted.</p><h3>Getting Paid</h3><p>Payments are processed via Stripe Connect and deposited directly to your linked bank account. The platform retains a 10% fee from your payout on each completed task.</p></div>
-      <div id="payments"><h2>Payments & Escrow</h2><p>ReLivR uses an escrow model to protect both parties:</p><ul><li>Creator funds escrow → Stripe holds the money (no transfer yet)</li><li>Work is completed → Creator releases payment</li><li>Stripe captures the payment → Transfers to earner minus 10% platform fee</li><li>If disputed → Escrow is frozen until admin resolves it</li></ul><div className="highlight"><p>Your card is authorised but not charged until you release payment. If you raise a dispute before releasing, no charge is made.</p></div></div>
+      <div id="earners"><h2>For Earners</h2><h3>Finding Tasks</h3><p>Browse the task feed by skill, keyword, or campus zone. The Suggestions tab surfaces tasks specifically matched to your skill profile using our Jaccard similarity algorithm.</p><h3>Submitting a Bid</h3><p>Write a pitch explaining why you're the right person for the task and propose your price. You can bid on multiple tasks simultaneously and withdraw a bid at any time before it's accepted.</p><h3>Getting Paid</h3><p>Payments are processed via Paystack and paid out to your linked bank account. The platform retains a 10% fee from your payout on each completed task.</p></div>
+      <div id="payments"><h2>Payments & Escrow</h2><p>ReLivR uses an escrow model to protect both parties:</p><ul><li>Creator funds escrow → the payment is held securely (no transfer yet)</li><li>Work is completed → Creator releases payment</li><li>The payment is captured → transferred to the earner minus the 10% platform fee</li><li>If disputed → Escrow is frozen until admin resolves it</li></ul><div className="highlight"><p>Your card is authorised but not charged until you release payment. If you raise a dispute before releasing, no charge is made.</p></div></div>
       <div id="messaging"><h2>Messaging</h2><p>Every task has a built-in messaging thread between the creator and the accepted earner. Messages are stored and visible to admin in the event of a dispute — so keep communication professional and on-platform.</p></div>
       <div id="disputes"><h2>Disputes</h2><p>If something goes wrong, either party can raise a dispute. This immediately freezes the escrow and notifies our admin team. The admin reviews all messages, task requirements, and evidence submitted, then decides to either refund the creator or release payment to the earner.</p></div>
     </SidebarPage>
@@ -1553,8 +1556,8 @@ function FeaturesPage({ onNav }) {
     <SidebarPage title="Platform Features" subtitle="Product" sections={sections} onNav={onNav}>
       <div id="overview"><h2>All Features</h2><p>ReLivR is built with a focused feature set designed around the realities of campus life. Everything was chosen because it solves a real problem for students.</p></div>
       <div id="matching"><h2>Smart Matching Engine</h2><p>When a task is posted, our matching engine automatically identifies earners whose skill profiles overlap with the task's skill tags using Jaccard similarity scoring. Earners are ranked by skill overlap score, average rating bonus (up to +20% for 5-star earners), and account longevity.</p></div>
-      <div id="trust"><h2>Trust Score System</h2><p>Every user has a trust score between 0 and 100, calculated from:</p><ul><li><strong style={{color:'#3b3548'}}>Identity (40pts)</strong> — Rhodes SSO link (30pts) + verified email (10pts)</li><li><strong style={{color:'#3b3548'}}>Track record (40pts)</strong> — completed tasks (up to 20pts) + average rating (up to 20pts)</li><li><strong style={{color:'#3b3548'}}>Longevity (20pts)</strong> — 5 points per month, capped at 20</li><li><strong style={{color:'#3b3548'}}>Dispute penalty</strong> — -10pts per dispute raised against you</li></ul><div className="highlight"><p>Levels: Unverified (0–19) · New (20–49) · Established (50–79) · Verified (80–100)</p></div></div>
-      <div id="escrow"><h2>Escrow System</h2><p>Our escrow is built on Stripe's PaymentIntent API with manual capture. Funds are authorised on the creator's card when escrow is funded, but no actual charge occurs until the creator releases payment. The 10% platform fee is deducted from the earner's payout, not added to the creator's charge.</p></div>
+      <div id="trust"><h2>Trust Score System</h2><p>Every user has a trust score between 0 and 100, calculated from:</p><ul><li><strong style={{color:'#3b3548'}}>Identity (40pts)</strong> — verified Rhodes student email @ru.ac.za (30pts) + verified email or Google sign-in (10pts)</li><li><strong style={{color:'#3b3548'}}>Track record (40pts)</strong> — completed tasks (up to 20pts) + average rating (up to 20pts)</li><li><strong style={{color:'#3b3548'}}>Longevity (20pts)</strong> — 5 points per month, capped at 20</li><li><strong style={{color:'#3b3548'}}>Dispute penalty</strong> — -10pts per dispute raised against you</li></ul><div className="highlight"><p>Levels: Unverified (0–19) · New (20–49) · Established (50–79) · Verified (80–100)</p></div></div>
+      <div id="escrow"><h2>Escrow System</h2><p>Our escrow uses an authorise-then-capture model through our payment provider, Paystack. Funds are authorised when escrow is funded, but no actual charge occurs until the creator releases payment. The 10% platform fee is deducted from the earner's payout, not added to the creator's charge.</p></div>
       <div id="messaging"><h2>Messaging</h2><p>Built-in direct messaging with task-scoped threads, pre-bid inquiry messages, read receipts, and message history preserved for dispute evidence. New messages reach you by email (instantly or in a daily digest — your choice in Profile → Security).</p></div>
       <div id="admin"><h2>Admin Tools</h2><p>The admin dashboard provides a full dispute queue with FIFO ordering, complete message logs for any task, escrow state visibility, user management, audit timelines, and one-click refund or release from the dispute detail view.</p></div>
     </SidebarPage>
@@ -1599,8 +1602,8 @@ function TrustSafetyPage({ onNav }) {
     <SidebarPage title="Trust & Safety" subtitle="Product" sections={sections} onNav={onNav}>
       <div id="overview"><h2>Our Commitment to Safety</h2><p>ReLivR is built on the principle that two students from the same campus should be able to transact with confidence. Every feature exists to make that possible.</p><div className="highlight"><p>🔒 All payments are held in escrow and never leave the platform until both parties are satisfied — or an admin resolves a dispute.</p></div></div>
       <div id="trust-scores"><h2>Trust Scores</h2><p>Every user has a visible trust score calculated from verifiable signals: verified identity, completed transactions, earned ratings, and account history. A high trust score is not a guarantee of quality, but it is a meaningful signal that a user has a real, verified identity and a track record on the platform.</p></div>
-      <div id="verification"><h2>Identity Verification</h2><p>To reach the highest trust tier, users must link their Rhodes University account (SSO). This verifies that the user is a current or recent Rhodes student and prevents anonymous bad-faith users from accumulating trust.</p></div>
-      <div id="escrow"><h2>Payment Safety</h2><p>ReLivR never holds your money — it is held by Stripe, one of the world's most trusted payment processors (PCI DSS Level 1 certified). Your card details are never stored by ReLivR.</p></div>
+      <div id="verification"><h2>Identity Verification</h2><p>Verifying your Rhodes student email (@ru.ac.za) earns a verified-student badge and boosts your trust. Email verification and Google sign-in further confirm a real identity and help prevent anonymous bad-faith accounts from accumulating trust.</p></div>
+      <div id="escrow"><h2>Payment Safety</h2><p>ReLivR never holds your money directly — payments are processed and held in escrow by our payment provider, Paystack, a PCI-DSS-compliant processor. Your card details are never stored by ReLivR.</p></div>
       <div id="reporting"><h2>Reporting Issues</h2><p>If you encounter a problem:</p><ul><li><strong style={{color:'#3b3548'}}>Raise a dispute</strong> — for unresolved task delivery issues. Freezes escrow immediately.</li><li><strong style={{color:'#3b3548'}}>Report a user</strong> — for conduct violations, harassment, or fraud.</li><li><strong style={{color:'#3b3548'}}>Contact support</strong> — for account issues or technical problems.</li></ul></div>
       <div id="prohibited"><h2>Prohibited Conduct</h2><p>The following result in immediate account suspension:</p><ul><li>Off-platform payment requests or arrangements</li><li>Creating fake reviews or inflating trust scores</li><li>Harassment, threats, or discriminatory language</li><li>Posting tasks or services that are illegal under South African law</li><li>Academic dishonesty services</li></ul></div>
     </SidebarPage>
@@ -1692,7 +1695,7 @@ function CookiesPage({ onNav }) {
       <div id="types"><h2>2. Types We Use</h2><h3>Strictly Necessary</h3><p>Essential for the operation, security and functionality of the Platform (including keeping you signed in). These cannot be disabled.</p><h3>Analytics &amp; Performance</h3><p>Help us understand how the Platform is used so we can improve it. Aggregated where possible.</p><h3>Functional</h3><p>Remember your preferences and settings for a more personalised experience.</p><h3>Advertising &amp; Marketing</h3><p>Not currently used. If introduced, they would only run with your consent where required by law.</p><h3>Third-Party</h3><p>Some technologies may be placed by trusted providers that support analytics, payments, fraud prevention or functionality, under their own privacy policies.</p></div>
       <div id="consent"><h2>3. POPIA-Compliant Consent</h2><p>Except for strictly necessary cookies, we will obtain your consent before placing or activating cookies and tracking technologies where required by law. You may accept all cookies, reject non-essential cookies, or customise your preferences by category, and you may withdraw or change consent at any time.</p></div>
       <div id="banner"><h2>4. Cookie Banner</h2><p>On your first visit, ReLivR will display a cookie notice that explains our use of cookies, links to this policy, lets you accept, reject or customise non-essential cookies, and records your preferences where required by law. We will not deploy non-essential cookies until appropriate consent has been obtained where legally required.</p></div>
-      <div id="control"><h2>5. Managing Cookies</h2><p>You can manage cookie preferences through settings on the Platform or through your browser. Most browsers let you block, delete or restrict cookies — though disabling some may affect functionality. Changing your preferences does not affect the lawfulness of processing carried out before you withdrew consent.</p><div className="highlight"><p>Questions? Email <a href="mailto:support.relivr@gmail.com">support.relivr@gmail.com</a></p></div></div>
+      <div id="control"><h2>5. Managing Cookies</h2><p>You can manage cookie preferences through settings on the Platform or through your browser. Most browsers let you block, delete or restrict cookies — though disabling some may affect functionality. Changing your preferences does not affect the lawfulness of processing carried out before you withdrew consent.</p><p><button onClick={openCookiePrefs} style={{ background:'var(--accent)', color:'#fff', border:'none', borderRadius:'var(--radius-sm)', padding:'10px 18px', fontWeight:700, fontSize:'.85rem', cursor:'pointer' }}>Manage cookie preferences</button></p><div className="highlight"><p>Questions? Email <a href="mailto:support.relivr@gmail.com">support.relivr@gmail.com</a></p></div></div>
     </SidebarPage>
   )
 }
@@ -1734,9 +1737,9 @@ function HelpCentrePage({ onNav }) {
   ]
   return (
     <SidebarPage title="Help Centre" subtitle="Support" sections={sections} onNav={onNav}>
-      <div id="getting-started"><h2>Getting Started</h2><h3>How do I create an account?</h3><p>Click "Get Started" on the homepage, fill in your name, email, and password, and choose whether you want to post tasks (Creator) or earn money (Earner). You can explore both roles after signup.</p><h3>Is it free to sign up?</h3><p>Yes. Creating an account is completely free. There are no monthly fees or charges for browsing.</p><h3>Do I need a Rhodes email?</h3><p>Any email works to create an account, but linking your Rhodes University SSO account increases your trust score significantly.</p></div>
+      <div id="getting-started"><h2>Getting Started</h2><h3>How do I create an account?</h3><p>Click "Get Started" on the homepage, fill in your name, email, and password, and choose whether you want to post tasks (Creator) or earn money (Earner). You can explore both roles after signup.</p><h3>Is it free to sign up?</h3><p>Yes. Creating an account is completely free. There are no monthly fees or charges for browsing.</p><h3>Do I need a Rhodes email?</h3><p>Any email works to create an account. Verifying a Rhodes student email (@ru.ac.za) earns a verified-student badge and increases your trust score.</p></div>
       <div id="creators"><h2>For Creators</h2><h3>How do I post a task?</h3><p>Log in, click "Post Task", fill in the details (title, description, budget, deadline, skill tags), review, and submit. It goes live immediately.</p><h3>What if the earner does poor work?</h3><p>Don't release payment. Use in-platform messaging to give specific feedback and request revisions. If the earner refuses, raise a dispute. Do not release payment until you are satisfied.</p></div>
-      <div id="earners"><h2>For Earners</h2><h3>How do I write a good pitch?</h3><p>Be specific. Reference the task directly, explain your relevant experience, give a realistic timeline, and be honest about your price. Generic pitches get ignored.</p><h3>How quickly do I get paid?</h3><p>Once the creator releases payment, Stripe processes the transfer. Payout timing is typically 1–3 business days for South African bank accounts.</p></div>
+      <div id="earners"><h2>For Earners</h2><h3>How do I write a good pitch?</h3><p>Be specific. Reference the task directly, explain your relevant experience, give a realistic timeline, and be honest about your price. Generic pitches get ignored.</p><h3>How quickly do I get paid?</h3><p>Once the creator releases payment, Paystack processes the payout. Payout timing is typically 1–3 business days for South African bank accounts.</p></div>
       <div id="payments"><h2>Payments</h2><h3>My payment failed. What do I do?</h3><p>Check your card details are correct and that you have sufficient funds. If the problem persists, try a different card or contact your bank.</p><h3>Can I get a refund if I'm not happy?</h3><p>Refunds are only processed through the dispute resolution system. Do not release payment until you are satisfied — once released we cannot reverse the transfer.</p></div>
       <div id="account"><h2>My Account</h2><h3>How do I change my password?</h3><p>Go to Profile → Security → Change Password. You will need your current password to set a new one.</p><h3>How do I delete my account?</h3><p>Go to Profile → Security → Delete Account. Pending transactions must be resolved before deletion.</p></div>
       <div id="technical"><h2>Technical Issues</h2><h3>The app doesn't work on my phone.</h3><p>ReLivR is designed to work on all modern mobile browsers. Try Chrome on Android or Safari on iOS. If the problem persists, please report it.</p><div className="highlight"><p>Still stuck? Email <a href="mailto:support@reliv.co.za">support@reliv.co.za</a> — we respond within 24 hours.</p></div></div>
@@ -2868,7 +2871,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
             </div>
           ))}
         </div>
-        <p style={{ fontSize:'0.82rem', color:'var(--text-muted)', marginBottom:20, lineHeight:1.5 }}>In demo mode no actual charge occurs. In production this charges via Stripe.</p>
+        <p style={{ fontSize:'0.82rem', color:'var(--text-muted)', marginBottom:20, lineHeight:1.5 }}>In demo mode no actual charge occurs. In production this is processed securely via Paystack.</p>
         <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
           <Btn variant="ghost" onClick={() => setFundModal(false)} disabled={fundLoading}>Cancel</Btn>
           <Btn variant="primary" onClick={confirmFund} loading={fundLoading}>Confirm & Fund Escrow</Btn>
@@ -6204,6 +6207,81 @@ function buildPath({ view, dashPage, taskId, disputeId }) {
   return '/'
 }
 
+// ─── COOKIE CONSENT (POPIA §4) ───────────────────────────────────────────────
+// First-visit banner: Accept all / Reject non-essential / Customise by category.
+// Choice is stored (versioned) so it isn't re-asked; re-openable from the footer
+// and the Cookie Policy via the `relivr:cookie-prefs` window event. Strictly
+// necessary is always on; non-essential categories default OFF (no pre-ticking).
+const COOKIE_CONSENT_KEY = 'rl_cookie_consent'
+const COOKIE_CONSENT_VERSION = 1
+function getCookieConsent() {
+  try {
+    const c = JSON.parse(localStorage.getItem(COOKIE_CONSENT_KEY) || 'null')
+    return c && c.version === COOKIE_CONSENT_VERSION ? c : null
+  } catch { return null }
+}
+function openCookiePrefs() { window.dispatchEvent(new Event('relivr:cookie-prefs')) }
+
+function CookieConsent() {
+  const [open, setOpen] = useState(false)
+  const [customizing, setCustomizing] = useState(false)
+  const [choices, setChoices] = useState({ analytics: false, functional: false, advertising: false })
+  useEffect(() => {
+    if (!getCookieConsent()) setOpen(true)
+    const reopen = () => {
+      const c = getCookieConsent()
+      if (c) setChoices({ analytics: !!c.analytics, functional: !!c.functional, advertising: !!c.advertising })
+      setCustomizing(true); setOpen(true)
+    }
+    window.addEventListener('relivr:cookie-prefs', reopen)
+    return () => window.removeEventListener('relivr:cookie-prefs', reopen)
+  }, [])
+  if (!open) return null
+  const save = (c) => {
+    try { localStorage.setItem(COOKIE_CONSENT_KEY, JSON.stringify({ version: COOKIE_CONSENT_VERSION, necessary: true, ...c, ts: Date.now() })) } catch { /* storage blocked */ }
+    setOpen(false); setCustomizing(false)
+  }
+  const Toggle = ({ k, label, desc, locked }) => (
+    <label style={{ display:'flex', gap:10, alignItems:'flex-start', padding:'7px 0', cursor: locked ? 'default' : 'pointer' }}>
+      <input type="checkbox" checked={locked ? true : choices[k]} disabled={locked}
+        onChange={e => setChoices(s => ({ ...s, [k]: e.target.checked }))} style={{ marginTop:3, accentColor:'var(--accent)' }} />
+      <span>
+        <span style={{ fontWeight:600, fontSize:'.82rem' }}>{label}</span>
+        {locked && <span style={{ fontSize:'.64rem', color:'var(--text-muted)', marginLeft:6, fontFamily:'var(--fm)', textTransform:'uppercase', letterSpacing:'.06em' }}>always on</span>}
+        <br /><span style={{ fontSize:'.74rem', color:'var(--text-muted)', lineHeight:1.5 }}>{desc}</span>
+      </span>
+    </label>
+  )
+  return (
+    <div role="dialog" aria-label="Cookie preferences" style={{ position:'fixed', left:0, right:0, bottom:0, zIndex:1200, background:'var(--bg-surface)', borderTop:'1px solid var(--border)', boxShadow:'0 -4px 24px rgba(33,28,46,.14)', padding:'16px 20px' }}>
+      <div style={{ maxWidth:1000, margin:'0 auto' }}>
+        <div style={{ display:'flex', gap:18, flexWrap:'wrap', alignItems:'center', justifyContent:'space-between' }}>
+          <div style={{ flex:1, minWidth:240 }}>
+            <div style={{ fontWeight:700, fontSize:'.95rem', marginBottom:4 }}>🍪 Cookies on ReLivR</div>
+            <p style={{ fontSize:'.82rem', color:'var(--text-secondary)', lineHeight:1.6, margin:0 }}>
+              We use strictly necessary technologies to keep you signed in, plus optional analytics. Accept all, reject non-essential, or customise — see our <a href="/cookies" style={{ color:'var(--accent)', fontWeight:600 }}>Cookie Policy</a>.
+            </p>
+          </div>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            <Btn variant="ghost" size="sm" onClick={() => setCustomizing(c => !c)}>Customise</Btn>
+            <Btn variant="secondary" size="sm" onClick={() => save({ analytics:false, functional:false, advertising:false })}>Reject non-essential</Btn>
+            <Btn size="sm" onClick={() => save({ analytics:true, functional:true, advertising:true })}>Accept all</Btn>
+          </div>
+        </div>
+        {customizing && (
+          <div style={{ marginTop:12, borderTop:'1px solid var(--border)', paddingTop:10 }}>
+            <Toggle locked label="Strictly necessary" desc="Required to sign in and keep the Platform secure." />
+            <Toggle k="analytics" label="Analytics & performance" desc="Help us understand usage so we can improve ReLivR." />
+            <Toggle k="functional" label="Functional" desc="Remember your preferences and settings." />
+            <Toggle k="advertising" label="Advertising & marketing" desc="Not currently used — reserved for the future, only with your consent." />
+            <div style={{ marginTop:10 }}><Btn size="sm" onClick={() => save(choices)}>Save preferences</Btn></div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [user, setUser]         = useState(null)
   const [userLoading, setUserLoading] = useState(true) // true while restoring session
@@ -6618,6 +6696,9 @@ export default function App() {
               onLogin={handleLogin}
             />
           )}
+
+          {/* ── COOKIE CONSENT (POPIA) — shows on first visit, re-openable ── */}
+          <CookieConsent />
 
         </ToastProvider>
       </StoreCtx.Provider>
