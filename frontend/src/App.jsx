@@ -8,6 +8,7 @@ import React, {
   useState, useEffect, useRef, useCallback,
   createContext, useContext, useReducer, useId,
 } from 'react'
+import { createPortal } from 'react-dom'
 import {
   MOCK_TASKS, MOCK_BIDS, MOCK_NOTIFICATIONS,
   MOCK_MESSAGES, MOCK_DISPUTES, MOCK_SUGGESTIONS,
@@ -3747,52 +3748,80 @@ function BizGallery({ images = [], height = 160, aspect = null, radius = 'var(--
   )
 }
 
-// A single business rendered as an Instagram-style feed post: a tappable
-// avatar+name header, a swipeable square image carousel, then a row of actions
-// (follow + contact) and a caption. Tapping the header or image opens the full
-// detail view; the carousel arrows stop propagation so they don't.
-function BizFeedPost({ b, onOpen }) {
+// All of a business's photos as one ordered, de-duplicated list (cover first).
+function bizPhotos(b) {
+  return [b.cover_image_url, ...(b.image_urls || [])]
+    .filter(Boolean)
+    .filter((u, i, a) => a.indexOf(u) === i)
+}
+
+// A business tile in the Local directory grid (Instagram-explore style): a large
+// cover image with a "multiple photos" badge, then a mini avatar + name + category.
+function BizGridTile({ b, onOpen }) {
+  const photos = bizPhotos(b)
+  const cover = photos[0] || null
   const initial = (b.name || '?').trim().charAt(0).toUpperCase()
-  // Instagram-style caption = bold name + description. Many descriptions lead
-  // with the business name ("Bean There — …"); strip that echo so the bold name
-  // prefix doesn't read twice. Only strips when the name is a whole leading token.
-  const name = (b.name || '').trim()
-  let caption = (b.description || '').trim()
-  if (name && caption.toLowerCase().startsWith(name.toLowerCase()) &&
-      (caption.length === name.length || /[\s—–\-:·]/.test(caption[name.length]))) {
-    caption = caption.slice(name.length).replace(/^\s*[—–\-:·]+\s*/, '').trim()
-  }
   return (
-    <DCard hover={false} style={{ padding:0, overflow:'hidden' }}>
-      <div onClick={onOpen} style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 14px', cursor:'pointer' }}>
+    <DCard hover onClick={onOpen} style={{ padding:0, overflow:'hidden', cursor:'pointer' }}>
+      <div style={{ position:'relative', aspectRatio:'4 / 3', background:'var(--bg-elevated)' }}>
+        {cover
+          ? <img src={cover} alt="" loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
+          : <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--text-muted)', fontSize:'2.4rem', fontFamily:'var(--font-display)' }}>{initial}</div>}
+        {photos.length > 1 && <div style={{ position:'absolute', top:8, right:8, background:'rgba(0,0,0,.58)', color:'#fff', borderRadius:8, padding:'2px 8px', fontSize:'.7rem', fontWeight:600, fontFamily:'var(--font-mono)' }}>▦ {photos.length}</div>}
+      </div>
+      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px' }}>
         {b.logo_url
-          ? <img src={b.logo_url} alt="" style={{ width:38, height:38, borderRadius:'50%', objectFit:'cover', flexShrink:0 }} />
-          : <div style={{ width:38, height:38, borderRadius:'50%', flexShrink:0, background:'var(--accent-glow)', color:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:800, fontFamily:'var(--font-display)' }}>{initial}</div>}
-        <div style={{ minWidth:0, flex:1 }}>
-          <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:'.98rem', lineHeight:1.2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{b.name}</div>
-          <div style={{ fontSize:'.72rem', color:'var(--text-muted)', fontFamily:'var(--font-mono)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{b.category}{b.address ? ` · ${b.address}` : ''}</div>
+          ? <img src={b.logo_url} alt="" style={{ width:26, height:26, borderRadius:'50%', objectFit:'cover', flexShrink:0 }} />
+          : <div style={{ width:26, height:26, borderRadius:'50%', flexShrink:0, background:'var(--accent-glow)', color:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:800, fontSize:'.78rem', fontFamily:'var(--font-display)' }}>{initial}</div>}
+        <div style={{ minWidth:0 }}>
+          <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:'.92rem', lineHeight:1.2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{b.name}</div>
+          <div style={{ fontSize:'.7rem', color:'var(--text-muted)', fontFamily:'var(--font-mono)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{b.category}</div>
         </div>
-      </div>
-
-      <div onClick={onOpen} style={{ cursor:'pointer' }}>
-        <BizGallery images={b.image_urls} aspect="1 / 1" radius="0" />
-      </div>
-
-      <div style={{ padding:'12px 14px' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:(b.follower_count>0||b.description)?10:0, flexWrap:'wrap' }}>
-          <FollowButton targetType="business" targetId={b.business_id} size="sm" />
-          {b.phone    && <a href={`tel:${b.phone}`} onClick={() => trackBizEvent(b.business_id, 'phone_click')} style={{ textDecoration:'none' }}><Btn variant="secondary" size="sm">📞</Btn></a>}
-          {b.whatsapp && <a href={`https://wa.me/${b.whatsapp.replace(/[^0-9]/g,'')}`} onClick={() => trackBizEvent(b.business_id, 'whatsapp_click')} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}><Btn variant="secondary" size="sm">💬</Btn></a>}
-          {b.link_url && <a href={b.link_url} onClick={() => trackBizEvent(b.business_id, 'link_click')} target="_blank" rel="noopener noreferrer nofollow" style={{ textDecoration:'none' }}><Btn variant="ghost" size="sm">🔗</Btn></a>}
-        </div>
-        {b.follower_count > 0 && <div style={{ fontFamily:'var(--font-mono)', fontSize:'.74rem', color:'var(--accent)', fontWeight:600, marginBottom:6 }}>♡ {b.follower_count} follower{b.follower_count===1?'':'s'}</div>}
-        <p style={{ fontSize:'.88rem', lineHeight:1.55, margin:0 }}>
-          <span style={{ fontWeight:700, fontFamily:'var(--font-display)' }}>{b.name}</span>
-          {caption && <>{' '}<span style={{ color:'var(--text-secondary)' }}>{caption}</span></>}
-        </p>
-        {b.hours && <Mono style={{ display:'block', marginTop:8, fontSize:'.72rem' }}>🕒 {b.hours}</Mono>}
       </div>
     </DCard>
+  )
+}
+
+// Full-screen Instagram-style photo viewer: arrow / keyboard / swipe through a
+// business's photos. Closes on ✕, backdrop click, or Escape.
+function BizLightbox({ images, index, onClose, onNav }) {
+  const touchX = useRef(null)
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose()
+      else if (e.key === 'ArrowRight') onNav(1)
+      else if (e.key === 'ArrowLeft') onNav(-1)
+    }
+    window.addEventListener('keydown', onKey)
+    // Lock background scroll while the viewer is open (Instagram-style takeover).
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prevOverflow }
+  }, [onClose, onNav])
+  const n = images.length
+  // Portalled to <body> so it escapes the page's transformed stacking context
+  // and covers the whole viewport (above the sticky header + bottom nav).
+  return createPortal(
+    <div onClick={onClose}
+      onTouchStart={(e) => { touchX.current = e.touches[0].clientX }}
+      onTouchEnd={(e) => { if (touchX.current == null) return; const dx = e.changedTouches[0].clientX - touchX.current; if (Math.abs(dx) > 40) onNav(dx < 0 ? 1 : -1); touchX.current = null }}
+      style={{ position:'fixed', inset:0, zIndex:1500, background:'rgba(0,0,0,.92)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <button onClick={(e) => { e.stopPropagation(); onClose() }} aria-label="Close"
+        style={{ position:'absolute', top:16, right:16, width:40, height:40, borderRadius:'50%', border:'none', background:'rgba(255,255,255,.14)', color:'#fff', fontSize:'1.1rem', cursor:'pointer', zIndex:2 }}>✕</button>
+      <img src={images[index]} alt="" onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth:'92vw', maxHeight:'86vh', objectFit:'contain', borderRadius:10, boxShadow:'0 24px 70px rgba(0,0,0,.6)' }} />
+      {n > 1 && <>
+        <button onClick={(e) => { e.stopPropagation(); onNav(-1) }} aria-label="Previous"
+          style={{ position:'absolute', left:'max(10px,3vw)', top:'50%', transform:'translateY(-50%)', width:46, height:46, borderRadius:'50%', border:'none', background:'rgba(255,255,255,.14)', color:'#fff', fontSize:'1.6rem', cursor:'pointer' }}>‹</button>
+        <button onClick={(e) => { e.stopPropagation(); onNav(1) }} aria-label="Next"
+          style={{ position:'absolute', right:'max(10px,3vw)', top:'50%', transform:'translateY(-50%)', width:46, height:46, borderRadius:'50%', border:'none', background:'rgba(255,255,255,.14)', color:'#fff', fontSize:'1.6rem', cursor:'pointer' }}>›</button>
+        <div style={{ position:'absolute', top:20, left:0, right:0, textAlign:'center', color:'rgba(255,255,255,.7)', fontFamily:'var(--font-mono)', fontSize:'.8rem' }}>{index + 1} / {n}</div>
+        <div style={{ position:'absolute', bottom:20, left:0, right:0, display:'flex', justifyContent:'center', gap:6 }}>
+          {images.map((_, i) => <span key={i} style={{ width:7, height:7, borderRadius:'50%', background:i === index ? '#fff' : 'rgba(255,255,255,.4)' }} />)}
+        </div>
+      </>}
+    </div>,
+    document.body
   )
 }
 
@@ -3801,6 +3830,7 @@ function LocalBrowse({ setPage }) {
   const [loading, setLoading]       = useState(true)
   const [cat, setCat]               = useState('all')
   const [selected, setSelected]     = useState(null)
+  const [lightbox, setLightbox]     = useState(null)   // photo index in the open profile, or null
 
   useEffect(() => {
     let cancelled = false
@@ -3818,34 +3848,69 @@ function LocalBrowse({ setPage }) {
     return () => { cancelled = true }
   }, [cat])
 
-  // Detail view
+  // Detail view — an Instagram-style business "profile": header (avatar, name,
+  // stats, follow), bio + contact actions, then a 3-column photo grid that opens
+  // a full-screen swipeable lightbox.
   if (selected) {
     const b = selected
+    const photos = bizPhotos(b)
+    const initial = (b.name || '?').trim().charAt(0).toUpperCase()
+    const avatarSize = 'clamp(76px,20vw,150px)'
     return (
-      <div className="page-enter" style={{ maxWidth:760 }}>
-        <button onClick={() => setSelected(null)} style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'0.78rem', fontFamily:'var(--font-mono)', letterSpacing:'0.06em', cursor:'pointer', marginBottom:16 }}>← Back to Local</button>
-        <DCard hover={false} style={{ padding:0, overflow:'hidden' }}>
-          {b.cover_image_url && <img src={b.cover_image_url} alt="" style={{ width:'100%', height:240, objectFit:'cover', display:'block' }} />}
-          {b.image_urls?.length > 0 && <BizGallery images={b.image_urls} height={b.cover_image_url ? 150 : 240} />}
-          <div style={{ padding:22 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8, flexWrap:'wrap' }}>
-              {b.logo_url && <img src={b.logo_url} alt="" style={{ width:44, height:44, borderRadius:10, objectFit:'cover' }} />}
-              <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.5rem', margin:0 }}>{b.name}</h1>
+      <div className="page-enter" style={{ maxWidth:935, margin:'0 auto' }}>
+        <button onClick={() => { setSelected(null); setLightbox(null) }} style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'0.78rem', fontFamily:'var(--font-mono)', letterSpacing:'0.06em', cursor:'pointer', marginBottom:18 }}>← Back to Local</button>
+
+        {/* Profile header */}
+        <div style={{ display:'flex', flexDirection:'column', gap:18, paddingBottom:24, borderBottom:'1px solid var(--border)' }}>
+          <div style={{ display:'flex', gap:'clamp(18px,5vw,44px)', alignItems:'center' }}>
+            {b.logo_url
+              ? <img src={b.logo_url} alt="" style={{ width:avatarSize, height:avatarSize, borderRadius:'50%', objectFit:'cover', flexShrink:0, border:'1px solid var(--border)' }} />
+              : <div style={{ width:avatarSize, height:avatarSize, borderRadius:'50%', flexShrink:0, background:'var(--accent-glow)', color:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:800, fontFamily:'var(--font-display)', fontSize:'clamp(1.8rem,6vw,3rem)' }}>{initial}</div>}
+            <div style={{ minWidth:0, flex:1 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:14, flexWrap:'wrap', marginBottom:14 }}>
+                <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'clamp(1.3rem,4vw,1.7rem)', margin:0 }}>{b.name}</h1>
+                <FollowButton targetType="business" targetId={b.business_id} size="sm" />
+              </div>
+              <div style={{ display:'flex', gap:'clamp(16px,4vw,30px)', flexWrap:'wrap', alignItems:'center', fontSize:'.9rem', color:'var(--text-secondary)' }}>
+                <span><strong style={{ color:'var(--text-primary)' }}>{photos.length}</strong> photo{photos.length===1?'':'s'}</span>
+                {b.follower_count > 0 && <span><strong style={{ color:'var(--text-primary)' }}>{b.follower_count}</strong> follower{b.follower_count===1?'':'s'}</span>}
+              </div>
+            </div>
+          </div>
+
+          {/* Bio */}
+          <div>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6, flexWrap:'wrap' }}>
+              <strong style={{ fontFamily:'var(--font-display)', fontSize:'.95rem' }}>{b.name}</strong>
               <Tag>{b.category}</Tag>
             </div>
-            {b.description && <p style={{ color:'var(--text-secondary)', lineHeight:1.7 }}>{b.description}</p>}
-            <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:16 }}>
+            {b.description && <p style={{ color:'var(--text-secondary)', lineHeight:1.65, margin:'0 0 10px' }}>{b.description}</p>}
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
               {b.address && <Mono>📍 {b.address}</Mono>}
               {b.hours   && <Mono>🕒 {b.hours}</Mono>}
             </div>
-            <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginTop:18 }}>
-              <FollowButton targetType="business" targetId={b.business_id} size="sm" />
-              {b.phone    && <a href={`tel:${b.phone}`} onClick={() => trackBizEvent(b.business_id, 'phone_click')} style={{ textDecoration:'none' }}><Btn variant="secondary" size="sm">📞 Call</Btn></a>}
-              {b.whatsapp && <a href={`https://wa.me/${b.whatsapp.replace(/[^0-9]/g,'')}`} onClick={() => trackBizEvent(b.business_id, 'whatsapp_click')} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}><Btn variant="secondary" size="sm">💬 WhatsApp</Btn></a>}
-              {b.link_url && <a href={b.link_url} onClick={() => trackBizEvent(b.business_id, 'link_click')} target="_blank" rel="noopener noreferrer nofollow" style={{ textDecoration:'none' }}><Btn variant="ghost" size="sm">🔗 Website</Btn></a>}
-            </div>
           </div>
-        </DCard>
+
+          {/* Contact actions */}
+          <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+            {b.phone    && <a href={`tel:${b.phone}`} onClick={() => trackBizEvent(b.business_id, 'phone_click')} style={{ textDecoration:'none' }}><Btn variant="secondary" size="sm">📞 Call</Btn></a>}
+            {b.whatsapp && <a href={`https://wa.me/${b.whatsapp.replace(/[^0-9]/g,'')}`} onClick={() => trackBizEvent(b.business_id, 'whatsapp_click')} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}><Btn variant="secondary" size="sm">💬 WhatsApp</Btn></a>}
+            {b.link_url && <a href={b.link_url} onClick={() => trackBizEvent(b.business_id, 'link_click')} target="_blank" rel="noopener noreferrer nofollow" style={{ textDecoration:'none' }}><Btn variant="ghost" size="sm">🔗 Website</Btn></a>}
+          </div>
+        </div>
+
+        {/* Photo grid */}
+        {photos.length === 0
+          ? <EmptyState icon="◇" message="No photos yet." />
+          : <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'clamp(2px,1vw,6px)', marginTop:4 }}>
+              {photos.map((src, i) => (
+                <div key={i} onClick={() => setLightbox(i)} style={{ aspectRatio:'1 / 1', overflow:'hidden', cursor:'pointer', background:'var(--bg-elevated)' }}>
+                  <img src={src} alt="" loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
+                </div>
+              ))}
+            </div>}
+
+        {lightbox != null && <BizLightbox images={photos} index={lightbox} onClose={() => setLightbox(null)} onNav={(d) => setLightbox(i => (i + d + photos.length) % photos.length)} />}
       </div>
     )
   }
@@ -3862,28 +3927,26 @@ function LocalBrowse({ setPage }) {
         </div>
       </div>
 
-      <div style={{ maxWidth:500, margin:'0 auto' }}>
-        {/* Category filter */}
-        <div className="feed-scroll" style={{ display:'flex', gap:8, marginBottom:20, overflowX:'auto', paddingBottom:4 }}>
-          {['all', ...BIZ_CATEGORIES].map(c => (
-            <button key={c} onClick={() => setCat(c)}
-              style={{ padding:'7px 14px', borderRadius:100, fontSize:'.82rem', fontWeight:600, whiteSpace:'nowrap', cursor:'pointer', border:`1px solid ${cat===c?'var(--accent)':'var(--border)'}`, background:cat===c?'var(--accent)':'var(--bg-surface)', color:cat===c?'#fff':'var(--text-secondary)' }}>
-              {c === 'all' ? 'All' : c}
-            </button>
+      {/* Category filter */}
+      <div className="feed-scroll" style={{ display:'flex', gap:8, marginBottom:20, overflowX:'auto', paddingBottom:4 }}>
+        {['all', ...BIZ_CATEGORIES].map(c => (
+          <button key={c} onClick={() => setCat(c)}
+            style={{ padding:'7px 14px', borderRadius:100, fontSize:'.82rem', fontWeight:600, whiteSpace:'nowrap', cursor:'pointer', border:`1px solid ${cat===c?'var(--accent)':'var(--border)'}`, background:cat===c?'var(--accent)':'var(--bg-surface)', color:cat===c?'#fff':'var(--text-secondary)' }}>
+            {c === 'all' ? 'All' : c}
+          </button>
+        ))}
+      </div>
+
+      {loading ? <div style={{ padding:50, textAlign:'center' }}><Spinner /></div>
+       : businesses.length === 0 ? (
+        <EmptyState icon="◇" message={cat==='all' ? 'No local businesses listed yet — check back soon!' : `No businesses in ${cat} yet`} />
+      ) : (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:'clamp(8px,1.5vw,16px)' }}>
+          {businesses.map(b => (
+            <BizGridTile key={b.business_id} b={b} onOpen={() => { setSelected(b); setLightbox(null); trackBizEvent(b.business_id, 'view') }} />
           ))}
         </div>
-
-        {loading ? <div style={{ padding:50, textAlign:'center' }}><Spinner /></div>
-         : businesses.length === 0 ? (
-          <EmptyState icon="◇" message={cat==='all' ? 'No local businesses listed yet — check back soon!' : `No businesses in ${cat} yet`} />
-        ) : (
-          <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
-            {businesses.map(b => (
-              <BizFeedPost key={b.business_id} b={b} onOpen={() => { setSelected(b); trackBizEvent(b.business_id, 'view') }} />
-            ))}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   )
 }
