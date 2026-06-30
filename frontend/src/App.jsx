@@ -2445,6 +2445,108 @@ function TaskBrowse({ setPage, setSelectedTask }) {
   )
 }
 
+// C3: a compact progress stepper for the two-party task journey.
+function StatusTimeline({ status }) {
+  const steps = [['open','Posted'], ['in_progress','In progress'], ['submitted','Submitted'], ['completed','Completed']]
+  const order = steps.map(s => s[0])
+  const cur = order.indexOf(status === 'disputed' ? 'submitted' : status)
+  return (
+    <DCard hover={false} style={{ padding:'14px 16px' }}>
+      <div style={{ display:'flex', alignItems:'flex-start' }}>
+        {steps.map(([key, label], i) => {
+          const done = i <= cur
+          return (
+            <React.Fragment key={key}>
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, flexShrink:0, width:64 }}>
+                <div style={{ width:22, height:22, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'.68rem', fontWeight:700, background:done?'var(--accent)':'var(--bg-elevated)', color:done?'#fff':'var(--text-muted)', border:done?'none':'1px solid var(--border)' }}>{done?'✓':i+1}</div>
+                <span style={{ fontSize:'.64rem', textAlign:'center', color:i===cur?'var(--accent)':'var(--text-muted)', fontWeight:i===cur?700:500 }}>{label}</span>
+              </div>
+              {i < steps.length-1 && <div style={{ flex:1, height:2, background:i<cur?'var(--accent)':'var(--border)', marginTop:10 }} />}
+            </React.Fragment>
+          )
+        })}
+      </div>
+    </DCard>
+  )
+}
+
+// C1/C2: the price handshake between the two parties of an awarded task. Either
+// proposes; the other confirms; acceptance becomes the on-platform agreed price.
+function TaskAgreementPanel({ taskId, task, otherName, onAgreed }) {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const myId = (() => { try { return JSON.parse(localStorage.getItem('rl_user') || 'null')?.userId } catch { return null } })()
+  const [data, setData] = useState(null)
+  const [amount, setAmount] = useState('')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const load = () => fetch(`${API_BASE}/tasks/${taskId}/agreements`, { headers: { Authorization: `Bearer ${token()}` } })
+    .then(r => r.ok ? r.json() : { agreements: [], agreedAmount: null }).then(setData).catch(() => setData({ agreements: [], agreedAmount: null }))
+  useEffect(() => { load() }, [taskId]) // eslint-disable-line
+
+  const pending = data?.agreements?.find(a => a.status === 'proposed')
+  const agreed = data?.agreedAmount ?? task.agreed_amount
+
+  async function propose() {
+    const amt = parseFloat(amount)
+    if (!amt || amt <= 0) { toast('Enter a valid amount', 'error'); return }
+    setBusy(true)
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}/agreements`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ amount: amt, note: note.trim() || null }) })
+      const d = await res.json().catch(() => ({})); if (!res.ok) throw new Error(d.message || 'Could not propose')
+      toast(`Price proposed — waiting for ${otherName} to confirm`, 'success'); setAmount(''); setNote(''); load()
+    } catch (e) { toast(e.message, 'error') } finally { setBusy(false) }
+  }
+  async function respond(agreementId, accept) {
+    setBusy(true)
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}/agreements/${agreementId}/respond`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ accept }) })
+      const d = await res.json().catch(() => ({})); if (!res.ok) throw new Error(d.message || 'Could not respond')
+      toast(accept ? 'Price agreed ✓' : 'Proposal declined', accept ? 'success' : 'info')
+      if (accept && d.agreedAmount != null && onAgreed) onAgreed(d.agreedAmount)
+      load()
+    } catch (e) { toast(e.message, 'error') } finally { setBusy(false) }
+  }
+
+  return (
+    <DCard hover={false}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10, gap:8 }}>
+        <Mono size="0.68rem" color="var(--accent)">Price agreement</Mono>
+        {agreed != null && <span style={{ fontFamily:'var(--font-display)', fontWeight:800 }}>Agreed: R{agreed}</span>}
+      </div>
+      {pending ? (
+        <div style={{ border:'1px solid var(--accent)', background:'var(--accent-glow)', borderRadius:'var(--radius-sm)', padding:12 }}>
+          <div style={{ fontWeight:700 }}>R{pending.amount} proposed {pending.proposed_by === myId ? 'by you' : `by ${otherName}`}</div>
+          {pending.note && <p style={{ fontSize:'.82rem', color:'var(--text-secondary)', margin:'6px 0 0', lineHeight:1.5 }}>{pending.note}</p>}
+          {pending.proposed_by === myId
+            ? <Mono style={{ display:'block', marginTop:8, color:'var(--text-muted)' }}>Waiting for {otherName} to confirm…</Mono>
+            : <div style={{ display:'flex', gap:8, marginTop:10, flexWrap:'wrap' }}>
+                <Btn variant="success" size="sm" loading={busy} onClick={() => respond(pending.agreement_id, true)}>Accept R{pending.amount}</Btn>
+                <Btn variant="secondary" size="sm" onClick={() => respond(pending.agreement_id, false)}>Decline</Btn>
+              </div>}
+        </div>
+      ) : (
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          <Input label="Propose a price (R)" type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder={agreed != null ? String(agreed) : 'e.g. 350'} />
+          <Input label="Note (optional)" value={note} onChange={e => setNote(e.target.value)} placeholder="Why the change?" />
+          <Btn size="sm" loading={busy} onClick={propose}>Propose to {otherName}</Btn>
+        </div>
+      )}
+      {data?.agreements?.length > 0 && (
+        <div style={{ marginTop:12, borderTop:'1px solid var(--border)', paddingTop:10, display:'flex', flexDirection:'column', gap:6 }}>
+          {data.agreements.slice(0, 6).map(a => (
+            <div key={a.agreement_id} style={{ display:'flex', justifyContent:'space-between', fontSize:'.78rem', color:'var(--text-secondary)' }}>
+              <span>R{a.amount} · {a.proposed_by_name || 'User'}</span>
+              <span style={{ color: a.status==='accepted'?'var(--success)':a.status==='declined'?'var(--danger)':'var(--text-muted)' }}>{a.status}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </DCard>
+  )
+}
+
 function TaskDetail({ taskId, setPage, openChat }) {
   const { user } = useAuth()
   const { state, dispatch } = useStore()
@@ -2779,6 +2881,14 @@ function TaskDetail({ taskId, setPage, openChat }) {
             )}
           </DCard>
 
+          {/* C3: progress timeline once work is under way */}
+          {currentStatus!=='open' && currentStatus!=='cancelled' && currentStatus!=='expired' && <StatusTimeline status={currentStatus} />}
+          {/* C1/C2: price handshake — visible to the two parties while the task is active */}
+          {(isOwner || task.assigned_to===user?.userId) && ['in_progress','submitted'].includes(currentStatus) && (
+            <TaskAgreementPanel taskId={taskId} task={task}
+              otherName={isOwner ? (acceptedBid?.display_name || 'the earner') : (task.creator_name || 'the creator')}
+              onAgreed={amt => setTask(t => ({ ...t, agreed_amount: amt }))} />
+          )}
           {/* ── Completion handshake ── */}
           {/* Earner submits finished work */}
           {task.assigned_to===user?.userId&&currentStatus==='in_progress'&&(

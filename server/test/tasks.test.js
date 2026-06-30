@@ -182,6 +182,53 @@ describe('PATCH /tasks/:taskId/extend', () => {
   })
 })
 
+describe('price handshake (C1/C2)', () => {
+  const AG = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+  const awarded = { task_id: TASK_ID, creator_id: 'creator-1', assigned_to: 'earner-9', status: 'in_progress', title: 'Fix bike' }
+  it('lets a party propose a price (201)', async () => {
+    let inserted = false
+    mockDb(pool, sql => {
+      if (/SELECT \* FROM tasks WHERE task_id = \$1/.test(sql)) return { rows: [awarded] }
+      if (/INSERT INTO task_agreements/.test(sql)) { inserted = true; return { rows: [{ agreement_id: AG, amount: 300, status: 'proposed' }] } }
+      return { rows: [] }
+    })
+    const res = await request(app).post(`/tasks/${TASK_ID}/agreements`).set('Authorization', `Bearer ${token}`).send({ amount: 300 })
+    expect(res.status).toBe(201)
+    expect(inserted).toBe(true)
+  })
+  it('forbids a non-party from proposing (403)', async () => {
+    mockDb(pool, sql => { if (/SELECT \* FROM tasks WHERE task_id = \$1/.test(sql)) return { rows: [{ ...awarded, creator_id: 'someone', assigned_to: 'other' }] } })
+    const res = await request(app).post(`/tasks/${TASK_ID}/agreements`).set('Authorization', `Bearer ${token}`).send({ amount: 300 })
+    expect(res.status).toBe(403)
+  })
+  it('409 when the task is no longer active', async () => {
+    mockDb(pool, sql => { if (/SELECT \* FROM tasks WHERE task_id = \$1/.test(sql)) return { rows: [{ ...awarded, status: 'completed' }] } })
+    const res = await request(app).post(`/tasks/${TASK_ID}/agreements`).set('Authorization', `Bearer ${token}`).send({ amount: 300 })
+    expect(res.status).toBe(409)
+  })
+  it('the other party accepts → writes agreed_amount (200)', async () => {
+    mockDb(pool)
+    let setAmount = false
+    pool.connect.mockResolvedValue(mockClient(sql => {
+      if (/FROM task_agreements a JOIN tasks t/.test(sql)) return { rows: [{ agreement_id: AG, proposed_by: 'earner-9', amount: 300, status: 'proposed', creator_id: 'creator-1', assigned_to: 'earner-9', title: 'Fix bike' }] }
+      if (/UPDATE tasks SET agreed_amount/.test(sql)) { setAmount = true; return { rows: [] } }
+      return { rows: [] }
+    }))
+    const res = await request(app).post(`/tasks/${TASK_ID}/agreements/${AG}/respond`).set('Authorization', `Bearer ${token}`).send({ accept: true })
+    expect(res.status).toBe(200)
+    expect(setAmount).toBe(true)
+  })
+  it('forbids the proposer from confirming their own (403)', async () => {
+    mockDb(pool)
+    pool.connect.mockResolvedValue(mockClient(sql =>
+      /FROM task_agreements a JOIN tasks t/.test(sql)
+        ? { rows: [{ agreement_id: AG, proposed_by: 'creator-1', amount: 300, status: 'proposed', creator_id: 'creator-1', assigned_to: 'earner-9', title: 'Fix bike' }] }
+        : { rows: [] }))
+    const res = await request(app).post(`/tasks/${TASK_ID}/agreements/${AG}/respond`).set('Authorization', `Bearer ${token}`).send({ accept: true })
+    expect(res.status).toBe(403)
+  })
+})
+
 describe('completion handshake', () => {
   it('earner submits work (in_progress → submitted, 200)', async () => {
     mockDb(pool, sql => /UPDATE tasks SET status = 'submitted'/.test(sql)

@@ -239,8 +239,8 @@ router.patch('/:taskId/bids/:bidId/accept',
       const winningBid = bidResult.rows[0]
       await client.query("UPDATE bids SET status = 'accepted' WHERE bid_id = $1", [bidId])
       await client.query("UPDATE bids SET status = 'rejected' WHERE task_id = $1 AND bid_id != $2", [taskId, bidId])
-      await client.query("UPDATE tasks SET status = 'in_progress', assigned_to = $1 WHERE task_id = $2",
-        [winningBid.bidder_id, taskId])
+      await client.query("UPDATE tasks SET status = 'in_progress', assigned_to = $1, agreed_amount = $2 WHERE task_id = $3",
+        [winningBid.bidder_id, winningBid.amount, taskId])
       await client.query('COMMIT')
 
       // Direct notification — replaces RabbitMQ bid.accepted event
@@ -375,6 +375,109 @@ router.patch('/:taskId/complete',
     }
   }
 )
+
+// ── PRICE HANDSHAKE (C1/C2): a two-party agreement on the task's price ──
+// Load a task + the caller's role in its handshake (creator ↔ assigned earner).
+async function loadTaskParty(taskId, userId) {
+  const { rows } = await pool.query('SELECT * FROM tasks WHERE task_id = $1', [taskId])
+  const task = rows[0] || null
+  if (!task) return { task: null }
+  const isCreator = task.creator_id === userId
+  const isEarner = task.assigned_to === userId
+  const other = isCreator ? task.assigned_to : (isEarner ? task.creator_id : null)
+  return { task, isCreator, isEarner, isParty: isCreator || isEarner, other }
+}
+
+// POST /tasks/:taskId/agreements — propose a (new) price. The other party confirms.
+router.post('/:taskId/agreements',
+  requireAuth,
+  [param('taskId').isUUID(), body('amount').isFloat({ gt: 0 }), body('note').optional({ nullable: true }).trim().isLength({ max: 280 })],
+  check,
+  async (req, res) => {
+    const { taskId } = req.params
+    const { amount } = req.body
+    const note = (req.body.note || '').toString().trim().slice(0, 280) || null
+    if (rejectIfProfane(res, note)) return
+    try {
+      const { task, isParty, other } = await loadTaskParty(taskId, req.userId)
+      if (!task) return res.status(404).json({ message: 'Task not found.' })
+      if (!isParty) return res.status(403).json({ message: 'Only the task creator or assigned earner can propose a price.' })
+      if (!other) return res.status(409).json({ message: 'This task has no assigned earner yet.' })
+      if (!['in_progress', 'submitted'].includes(task.status)) return res.status(409).json({ message: 'A price can only be agreed while the task is active.' })
+      await pool.query("UPDATE task_agreements SET status = 'superseded' WHERE task_id = $1 AND status = 'proposed'", [taskId])
+      const { rows } = await pool.query(
+        `INSERT INTO task_agreements (task_id, proposed_by, amount, note) VALUES ($1,$2,$3,$4) RETURNING *`,
+        [taskId, req.userId, amount, note])
+      createNotification({
+        userId: other, type: 'task.price_proposed',
+        title: 'New price proposed', body: `A new price of R${amount} was proposed on "${task.title}" — review and confirm.`,
+        referenceId: taskId,
+      }).catch(() => {})
+      return res.status(201).json({ agreement: rows[0] })
+    } catch (err) {
+      log.error('POST /tasks/:taskId/agreements', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// POST /tasks/:taskId/agreements/:agreementId/respond — the OTHER party accepts/declines.
+// Accepting writes tasks.agreed_amount (the on-platform source of truth, C2).
+router.post('/:taskId/agreements/:agreementId/respond',
+  requireAuth,
+  [param('taskId').isUUID(), param('agreementId').isUUID(), body('accept').isBoolean()],
+  check,
+  async (req, res) => {
+    const { taskId, agreementId } = req.params
+    const accept = req.body.accept === true
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      const { rows } = await client.query(
+        `SELECT a.*, t.creator_id, t.assigned_to, t.title
+           FROM task_agreements a JOIN tasks t ON t.task_id = a.task_id
+          WHERE a.agreement_id = $1 AND a.task_id = $2 FOR UPDATE`, [agreementId, taskId])
+      const ag = rows[0]
+      if (!ag) { await client.query('ROLLBACK'); return res.status(404).json({ message: 'Proposal not found.' }) }
+      if (ag.creator_id !== req.userId && ag.assigned_to !== req.userId) { await client.query('ROLLBACK'); return res.status(403).json({ message: 'Not your task.' }) }
+      if (ag.proposed_by === req.userId) { await client.query('ROLLBACK'); return res.status(403).json({ message: 'The other party must confirm your proposal.' }) }
+      if (ag.status !== 'proposed') { await client.query('ROLLBACK'); return res.status(409).json({ message: 'This proposal has already been answered.' }) }
+      const newStatus = accept ? 'accepted' : 'declined'
+      await client.query('UPDATE task_agreements SET status = $1, responded_at = NOW(), responded_by = $2 WHERE agreement_id = $3',
+        [newStatus, req.userId, agreementId])
+      if (accept) await client.query('UPDATE tasks SET agreed_amount = $1, updated_at = NOW() WHERE task_id = $2', [ag.amount, taskId])
+      await client.query('COMMIT')
+      createNotification({
+        userId: ag.proposed_by, type: `task.price_${newStatus}`,
+        title: accept ? 'Price agreed' : 'Price declined',
+        body: accept ? `Your proposed price of R${ag.amount} on "${ag.title}" was agreed.` : `Your proposed price on "${ag.title}" was declined.`,
+        referenceId: taskId,
+      }).catch(() => {})
+      return res.status(200).json({ agreement: { ...ag, status: newStatus }, agreedAmount: accept ? ag.amount : null })
+    } catch (err) {
+      await client.query('ROLLBACK')
+      log.error('respond agreement', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    } finally { client.release() }
+  }
+)
+
+// GET /tasks/:taskId/agreements — the handshake history (parties + admin).
+router.get('/:taskId/agreements', requireAuth, [param('taskId').isUUID()], check, async (req, res) => {
+  try {
+    const { task, isParty } = await loadTaskParty(req.params.taskId, req.userId)
+    if (!task) return res.status(404).json({ message: 'Task not found.' })
+    if (!isParty && req.userRole !== 'admin') return res.status(403).json({ message: 'Not your task.' })
+    const { rows } = await pool.query(
+      `SELECT a.*, up.display_name AS proposed_by_name
+         FROM task_agreements a LEFT JOIN user_profiles up ON up.user_id = a.proposed_by
+        WHERE a.task_id = $1 ORDER BY a.created_at DESC`, [req.params.taskId])
+    return res.status(200).json({ agreements: rows, agreedAmount: task.agreed_amount })
+  } catch (err) {
+    log.error('GET /tasks/:taskId/agreements', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
 
 // PATCH /tasks/:taskId — creator edits an OPEN task (locked once work starts).
 router.patch('/:taskId',
