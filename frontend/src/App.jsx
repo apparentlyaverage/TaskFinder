@@ -2313,19 +2313,6 @@ function useCategories() {
   return cats
 }
 
-function CardCover({ task, height = 108 }) {
-  const c = categoryFor(task)
-  return (
-    <div style={{ height, background:`linear-gradient(135deg, ${c.g[0]}, ${c.g[1]})`, position:'relative', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden' }}>
-      <div style={{ position:'absolute', width:130, height:130, borderRadius:'50%', background:'rgba(255,255,255,.35)', top:-58, left:-34 }} />
-      <div style={{ position:'absolute', width:90, height:90, borderRadius:'50%', background:'rgba(255,255,255,.25)', bottom:-44, right:36 }} />
-      <span style={{ fontSize:'2.5rem', position:'relative', filter:'drop-shadow(0 2px 6px rgba(33,28,46,.15))' }}>{c.icon}</span>
-      <div style={{ position:'absolute', top:10, left:10 }}><Badge variant={task.status}>{task.status.replace('_',' ')}</Badge></div>
-      <span style={{ position:'absolute', right:10, bottom:10, background:'rgba(255,255,255,.94)', color:'var(--text-primary)', fontFamily:'var(--font-display)', fontWeight:800, padding:'4px 11px', borderRadius:10, fontSize:'.95rem', boxShadow:'0 1px 4px rgba(33,28,46,.12)' }}>R{task.budget}</span>
-    </div>
-  )
-}
-
 function TaskBrowse({ setPage, setSelectedTask }) {
   const { state } = useStore()
   const [skill, setSkill]   = useState('')
@@ -2428,21 +2415,29 @@ function TaskBrowse({ setPage, setSelectedTask }) {
       </div>
       {loading && <div style={{ padding:40, textAlign:'center' }}><Spinner /></div>}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(310px,1fr))', gap:14 }}>
-        {!loading && filtered.map(task => (
-          <DCard key={task.task_id} onClick={() => { setSelectedTask(task.task_id); setPage('task-detail') }} style={{ padding:0, overflow:'hidden' }}>
-            <CardCover task={task} />
+        {!loading && filtered.map(task => {
+          const c = categoryFor(task)   // category drives the card's colour + label (no cover image)
+          return (
+          <DCard key={task.task_id} onClick={() => { setSelectedTask(task.task_id); setPage('task-detail') }} style={{ padding:0, overflow:'hidden', borderLeft:`4px solid ${c.g[1]}` }}>
             <div style={{ padding:'14px 16px 16px' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, marginBottom:10 }}>
+                <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontFamily:'var(--font-mono)', fontSize:'.68rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', color:'var(--text-secondary)', background:c.g[0], borderRadius:100, padding:'3px 10px' }}>
+                  <span aria-hidden="true">{c.icon}</span>{c.name}
+                </span>
+                <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.05rem' }}>R{task.budget}</span>
+              </div>
               <h2 style={{ fontFamily:'var(--font-display)', fontSize:'1.05rem', fontWeight:700, marginBottom:6, lineHeight:1.3 }}>{task.title}</h2>
               <Mono style={{ display:'block', marginBottom:10 }}>📍 {task.campus_zone || 'Rhodes Campus'} · {timeAgo(task.created_at)}</Mono>
               <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:12 }}>{task.skill_tags.slice(0,3).map(t => <Tag key={t}>{t}</Tag>)}</div>
               <Divider style={{ marginBottom:10 }} />
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                <Mono>Due {new Date(task.deadline).toLocaleDateString()}</Mono>
-                <Mono>{bidCount(task.task_id)} bid{bidCount(task.task_id)!==1?'s':''}</Mono>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
+                <Badge variant={task.status}>{task.status.replace('_',' ')}</Badge>
+                <Mono>{bidCount(task.task_id)} bid{bidCount(task.task_id)!==1?'s':''} · Due {new Date(task.deadline).toLocaleDateString()}</Mono>
               </div>
             </div>
           </DCard>
-        ))}
+          )
+        })}
         {filtered.length===0 && <div style={{ gridColumn:'1/-1' }}><EmptyState icon="◻" message="No tasks match your filter" action={filtersActive?<Btn variant="secondary" size="sm" onClick={() => { setSkill(''); setCat(null); setStatus('all'); setSort('newest') }}>Clear Filters</Btn>:null} /></div>}
       </div>
     </div>
