@@ -3,7 +3,7 @@
 // rejected at create).
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import request from 'supertest'
-import { authToken, mockDb } from './helpers.js'
+import { authToken, mockDb, mockClient } from './helpers.js'
 
 vi.mock('../db.js', () => ({ pool: { query: vi.fn(), connect: vi.fn() } }))
 
@@ -204,6 +204,51 @@ describe('POST /deals/:id/redeem (customer)', () => {
     })
     const res = await request(app).post(`/deals/${DEAL}/redeem`).set('Authorization', `Bearer ${otherToken}`)
     expect(res.status).toBe(409)
+  })
+})
+
+describe('A2 — student QR: claim + redeem-token', () => {
+  it('claims a regular deal and returns a one-time token (201)', async () => {
+    mockDb(pool, s => {
+      if (/student_only, status, expires_at FROM campus_deals/.test(s)) return { rows: [{ deal_id: DEAL, business_owner_id: OWNER, student_only: false, status: 'active', expires_at: future }] }
+      if (/FROM deal_claims WHERE deal_id/.test(s)) return { rows: [] }
+      if (/INSERT INTO deal_claims/.test(s)) return { rows: [{ claim_id: 'cl1', token: 'ABC123XY', status: 'claimed' }] }
+    })
+    const res = await request(app).post(`/deals/${DEAL}/claim`).set('Authorization', `Bearer ${otherToken}`)
+    expect(res.status).toBe(201)
+    expect(res.body.claim.token).toBe('ABC123XY')
+  })
+  it('blocks a non-student from a student_only deal (403)', async () => {
+    mockDb(pool, s => {
+      if (/student_only, status, expires_at FROM campus_deals/.test(s)) return { rows: [{ deal_id: DEAL, business_owner_id: OWNER, student_only: true, status: 'active', expires_at: future }] }
+      if (/SELECT email, is_email_verified FROM users/.test(s)) return { rows: [{ email: 'x@gmail.com', is_email_verified: true }] }
+      if (/FROM student_domains WHERE domain/.test(s)) return { rows: [] } // gmail.com isn't an allowlisted campus
+    })
+    const res = await request(app).post(`/deals/${DEAL}/claim`).set('Authorization', `Bearer ${otherToken}`)
+    expect(res.status).toBe(403)
+  })
+  it('redeems a valid code for the owning business (200)', async () => {
+    mockDb(pool, s => {
+      if (/FROM businesses WHERE owner_id/.test(s)) return { rows: [{ business_id: BIZ }] }
+      if (/FROM deal_claims c JOIN campus_deals d/.test(s)) return { rows: [{ claim_id: 'cl1', status: 'claimed', user_id: OTHER, deal_id: DEAL, business_id: BIZ, title: 'Coffee', price_cents: 4500, deal_status: 'active', expires_at: future }] }
+      if (/FROM user_profiles WHERE user_id/.test(s)) return { rows: [{ display_name: 'Sam' }] }
+    })
+    pool.connect.mockResolvedValue(mockClient(s => {
+      if (/UPDATE deal_claims SET status = 'redeemed'/.test(s)) return { rows: [{ claim_id: 'cl1' }] }
+      if (/INSERT INTO deal_redemptions/.test(s)) return { rows: [] }
+      return undefined
+    }))
+    const res = await request(app).post('/deals/redeem-token').set('Authorization', `Bearer ${ownerToken}`).send({ token: 'ABC123XY' })
+    expect(res.status).toBe(200)
+    expect(res.body.customer).toBe('Sam')
+  })
+  it('rejects a code that belongs to another business (403)', async () => {
+    mockDb(pool, s => {
+      if (/FROM businesses WHERE owner_id/.test(s)) return { rows: [{ business_id: BIZ }] }
+      if (/FROM deal_claims c JOIN campus_deals d/.test(s)) return { rows: [{ claim_id: 'cl1', status: 'claimed', user_id: OTHER, deal_id: DEAL, business_id: 'other-biz', title: 'Coffee', deal_status: 'active', expires_at: future }] }
+    })
+    const res = await request(app).post('/deals/redeem-token').set('Authorization', `Bearer ${ownerToken}`).send({ token: 'ABC123XY' })
+    expect(res.status).toBe(403)
   })
 })
 

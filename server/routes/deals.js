@@ -17,6 +17,7 @@ import log from '../log.js'
 import { requireAuth, requireAdmin } from '../middleware.js'
 import { createNotification } from '../notify.js'
 import { writeAudit } from '../audit.js'
+import crypto from 'node:crypto'
 
 const router = Router()
 
@@ -31,6 +32,18 @@ async function ownedBusiness(userId) {
   const { rows } = await pool.query(
     'SELECT business_id FROM businesses WHERE owner_id = $1 ORDER BY created_at ASC LIMIT 1', [userId])
   return rows[0] || null
+}
+
+// A "verified student" = a verified email whose domain is in the campus allowlist
+// (student_domains). Gates claiming of student_only deals (A2).
+async function isVerifiedStudent(userId) {
+  const { rows } = await pool.query('SELECT email, is_email_verified FROM users WHERE user_id = $1', [userId])
+  const u = rows[0]
+  if (!u || !u.is_email_verified) return false
+  const domain = (u.email || '').split('@')[1]?.toLowerCase()
+  if (!domain) return false
+  const d = await pool.query('SELECT 1 FROM student_domains WHERE domain = $1', [domain])
+  return d.rows.length > 0
 }
 
 // Allow empty/null; reject dangerous schemes; require an http(s) host. Mirrors
@@ -50,7 +63,7 @@ function cleanImageUrl(value) {
 const futureDate = v => { if (new Date(v).getTime() <= Date.now()) throw new Error('expiresAt must be in the future.'); return true }
 
 const PUBLIC_COLS = `d.deal_id, d.title, d.description, d.image_url, d.price_cents,
-  d.original_price_cents, d.starts_at, d.expires_at, d.location_id, d.recurrence, d.created_at,
+  d.original_price_cents, d.starts_at, d.expires_at, d.location_id, d.recurrence, d.student_only, d.created_at,
   b.business_id, b.name AS business_name, b.logo_url, b.category`
 
 // ── PUBLIC: active, campus-wide deals ──
@@ -138,6 +151,7 @@ router.post('/',
     body('originalPriceCents').optional({ nullable: true }).isInt({ min: 0 }),
     body('locationId').optional({ nullable: true }).isUUID(),
     body('status').optional().isIn(['draft', 'active']),
+    body('studentOnly').optional().isBoolean(),
     body('recurrence').optional().isIn(['none', 'daily', 'weekly', 'monthly']),
     body('recurrenceUntil').optional({ nullable: true }).isISO8601(),
     body('expiresAt').isISO8601().bail().custom(futureDate),
@@ -158,11 +172,11 @@ router.post('/',
         `INSERT INTO campus_deals
            (business_id, business_owner_id, location_id, title, description, image_url,
             price_cents, original_price_cents, status, expires_at,
-            recurrence, recurrence_until, active_window_s)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+            recurrence, recurrence_until, active_window_s, student_only)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
         [biz.business_id, req.userId, b.locationId || null, b.title, b.description || null,
          imageUrl, b.priceCents ?? null, b.originalPriceCents ?? null, b.status || 'active', b.expiresAt,
-         recurrence, b.recurrenceUntil || null, activeWindowS])
+         recurrence, b.recurrenceUntil || null, activeWindowS, b.studentOnly === true])
       return res.status(201).json({ deal: rows[0] })
     } catch (err) {
       if (/image URL|future/i.test(err.message)) return res.status(422).json({ message: err.message })
@@ -184,6 +198,7 @@ router.patch('/:id',
     body('originalPriceCents').optional({ nullable: true }).isInt({ min: 0 }),
     body('locationId').optional({ nullable: true }).isUUID(),
     body('status').optional().isIn(['draft', 'active', 'archived']),
+    body('studentOnly').optional().isBoolean(),
     body('recurrence').optional().isIn(['none', 'daily', 'weekly', 'monthly']),
     body('recurrenceUntil').optional({ nullable: true }).isISO8601(),
     body('expiresAt').optional().isISO8601().bail().custom(futureDate),
@@ -205,6 +220,7 @@ router.patch('/:id',
       if (req.body.priceCents !== undefined)         { sets.push(`price_cents = $${i++}`);          vals.push(req.body.priceCents) }
       if (req.body.originalPriceCents !== undefined) { sets.push(`original_price_cents = $${i++}`); vals.push(req.body.originalPriceCents) }
       if (req.body.locationId !== undefined)         { sets.push(`location_id = $${i++}`);          vals.push(req.body.locationId || null) }
+      if (req.body.studentOnly !== undefined)        { sets.push(`student_only = $${i++}`);         vals.push(req.body.studentOnly === true) }
       if (req.body.expiresAt !== undefined)          { sets.push(`expires_at = $${i++}`);           vals.push(req.body.expiresAt) }
       if (req.body.imageUrl !== undefined)           { sets.push(`image_url = $${i++}`);            vals.push(cleanImageUrl(req.body.imageUrl)) }
       if (req.body.recurrence !== undefined)         { sets.push(`recurrence = $${i++}`);           vals.push(req.body.recurrence) }
@@ -292,6 +308,72 @@ router.post('/:id/redeem', requireAuth, [ param('id').isUUID() ], check, async (
     return res.status(201).json({ redemption })
   } catch (err) {
     log.error('POST /deals/:id/redeem', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
+
+// ── CUSTOMER: claim a deal → a one-time QR token the business later redeems (A2) ──
+// POST /deals/:id/claim   (student_only deals require a verified student)
+router.post('/:id/claim', requireAuth, [ param('id').isUUID() ], check, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT deal_id, business_owner_id, student_only, status, expires_at FROM campus_deals WHERE deal_id = $1`, [req.params.id])
+    const deal = rows[0]
+    if (!deal || deal.status !== 'active' || new Date(deal.expires_at).getTime() <= Date.now()) {
+      return res.status(404).json({ message: 'This deal is no longer available.' })
+    }
+    if (deal.business_owner_id === req.userId) return res.status(400).json({ message: "You can't claim your own deal." })
+    if (deal.student_only && !(await isVerifiedStudent(req.userId))) {
+      return res.status(403).json({ message: 'This deal is for verified students — verify your student email to claim it.' })
+    }
+    // Re-claiming returns the existing live token (idempotent QR), never a duplicate.
+    const existing = await pool.query(
+      `SELECT * FROM deal_claims WHERE deal_id = $1 AND user_id = $2 AND status = 'claimed'`, [deal.deal_id, req.userId])
+    if (existing.rows.length) return res.status(200).json({ claim: existing.rows[0] })
+    const token = crypto.randomBytes(9).toString('base64').replace(/[^A-Za-z0-9]/g, '').slice(0, 10).toUpperCase()
+    const ins = await pool.query(
+      `INSERT INTO deal_claims (deal_id, user_id, token) VALUES ($1,$2,$3) RETURNING *`, [deal.deal_id, req.userId, token])
+    return res.status(201).json({ claim: ins.rows[0] })
+  } catch (err) {
+    log.error('POST /deals/:id/claim', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
+
+// ── OWNER: redeem a student's claim token (the business "scans" the QR) (A2) ──
+// POST /deals/redeem-token   { token }  — records a normal deal_redemption.
+router.post('/redeem-token', requireAuth, [ body('token').trim().isLength({ min: 4, max: 24 }) ], check, async (req, res) => {
+  try {
+    const biz = await ownedBusiness(req.userId)
+    if (!biz) return res.status(403).json({ message: 'No business is linked to your account.' })
+    const token = req.body.token.trim().toUpperCase()
+    const { rows } = await pool.query(
+      `SELECT c.claim_id, c.status, c.user_id, d.deal_id, d.business_id, d.title, d.price_cents,
+              d.status AS deal_status, d.expires_at
+         FROM deal_claims c JOIN campus_deals d ON d.deal_id = c.deal_id
+        WHERE c.token = $1`, [token])
+    const row = rows[0]
+    if (!row) return res.status(404).json({ message: 'Code not found.' })
+    if (row.business_id !== biz.business_id) return res.status(403).json({ message: 'This code is for another business.' })
+    if (row.status === 'redeemed') return res.status(409).json({ message: 'This code has already been redeemed.' })
+    if (row.deal_status !== 'active' || new Date(row.expires_at).getTime() <= Date.now()) {
+      return res.status(410).json({ message: 'This deal has expired.' })
+    }
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      const upd = await client.query(
+        `UPDATE deal_claims SET status = 'redeemed', redeemed_at = NOW() WHERE claim_id = $1 AND status = 'claimed' RETURNING claim_id`, [row.claim_id])
+      if (upd.rows.length === 0) { await client.query('ROLLBACK'); return res.status(409).json({ message: 'This code has already been redeemed.' }) }
+      await client.query(
+        `INSERT INTO deal_redemptions (deal_id, business_id, customer_id, amount_cents)
+         VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`, [row.deal_id, row.business_id, row.user_id, row.price_cents ?? null])
+      await client.query('COMMIT')
+    } catch (e) { await client.query('ROLLBACK'); throw e } finally { client.release() }
+    const cust = await pool.query('SELECT display_name FROM user_profiles WHERE user_id = $1', [row.user_id])
+    return res.status(200).json({ ok: true, dealTitle: row.title, customer: cust.rows[0]?.display_name || 'Student' })
+  } catch (err) {
+    log.error('POST /deals/redeem-token', { reqId: req.id, msg: err.message })
     return res.status(500).json({ message: 'Internal server error.' })
   }
 })

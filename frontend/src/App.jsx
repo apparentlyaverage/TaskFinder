@@ -9,6 +9,7 @@ import React, {
   createContext, useContext, useReducer, useId,
 } from 'react'
 import { createPortal } from 'react-dom'
+import QRCode from 'qrcode'
 import {
   MOCK_TASKS, MOCK_BIDS, MOCK_NOTIFICATIONS,
   MOCK_MESSAGES, MOCK_DISPUTES, MOCK_SUGGESTIONS,
@@ -5171,10 +5172,13 @@ function DealCard({ d, onRedeem, claimed }) {
               <span style={{ fontSize: '.85rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>{zar(d.original_price_cents)}</span>}
           </div>
         )}
+        {d.student_only && (
+          <span style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 100, fontSize: '.66rem', fontWeight: 700, background: 'var(--accent-glow)', color: 'var(--accent)' }}>🎓 Students only</span>
+        )}
         {onRedeem && !expired && (
-          <button type="button" disabled={claimed} onClick={() => onRedeem(d)}
-            style={{ marginTop: d.price_cents != null ? 8 : 'auto', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: claimed ? 'default' : 'pointer', fontWeight: 700, fontSize: '.82rem', background: claimed ? 'var(--bg-elevated)' : 'var(--accent)', color: claimed ? 'var(--text-muted)' : '#fff' }}>
-            {claimed ? 'Claimed ✓' : 'Claim deal'}
+          <button type="button" onClick={() => onRedeem(d)}
+            style={{ marginTop: d.price_cents != null && !d.student_only ? 8 : 'auto', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '.82rem', background: claimed ? 'var(--bg-elevated)' : 'var(--accent)', color: claimed ? 'var(--text-primary)' : '#fff' }}>
+            {claimed ? 'Show my QR' : 'Get my QR'}
           </button>
         )}
       </div>
@@ -5194,6 +5198,7 @@ function DealForm({ biz, deal, onDone, onCancel }) {
     originalRand: deal?.original_price_cents != null ? String(deal.original_price_cents / 100) : '',
     status: deal?.status === 'draft' ? 'draft' : 'active',
     recurrence: deal?.recurrence || 'none',
+    studentOnly: deal?.student_only || false,
     expiresLocal: isoToLocalInput(deal?.expires_at),
   })
   const set = k => e => setF(p => ({ ...p, [k]: e.target.value }))
@@ -5210,7 +5215,7 @@ function DealForm({ biz, deal, onDone, onCancel }) {
         title: f.title, description: f.description || null, imageUrl: f.imageUrl || null,
         priceCents: f.priceRand === '' ? null : Math.round(parseFloat(f.priceRand) * 100),
         originalPriceCents: f.originalRand === '' ? null : Math.round(parseFloat(f.originalRand) * 100),
-        status: f.status, expiresAt, recurrence: f.recurrence,
+        status: f.status, expiresAt, recurrence: f.recurrence, studentOnly: f.studentOnly,
       }
       const res = await fetch(API_BASE + (isNew ? '/deals' : `/deals/${deal.deal_id}`), {
         method: isNew ? 'POST' : 'PATCH',
@@ -5228,7 +5233,7 @@ function DealForm({ biz, deal, onDone, onCancel }) {
     price_cents: f.priceRand === '' ? null : Math.round(parseFloat(f.priceRand) * 100),
     original_price_cents: f.originalRand === '' ? null : Math.round(parseFloat(f.originalRand) * 100),
     expires_at: f.expiresLocal ? new Date(f.expiresLocal).toISOString() : null,
-    business_name: biz.name, logo_url: biz.logo_url,
+    business_name: biz.name, logo_url: biz.logo_url, student_only: f.studentOnly,
   }
 
   return (
@@ -5272,6 +5277,10 @@ function DealForm({ biz, deal, onDone, onCancel }) {
               <option value="active">Active (visible now)</option>
               <option value="draft">Draft (hidden)</option>
             </SelectField>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, fontSize: '.85rem', color: 'var(--text-secondary)', cursor: 'pointer', lineHeight: 1.5 }}>
+              <input type="checkbox" checked={f.studentOnly} onChange={e => setF(p => ({ ...p, studentOnly: e.target.checked }))} style={{ marginTop: 2, accentColor: 'var(--accent)' }} />
+              <span>🎓 <strong>Students only</strong> — only customers with a verified student email can claim this deal.</span>
+            </label>
             <div style={{ display: 'flex', gap: 10 }}>
               <Btn loading={saving} onClick={save}>{isNew ? 'Post deal' : 'Save changes'}</Btn>
               <Btn variant="secondary" onClick={onCancel}>Cancel</Btn>
@@ -5294,6 +5303,21 @@ function BusinessDeals({ biz }) {
   const [deals, setDeals] = useState(null)
   const [view, setView] = useState('list')   // 'list' | 'form'
   const [editing, setEditing] = useState(null)
+  const [code, setCode] = useState('')
+  const [redeeming, setRedeeming] = useState(false)
+
+  async function redeemCode() {
+    const c = code.trim()
+    if (!c) return
+    setRedeeming(true)
+    try {
+      const res = await fetch(API_BASE + '/deals/redeem-token', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ token: c }) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.message || 'Could not redeem this code')
+      toast(`✓ Redeemed for ${d.customer} — ${d.dealTitle}`, 'success')
+      setCode('')
+    } catch (e) { toast(e.message, 'error') } finally { setRedeeming(false) }
+  }
 
   const load = () => fetch(API_BASE + '/deals/mine', { headers: { Authorization: `Bearer ${token()}` } })
     .then(r => r.ok ? r.json() : Promise.reject(new Error('load')))
@@ -5318,6 +5342,15 @@ function BusinessDeals({ biz }) {
         </div>
         <Btn onClick={() => { setEditing(null); setView('form') }}>＋ New deal</Btn>
       </div>
+      <DCard hover={false} style={{ marginBottom: 16, padding: 14 }}>
+        <Mono style={{ display: 'block', marginBottom: 8 }}>Redeem a customer's QR code</Mono>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="Scan or type their code"
+            onKeyDown={e => { if (e.key === 'Enter') redeemCode() }}
+            style={{ flex: 1, minWidth: 160, padding: '9px 13px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase' }} />
+          <Btn loading={redeeming} onClick={redeemCode}>Redeem</Btn>
+        </div>
+      </DCard>
       {deals === null ? <div style={{ padding: 50, textAlign: 'center' }}><Spinner /></div>
         : deals.length === 0 ? <EmptyState icon="🏷" message="No deals yet — post your first special" action={<Btn size="sm" onClick={() => setView('form')}>＋ New deal</Btn>} />
           : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -5348,10 +5381,39 @@ function BusinessDeals({ biz }) {
 }
 
 // Public, campus-wide Deals page — active (unexpired) deals only.
+// The claimed-deal QR: a one-time token rendered as a QR (+ the code as text) that
+// the student shows; the business scans/types it to apply the discount (A2).
+function DealQRModal({ deal, token, onClose }) {
+  const [dataUrl, setDataUrl] = useState('')
+  useEffect(() => {
+    let alive = true
+    QRCode.toDataURL(token, { width: 240, margin: 1 }).then(u => { if (alive) setDataUrl(u) }).catch(() => {})
+    return () => { alive = false }
+  }, [token])
+  return createPortal(
+    <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:1300, background:'rgba(20,16,30,.7)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ width:'100%', maxWidth:360, background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:'var(--radius-md)', boxShadow:'var(--shadow-xl)', padding:'26px 24px', textAlign:'center' }}>
+        <Mono size="0.68rem" color="var(--accent)" style={{ display:'block', marginBottom:6 }}>Show this at the business</Mono>
+        <h2 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.15rem', margin:'0 0 16px' }}>{deal.title}</h2>
+        <div style={{ background:'#fff', borderRadius:12, padding:12, display:'inline-block' }}>
+          {dataUrl
+            ? <img src={dataUrl} alt="Your claim QR code" style={{ width:200, height:200, display:'block' }} />
+            : <div style={{ width:200, height:200, display:'flex', alignItems:'center', justifyContent:'center' }}><Spinner /></div>}
+        </div>
+        <div style={{ fontFamily:'var(--font-mono)', fontSize:'1.3rem', fontWeight:700, letterSpacing:'0.15em', marginTop:16, color:'var(--text-primary)' }}>{token}</div>
+        <p style={{ fontSize:'.8rem', color:'var(--text-muted)', lineHeight:1.5, margin:'10px 0 18px' }}>Staff scan this code (or type it) to apply your discount. One-time use.</p>
+        <Btn variant="secondary" size="sm" onClick={onClose}>Done</Btn>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
 function DealsPage() {
   const toast = useToast()
   const [deals, setDeals] = useState(null)
   const [claimed, setClaimed] = useState({})
+  const [qr, setQr] = useState(null)   // { deal, token } — the claimed-QR modal
   useEffect(() => {
     let alive = true
     // The endpoint is public (auth ignored), but sending a token if we have one
@@ -5364,16 +5426,17 @@ function DealsPage() {
     return () => { alive = false }
   }, [])
 
-  async function redeem(d) {
+  async function claim(d) {
     const t = localStorage.getItem('rl_token')
     if (!t) { toast('Sign in to claim deals', 'error'); return }
     try {
-      const res = await fetch(`${API_BASE}/deals/${d.deal_id}/redeem`, { method: 'POST', headers: { Authorization: `Bearer ${t}` } })
-      if (res.status === 201) { setClaimed(c => ({ ...c, [d.deal_id]: true })); toast('Deal claimed! Show this at the business.', 'success') }
-      else if (res.status === 409) { setClaimed(c => ({ ...c, [d.deal_id]: true })); toast('You already claimed this today.', 'success') }
-      else if (res.status === 400) toast("You can't claim your own deal.", 'error')
+      const res = await fetch(`${API_BASE}/deals/${d.deal_id}/claim`, { method: 'POST', headers: { Authorization: `Bearer ${t}` } })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.claim) { setClaimed(c => ({ ...c, [d.deal_id]: true })); setQr({ deal: d, token: data.claim.token }) }
+      else if (res.status === 403) toast(data.message || 'This deal is for verified students.', 'error')
       else if (res.status === 401) toast('Sign in to claim deals', 'error')
-      else toast('Could not claim the deal', 'error')
+      else if (res.status === 400) toast("You can't claim your own deal.", 'error')
+      else toast(data.message || 'Could not claim the deal', 'error')
     } catch { toast('Could not claim the deal', 'error') }
   }
 
@@ -5386,8 +5449,9 @@ function DealsPage() {
       {deals === null ? <div style={{ padding: 60, textAlign: 'center' }}><Spinner /></div>
         : deals.length === 0 ? <EmptyState icon="🏷" message="No live deals right now — check back soon" />
           : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
-            {deals.map(d => <DealCard key={d.deal_id} d={d} onRedeem={redeem} claimed={!!claimed[d.deal_id]} />)}
+            {deals.map(d => <DealCard key={d.deal_id} d={d} onRedeem={claim} claimed={!!claimed[d.deal_id]} />)}
           </div>}
+      {qr && <DealQRModal deal={qr.deal} token={qr.token} onClose={() => setQr(null)} />}
     </div>
   )
 }
