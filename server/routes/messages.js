@@ -8,6 +8,7 @@ import { pool } from '../db.js'
 import log from '../log.js'
 import { createNotification } from '../notify.js'
 import { requireAuth } from '../middleware.js'
+import { rejectIfProfane } from '../profanity.js'
 
 const router = Router()
 
@@ -25,6 +26,7 @@ router.post('/messages',
   async (req, res) => {
     const { receiver_id, task_id = null, content } = req.body
     if (req.userId === receiver_id) return res.status(400).json({ message: 'Cannot message yourself.' })
+    if (rejectIfProfane(res, content)) return
     try {
       const { rows } = await pool.query(
         'INSERT INTO messages (sender_id, receiver_id, task_id, content) VALUES ($1,$2,$3,$4) RETURNING *',

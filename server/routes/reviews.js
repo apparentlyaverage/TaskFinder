@@ -5,6 +5,7 @@ import { pool } from '../db.js'
 import log from '../log.js'
 import { createNotification } from '../notify.js'
 import { requireAuth } from '../middleware.js'
+import { rejectIfProfane } from '../profanity.js'
 
 const router = Router()
 
@@ -35,6 +36,7 @@ router.post('/',
   check,
   async (req, res) => {
     const { task_id, rating, comment = null } = req.body
+    if (rejectIfProfane(res, comment)) return
     const client = await pool.connect()
     try {
       await client.query('BEGIN')

@@ -10,6 +10,7 @@ import { pool } from '../db.js'
 import log from '../log.js'
 import { createNotification } from '../notify.js'
 import { requireAuth } from '../middleware.js'
+import { rejectIfProfane } from '../profanity.js'
 import { expireDueTasks } from '../jobs.js'
 
 const router = Router()
@@ -37,6 +38,7 @@ router.post('/',
     if (new Date(deadline) <= new Date()) {
       return res.status(400).json({ message: 'Deadline must be in the future.' })
     }
+    if (rejectIfProfane(res, title, description)) return
     try {
       const { rows } = await pool.query(
         `INSERT INTO tasks (creator_id, title, description, budget, deadline, skill_tags, campus_zone)
@@ -176,6 +178,7 @@ router.post('/:taskId/bids',
   async (req, res) => {
     const { taskId } = req.params
     const { amount, pitch } = req.body
+    if (rejectIfProfane(res, pitch)) return
     try {
       const taskResult = await pool.query(
         'SELECT task_id, creator_id, status, title FROM tasks WHERE task_id = $1', [taskId])
