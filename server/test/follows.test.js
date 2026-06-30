@@ -66,12 +66,42 @@ describe('DELETE /follows/:type/:id', () => {
   })
 })
 
+describe('PATCH /follows/:type/:id/favourite', () => {
+  it('401s without a token', async () => {
+    const res = await request(app).patch(`/follows/business/${BIZ}/favourite`).send({ favourite: true })
+    expect(res.status).toBe(401)
+  })
+  it('favourites a business (200) and upserts the edge', async () => {
+    let upserted = false
+    mockDb(pool, sql => {
+      if (/SELECT owner_id FROM businesses/.test(sql)) return { rows: [{ owner_id: OTHER }] }
+      if (/INSERT INTO follows/.test(sql)) { upserted = true; return { rowCount: 1, rows: [] } }
+    })
+    const res = await request(app).patch(`/follows/business/${BIZ}/favourite`).set('Authorization', `Bearer ${meToken}`).send({ favourite: true })
+    expect(res.status).toBe(200)
+    expect(res.body.favourite).toBe(true)
+    expect(res.body.following).toBe(true)
+    expect(upserted).toBe(true)
+  })
+  it('refuses to favourite yourself (400)', async () => {
+    mockDb(pool)
+    const res = await request(app).patch(`/follows/user/${ME}/favourite`).set('Authorization', `Bearer ${meToken}`).send({ favourite: true })
+    expect(res.status).toBe(400)
+  })
+  it('422s on a non-boolean favourite', async () => {
+    mockDb(pool)
+    const res = await request(app).patch(`/follows/business/${BIZ}/favourite`).set('Authorization', `Bearer ${meToken}`).send({ favourite: 'yes' })
+    expect(res.status).toBe(422)
+  })
+})
+
 describe('GET /follows/state/:type/:id', () => {
-  it('returns following + follower count (200)', async () => {
-    mockDb(pool, sql => { if (/AS following/.test(sql)) return { rows: [{ following: true, followers: 7 }] } })
+  it('returns following + favourite + follower count (200)', async () => {
+    mockDb(pool, sql => { if (/AS following/.test(sql)) return { rows: [{ following: true, favourite: false, followers: 7 }] } })
     const res = await request(app).get(`/follows/state/user/${OTHER}`).set('Authorization', `Bearer ${meToken}`)
     expect(res.status).toBe(200)
     expect(res.body.following).toBe(true)
+    expect(res.body.favourite).toBe(false)
     expect(res.body.followers).toBe(7)
   })
 })

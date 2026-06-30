@@ -2121,6 +2121,10 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch 
                       onMouseEnter={e => e.currentTarget.style.background='var(--bg-hover)'}
                       onMouseLeave={e => e.currentTarget.style.background='none'}>{item.label}</button>
                   ))}
+                  <button onClick={() => { window.dispatchEvent(new Event('relivr:show-walkthrough')); setMenuOpen(false) }}
+                    style={{ display:'block', width:'100%', textAlign:'left', padding:'11px 16px', background:'none', border:'none', borderTop:'1px solid var(--border)', fontSize:'.875rem', color:'var(--text-secondary)', cursor:'pointer' }}
+                    onMouseEnter={e => e.currentTarget.style.background='var(--bg-hover)'}
+                    onMouseLeave={e => e.currentTarget.style.background='none'}>How ReLivR works</button>
                   {onViewLanding && (
                     <button onClick={() => { onViewLanding(); setMenuOpen(false) }}
                       style={{ display:'block', width:'100%', textAlign:'left', padding:'11px 16px', background:'none', border:'none', borderTop:'1px solid var(--border)', fontSize:'.875rem', color:'var(--text-secondary)', cursor:'pointer' }}
@@ -3459,6 +3463,7 @@ function Messages({ target, clearTarget }) {
   return (
     <div className="page-enter" style={{ maxWidth:900 }}>
       <PageTitle sub="Direct messages">Messages</PageTitle>
+      <FirstUseNote id="messages">Your task chats live here. Keep conversations on-platform — messages stay visible to admins if a dispute is ever raised.</FirstUseNote>
       {offline && <div style={{ background:'rgba(180,83,9,.08)', border:'1px solid rgba(180,83,9,.25)', borderRadius:8, padding:'8px 13px', marginBottom:14, fontSize:'.8rem', color:'var(--warning)' }}>Showing demo messages — start the backend to send real ones.</div>}
       <DCard hover={false} className={`msg-shell ${activeId ? 'has-active' : ''}`} style={{ display:'flex', height:580, padding:0, overflow:'hidden' }}>
 
@@ -3657,8 +3662,8 @@ function useLocations() {
 // ─── SOCIAL GRAPH ──────────────────────────────────────────────────────────────
 // Follow/unfollow a user or business. Shows follower count + the viewer's state.
 // Renders nothing for logged-out viewers (following is a signed-in action).
-function FollowButton({ targetType, targetId, size }) {
-  const [state, setState] = useState(null)   // { following, followers }
+function FollowButton({ targetType, targetId, size, showFavourite }) {
+  const [state, setState] = useState(null)   // { following, favourite, followers }
   const [busy, setBusy] = useState(false)
   const token = () => localStorage.getItem('rl_token')
   useEffect(() => {
@@ -3676,13 +3681,34 @@ function FollowButton({ targetType, targetId, size }) {
       const res = was
         ? await fetch(`${API_BASE}/follows/${targetType}/${targetId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token()}` } })
         : await fetch(`${API_BASE}/follows`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ targetType, targetId }) })
-      if (res.ok) setState(s => ({ following: !was, followers: Math.max(0, (s.followers || 0) + (was ? -1 : 1)) }))
+      if (res.ok) setState(s => ({ ...s, following: !was, favourite: was ? false : s.favourite, followers: Math.max(0, (s.followers || 0) + (was ? -1 : 1)) }))
     } catch { /* ignore */ } finally { setBusy(false) }
   }
-  return (
+  async function toggleFav() {
+    const next = !state.favourite
+    const wasFollowing = state.following
+    setState(s => ({ ...s, favourite: next, following: true, followers: wasFollowing ? s.followers : (s.followers || 0) + 1 }))
+    try {
+      await fetch(`${API_BASE}/follows/${targetType}/${targetId}/favourite`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({ favourite: next }),
+      })
+    } catch { setState(s => ({ ...s, favourite: !next })) }
+  }
+  const followBtn = (
     <Btn variant={state.following ? 'secondary' : 'primary'} size={size} loading={busy} onClick={toggle}>
       {state.following ? '✓ Following' : '+ Follow'}{state.followers > 0 ? ` · ${state.followers}` : ''}
     </Btn>
+  )
+  if (!showFavourite) return followBtn
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:8 }}>
+      {followBtn}
+      <button onClick={toggleFav} aria-label={state.favourite ? 'Remove from favourites' : 'Save to favourites'} title={state.favourite ? 'Favourited' : 'Save to favourites'}
+        style={{ width:34, height:34, borderRadius:'50%', flexShrink:0, border:`1px solid ${state.favourite?'var(--accent)':'var(--border)'}`, background:state.favourite?'var(--accent-glow)':'transparent', color:state.favourite?'var(--accent)':'var(--text-secondary)', cursor:'pointer', fontSize:'1rem', lineHeight:1 }}>
+        {state.favourite ? '★' : '☆'}
+      </button>
+    </span>
   )
 }
 
@@ -3712,7 +3738,7 @@ function FollowingPage({ openProfile, setPage }) {
                 <DCard key={u.user_id} hover onClick={() => openProfile(u.user_id)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', cursor: 'pointer' }}>
                   {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover' }} />
                     : <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{(u.display_name || '?').charAt(0).toUpperCase()}</div>}
-                  <span style={{ fontWeight: 600 }}>{u.display_name || 'ReLivR user'}</span>
+                  <span style={{ fontWeight: 600 }}>{u.display_name || 'ReLivR user'}{u.favourite && <span title="Favourite" aria-label="Favourite" style={{ color:'var(--accent)', marginLeft:6 }}>★</span>}</span>
                 </DCard>
               ))}
             </div>
@@ -3724,7 +3750,7 @@ function FollowingPage({ openProfile, setPage }) {
                 <DCard key={b.business_id} hover onClick={() => setPage('local-browse')} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', cursor: 'pointer' }}>
                   {b.logo_url ? <img src={b.logo_url} alt="" style={{ width: 38, height: 38, borderRadius: 9, objectFit: 'cover' }} />
                     : <div style={{ width: 38, height: 38, borderRadius: 9, background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>◇</div>}
-                  <div><div style={{ fontWeight: 600 }}>{b.name || 'Business'}</div><Mono style={{ color: 'var(--text-muted)' }}>{b.category}</Mono></div>
+                  <div><div style={{ fontWeight: 600 }}>{b.name || 'Business'}{b.favourite && <span title="Favourite" aria-label="Favourite" style={{ color:'var(--accent)', marginLeft:6 }}>★</span>}</div><Mono style={{ color: 'var(--text-muted)' }}>{b.category}</Mono></div>
                 </DCard>
               ))}
             </div>
@@ -3881,7 +3907,7 @@ function LocalBrowse({ setPage }) {
             <div style={{ minWidth:0, flex:1 }}>
               <div style={{ display:'flex', alignItems:'center', gap:14, flexWrap:'wrap', marginBottom:14 }}>
                 <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'clamp(1.3rem,4vw,1.7rem)', margin:0 }}>{b.name}</h1>
-                <FollowButton targetType="business" targetId={b.business_id} size="sm" />
+                <FollowButton targetType="business" targetId={b.business_id} size="sm" showFavourite />
               </div>
               <div style={{ display:'flex', gap:'clamp(16px,4vw,30px)', flexWrap:'wrap', alignItems:'center', fontSize:'.9rem', color:'var(--text-secondary)' }}>
                 <span><strong style={{ color:'var(--text-primary)' }}>{photos.length}</strong> photo{photos.length===1?'':'s'}</span>
@@ -3938,6 +3964,8 @@ function LocalBrowse({ setPage }) {
           <p style={{ color:'rgba(255,255,255,.85)', fontSize:'.95rem', maxWidth:440 }}>Discover the businesses around Grahamstown — supported by ReLivR.</p>
         </div>
       </div>
+
+      <FirstUseNote id="local">Tap any business to open its profile — scroll their photos Instagram-style and grab student-only deals.</FirstUseNote>
 
       {/* Category filter */}
       <div className="feed-scroll" style={{ display:'flex', gap:8, marginBottom:20, overflowX:'auto', paddingBottom:4 }}>
@@ -4485,7 +4513,7 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
           {!isMe && (
             <div style={{ marginTop:16, display:'flex', gap:10, flexWrap:'wrap' }}>
               <Btn onClick={() => openChat(userId, name)}>💬 Message {name.split(' ')[0]}</Btn>
-              <FollowButton targetType="user" targetId={userId} />
+              <FollowButton targetType="user" targetId={userId} showFavourite />
             </div>
           )}
         </div>
@@ -6134,7 +6162,8 @@ function useFlags() {
   const [flags, setFlags] = useState({})
   useEffect(() => {
     let alive = true
-    fetch(API_BASE + '/flags').then(r => r.ok ? r.json() : { flags:{} })
+    const tok = localStorage.getItem('rl_token')
+    fetch(API_BASE + '/flags', tok ? { headers:{ Authorization:`Bearer ${tok}` } } : undefined).then(r => r.ok ? r.json() : { flags:{} })
       .then(d => { if (alive) setFlags(d.flags || {}) }).catch(() => {})
     return () => { alive = false }
   }, [])
@@ -6222,14 +6251,20 @@ function AdminFlags() {
   }
   useEffect(() => { load() }, []) // eslint-disable-line
 
-  async function toggle(f) {
+  async function patch(f, changes, label) {
     try {
-      const res = await fetch(`${API_BASE}/admin/flags/${f.flag_key}`, { method:'PATCH', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` }, body: JSON.stringify({ enabled: !f.enabled }) })
+      const res = await fetch(`${API_BASE}/admin/flags/${f.flag_key}`, { method:'PATCH', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` }, body: JSON.stringify(changes) })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(d.message || 'Could not update flag')
-      setFlags(fs => fs.map(x => x.flag_key===f.flag_key ? { ...x, enabled: !x.enabled } : x))
-      toast(`${f.flag_key} turned ${!f.enabled ? 'on' : 'off'}`, 'success')
+      setFlags(fs => fs.map(x => x.flag_key===f.flag_key ? { ...x, ...(d.flag || changes) } : x))
+      toast(label || `${f.flag_key} updated`, 'success')
     } catch (err) { toast(err.message, 'error') }
+  }
+  const FLAG_ROLES = ['member', 'business', 'admin']
+  const toggleRole = (f, role) => {
+    const cur = Array.isArray(f.rollout_roles) ? f.rollout_roles : []
+    const next = cur.includes(role) ? cur.filter(r => r !== role) : [...cur, role]
+    patch(f, { rollout_roles: next }, `${f.flag_key} roles updated`)
   }
 
   return (
@@ -6245,7 +6280,28 @@ function AdminFlags() {
                   <div style={{ fontWeight:600, fontFamily:'var(--font-mono)', fontSize:'0.88rem' }}>{f.flag_key}</div>
                   {f.description && <div style={{ fontSize:'0.8rem', color:'var(--text-muted)' }}>{f.description}</div>}
                 </div>
-                <Btn variant={f.enabled ? 'success' : 'secondary'} size="sm" onClick={() => toggle(f)}>{f.enabled ? 'On' : 'Off'}</Btn>
+                <Btn variant={f.enabled ? 'success' : 'secondary'} size="sm" onClick={() => patch(f, { enabled: !f.enabled }, `${f.flag_key} turned ${!f.enabled ? 'on' : 'off'}`)}>{f.enabled ? 'On' : 'Off'}</Btn>
+              </div>
+              {/* Targeting — who sees it (roles) + gradual % rollout. Dimmed when the flag is off. */}
+              <div style={{ display:'flex', alignItems:'center', gap:18, flexWrap:'wrap', marginTop:12, paddingTop:12, borderTop:'1px solid var(--border)', opacity:f.enabled?1:.5 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:7, flexWrap:'wrap' }}>
+                  <Mono style={{ color:'var(--text-muted)' }}>Roles</Mono>
+                  {FLAG_ROLES.map(role => {
+                    const on = Array.isArray(f.rollout_roles) && f.rollout_roles.includes(role)
+                    return (
+                      <button key={role} onClick={() => toggleRole(f, role)} disabled={!f.enabled}
+                        style={{ padding:'4px 10px', borderRadius:100, fontSize:'.74rem', fontWeight:600, cursor:f.enabled?'pointer':'default', border:`1px solid ${on?'var(--accent)':'var(--border)'}`, background:on?'var(--accent)':'transparent', color:on?'#fff':'var(--text-secondary)' }}>{role}</button>
+                    )
+                  })}
+                  {(!f.rollout_roles || f.rollout_roles.length===0) && <Mono style={{ color:'var(--text-muted)' }}>everyone</Mono>}
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+                  <Mono style={{ color:'var(--text-muted)' }}>Rollout</Mono>
+                  <input type="number" min={0} max={100} defaultValue={f.rollout_percent ?? 100} disabled={!f.enabled}
+                    onBlur={e => { const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0)); if (v !== (f.rollout_percent ?? 100)) patch(f, { rollout_percent: v }, `${f.flag_key} rollout ${v}%`) }}
+                    style={{ width:60, padding:'5px 8px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg-elevated)', color:'var(--text-primary)', fontSize:'.8rem' }} />
+                  <Mono style={{ color:'var(--text-muted)' }}>%</Mono>
+                </div>
               </div>
             </DCard>
           ))}
@@ -6391,6 +6447,34 @@ function OnboardingWalkthrough() {
             : <Btn variant="primary" size="sm" onClick={() => setI(n => n + 1)}>Next</Btn>}
         </div>
       </div>
+    </div>
+  )
+}
+
+// First-use note — a one-time, dismissible "how this works" callout shown the first
+// time a user opens a feature. Keyed by id in localStorage so it never re-nags.
+function FirstUseNote({ id, children }) {
+  const KEY = 'rl_seen_hints'
+  const [show, setShow] = useState(false)
+  useEffect(() => {
+    let seen = []
+    try { seen = JSON.parse(localStorage.getItem(KEY) || '[]') } catch { seen = [] }
+    if (!Array.isArray(seen) || !seen.includes(id)) setShow(true)
+  }, [id])
+  if (!show) return null
+  const dismiss = () => {
+    try {
+      const seen = JSON.parse(localStorage.getItem(KEY) || '[]')
+      const arr = Array.isArray(seen) ? seen : []
+      if (!arr.includes(id)) { arr.push(id); localStorage.setItem(KEY, JSON.stringify(arr)) }
+    } catch { /* storage blocked — just hide for this session */ }
+    setShow(false)
+  }
+  return (
+    <div role="note" style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'11px 14px', marginBottom:16, background:'var(--accent-glow)', border:'1px solid var(--accent-dim)', borderRadius:'var(--radius-md)' }}>
+      <span aria-hidden="true" style={{ color:'var(--accent)', fontWeight:800, fontSize:'.95rem', lineHeight:1.5 }}>ⓘ</span>
+      <div style={{ flex:1, fontSize:'.84rem', color:'var(--text-secondary)', lineHeight:1.55 }}>{children}</div>
+      <button onClick={dismiss} aria-label="Dismiss tip" style={{ background:'none', border:'none', color:'var(--text-muted)', cursor:'pointer', fontSize:'.95rem', lineHeight:1, padding:2 }}>✕</button>
     </div>
   )
 }

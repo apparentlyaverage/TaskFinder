@@ -99,10 +99,31 @@ describe('feature flags', () => {
     expect(res.body.flag.enabled).toBe(false)
   })
   it('exposes enabled flags publicly at GET /flags', async () => {
-    mockDb(pool, sql => /SELECT flag_key, enabled FROM feature_flags/.test(sql) ? { rows: [{ flag_key: 'recurring_tasks', enabled: true }] } : undefined)
+    mockDb(pool, sql => /FROM feature_flags/.test(sql) ? { rows: [{ flag_key: 'recurring_tasks', enabled: true, rollout_roles: null, rollout_percent: 100 }] } : undefined)
     const res = await request(app).get('/flags')
     expect(res.status).toBe(200)
     expect(res.body.flags.recurring_tasks).toBe(true)
+  })
+  it('updates flag targeting — roles + percent (200)', async () => {
+    mockDb(pool, sql => /UPDATE feature_flags/.test(sql) ? { rows: [{ flag_key: 'recurring_tasks', enabled: true, rollout_roles: ['member'], rollout_percent: 50 }] } : undefined)
+    const res = await request(app).patch('/admin/flags/recurring_tasks').set('Authorization', `Bearer ${adminToken}`).send({ rollout_roles: ['member'], rollout_percent: 50 })
+    expect(res.status).toBe(200)
+    expect(res.body.flag.rollout_percent).toBe(50)
+  })
+  it('rejects an out-of-range rollout_percent (422)', async () => {
+    mockDb(pool)
+    const res = await request(app).patch('/admin/flags/recurring_tasks').set('Authorization', `Bearer ${adminToken}`).send({ rollout_percent: 150 })
+    expect(res.status).toBe(422)
+  })
+  it('resolves role-targeted flags per viewer at GET /flags', async () => {
+    mockDb(pool, sql => /FROM feature_flags/.test(sql) ? { rows: [
+      { flag_key: 'biz_only', enabled: true, rollout_roles: ['business'], rollout_percent: 100 },
+      { flag_key: 'everyone', enabled: true, rollout_roles: null,         rollout_percent: 100 },
+    ] } : undefined)
+    const res = await request(app).get('/flags').set('Authorization', `Bearer ${memberToken}`)
+    expect(res.status).toBe(200)
+    expect(res.body.flags.everyone).toBe(true)
+    expect(res.body.flags.biz_only).toBe(false) // a member isn't in [business]
   })
 })
 
