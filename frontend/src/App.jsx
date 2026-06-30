@@ -2427,7 +2427,7 @@ function TaskBrowse({ setPage, setSelectedTask }) {
                 <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.05rem' }}>R{task.budget}</span>
               </div>
               <h2 style={{ fontFamily:'var(--font-display)', fontSize:'1.05rem', fontWeight:700, marginBottom:6, lineHeight:1.3 }}>{task.title}</h2>
-              <Mono style={{ display:'block', marginBottom:10 }}>📍 {task.campus_zone || 'Rhodes Campus'} · {timeAgo(task.created_at)}</Mono>
+              <Mono style={{ display:'block', marginBottom:10 }}>📍 {task.campus_zone || 'Rhodes Campus'} · {timeAgo(task.created_at)}{task.expected_duration ? ` · ⏱ ${task.expected_duration}` : ''}</Mono>
               <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:12 }}>{task.skill_tags.slice(0,3).map(t => <Tag key={t}>{t}</Tag>)}</div>
               <Divider style={{ marginBottom:10 }} />
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
@@ -2459,6 +2459,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
   const [editForm, setEditForm]   = useState({ title:'', description:'', budget:'', deadline:'' })
   const [editSaving, setEditSaving] = useState(false)
   const [cancelling, setCancelling] = useState(false)
+  const [extending, setExtending]   = useState(false)
 
   function openEdit() {
     setEditForm({
@@ -2501,6 +2502,19 @@ function TaskDetail({ taskId, setPage, openChat }) {
       toast('Task cancelled', 'success')
       setPage('tasks-mine')
     } catch (err) { toast(err.message, 'error') } finally { setCancelling(false) }
+  }
+
+  async function extendTask() {
+    setExtending(true)
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}/extend`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${token()}` },
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || 'Could not extend task')
+      setTask(t => ({ ...t, deadline: data.task.deadline }))
+      toast('Deadline extended by 7 days', 'success')
+    } catch (err) { toast(err.message, 'error') } finally { setExtending(false) }
   }
 
   async function loadTask({ silent = false } = {}) {
@@ -2552,6 +2566,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
   const isOwner    = task && task.creator_id === user.userId
   const isCreator  = isOwner                       // can manage this task
   const isEarner   = task && !isOwner              // can bid on it
+  const bidsClosed = !!(task && task.bids_close_at && new Date(task.bids_close_at) <= new Date())
   const acceptedBid = bids.find(b=>b.status==='accepted')
   const currentStatus = task?.status
 
@@ -2708,6 +2723,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
       {task.creator_id === user?.userId && task.status === 'open' && (
         <div style={{ display:'flex', gap:8, marginBottom:20, flexWrap:'wrap' }}>
           <Btn variant="secondary" size="sm" onClick={openEdit}>Edit task</Btn>
+          <Btn variant="secondary" size="sm" loading={extending} onClick={extendTask}>Extend +7 days</Btn>
           <Btn variant="danger" size="sm" loading={cancelling} onClick={cancelTask}>Cancel task</Btn>
         </div>
       )}
@@ -2813,7 +2829,12 @@ function TaskDetail({ taskId, setPage, openChat }) {
         </div>
 
         <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-          {isEarner&&currentStatus==='open'&&!alreadyBid&&(
+          {isEarner&&currentStatus==='open'&&!alreadyBid&&bidsClosed&&(
+            <DCard hover={false} style={{ border:'1px solid var(--border)', textAlign:'center', padding:20 }}>
+              <Mono color="var(--text-muted)" size="0.8rem">Bidding has closed for this task.</Mono>
+            </DCard>
+          )}
+          {isEarner&&currentStatus==='open'&&!alreadyBid&&!bidsClosed&&(
             <DCard hover={false}>
               <Mono size="0.68rem" color="var(--accent)" style={{ display:'block', marginBottom:14 }}>Submit Your Bid</Mono>
               <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
@@ -2840,7 +2861,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
           )}
           <DCard hover={false}>
             <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:14 }}>Task Details</Mono>
-            {[['Budget',`R${task.budget}`],['Deadline',new Date(task.deadline).toLocaleDateString()],['Status',currentStatus?.replace('_',' ')],['Posted',new Date(task.created_at).toLocaleDateString()],['Bids',`${bids.length} bid${bids.length!==1?'s':''}`],['Task ID',`#${task.task_id}`]].map(([k,v]) => (
+            {[['Budget',`R${task.budget}`],['Deadline',new Date(task.deadline).toLocaleDateString()],...(task.expected_duration?[['Duration',task.expected_duration]]:[]),['Status',currentStatus?.replace('_',' ')],['Posted',new Date(task.created_at).toLocaleDateString()],['Bids',`${bids.length} bid${bids.length!==1?'s':''}`],...(task.bids_close_at?[['Bids close',new Date(task.bids_close_at).toLocaleDateString()]]:[]),['Task ID',`#${task.task_id}`]].map(([k,v]) => (
               <div key={k} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 0', borderBottom:'1px solid var(--border)' }}>
                 <Mono>{k}</Mono><span style={{ fontSize:'0.85rem', color:'var(--text-primary)', fontWeight:500 }}>{v}</span>
               </div>
@@ -2915,6 +2936,8 @@ function TaskDetail({ taskId, setPage, openChat }) {
   )
 }
 
+const TASK_DURATIONS = ['Under 1 hour', '1–3 hours', 'Half day', 'Full day', 'Multi-day']
+
 function TaskNew({ setPage, setSelectedTask }) {
   const { dispatch } = useStore()
   const { user } = useAuth()
@@ -2925,6 +2948,8 @@ function TaskNew({ setPage, setSelectedTask }) {
   const [desc, setDesc]     = useState('')
   const [budget, setBudget] = useState('')
   const [deadline, setDead] = useState('')
+  const [duration, setDuration]   = useState('')
+  const [bidsClose, setBidsClose] = useState('')
   const [tags, setTags]     = useState('')
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
@@ -2955,6 +2980,8 @@ function TaskNew({ setPage, setSelectedTask }) {
           budget: parseFloat(budget),
           deadline: new Date(deadline).toISOString(),
           skill_tags: skillTags,
+          expected_duration: duration || null,
+          bids_close_at: bidsClose ? new Date(bidsClose).toISOString() : null,
         }),
       })
       if (!res.ok) {
@@ -2990,7 +3017,7 @@ function TaskNew({ setPage, setSelectedTask }) {
         <div style={{ display:'flex', gap:10, justifyContent:'center', flexWrap:'wrap' }}>
           <Btn onClick={() => { setSelectedTask(createdId); setPage('task-detail') }}>View Task</Btn>
           <Btn variant="secondary" onClick={() => { setSelectedTask(null); setPage('tasks-mine') }}>All My Tasks</Btn>
-          <Btn variant="ghost" onClick={() => { setTitle(''); setDesc(''); setBudget(''); setDead(''); setTags(''); setCreatedId(null); setStep(0) }}>Post Another</Btn>
+          <Btn variant="ghost" onClick={() => { setTitle(''); setDesc(''); setBudget(''); setDead(''); setDuration(''); setBidsClose(''); setTags(''); setCreatedId(null); setStep(0) }}>Post Another</Btn>
         </div>
       </DCard>
     </div>
@@ -3008,6 +3035,11 @@ function TaskNew({ setPage, setSelectedTask }) {
         {step===1&&<div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:18 }}>
           <Input label="Budget (R)" type="number" min="1" placeholder="e.g. 500" value={budget} onChange={e=>{setBudget(e.target.value);setErrors(v=>({...v,budget:null}))}} error={errors.budget} />
           <Input label="Deadline" type="date" value={deadline} onChange={e=>{setDead(e.target.value);setErrors(v=>({...v,deadline:null}))}} error={errors.deadline} />
+          <SelectField label="Expected duration" value={duration} onChange={e=>setDuration(e.target.value)}>
+            <option value="">Not sure</option>
+            {TASK_DURATIONS.map(d => <option key={d} value={d}>{d}</option>)}
+          </SelectField>
+          <Input label="Bidding closes" type="date" value={bidsClose} onChange={e=>setBidsClose(e.target.value)} hint="Optional — no new bids after this date" />
         </div>}
         {step===2&&<Input label="Skill Tags (comma separated)" placeholder="e.g. react, node.js, postgres" value={tags} onChange={e=>{setTags(e.target.value);setErrors(v=>({...v,tags:null}))}} hint="Used to automatically match and notify earners" error={errors.tags} />}
         {step===3&&<div style={{ display:'flex', flexDirection:'column', gap:16 }}>

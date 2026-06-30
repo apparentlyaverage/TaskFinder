@@ -24,6 +24,14 @@ describe('POST /tasks', () => {
     expect(res.body.task.task_id).toBe(TASK_ID)
   })
 
+  it('accepts expected_duration + bids_close_at (201)', async () => {
+    mockDb(pool, sql => /INSERT INTO tasks/.test(sql) ? { rows: [{ task_id: TASK_ID, title: 'Fix bike', expected_duration: '1–3 hours' }] } : undefined)
+    const res = await request(app).post('/tasks').set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Fix bike', description: 'brakes please', budget: 250, deadline: future, expected_duration: '1–3 hours', bids_close_at: future })
+    expect(res.status).toBe(201)
+    expect(res.body.task.expected_duration).toBe('1–3 hours')
+  })
+
   it('rejects a missing title (422)', async () => {
     mockDb(pool)
     const res = await request(app).post('/tasks').set('Authorization', `Bearer ${token}`)
@@ -76,6 +84,12 @@ describe('POST /tasks/:taskId/bids', () => {
     const res = await request(app).post(`/tasks/${TASK_ID}/bids`).set('Authorization', `Bearer ${token}`)
       .send({ amount: 200, pitch: 'ghost' })
     expect(res.status).toBe(404)
+  })
+  it('rejects bids after the bidding deadline (409)', async () => {
+    setup({ ...openTask, bids_close_at: new Date(Date.now() - 864e5).toISOString() })
+    const res = await request(app).post(`/tasks/${TASK_ID}/bids`).set('Authorization', `Bearer ${token}`)
+      .send({ amount: 200, pitch: 'too late to bid' })
+    expect(res.status).toBe(409)
   })
 })
 
@@ -144,6 +158,19 @@ describe('PATCH /tasks/:taskId/cancel', () => {
     pool.connect.mockResolvedValue(mockClient(sql =>
       /UPDATE tasks SET status = 'cancelled'/.test(sql) ? { rows: [] } : undefined))
     const res = await request(app).patch(`/tasks/${TASK_ID}/cancel`).set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('PATCH /tasks/:taskId/extend', () => {
+  it('extends an open task (200)', async () => {
+    mockDb(pool, sql => /UPDATE tasks\s+SET deadline/.test(sql) ? { rows: [{ task_id: TASK_ID, deadline: future }] } : undefined)
+    const res = await request(app).patch(`/tasks/${TASK_ID}/extend`).set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(200)
+  })
+  it('404 when not yours / not open', async () => {
+    mockDb(pool, sql => /UPDATE tasks\s+SET deadline/.test(sql) ? { rows: [] } : undefined)
+    const res = await request(app).patch(`/tasks/${TASK_ID}/extend`).set('Authorization', `Bearer ${token}`)
     expect(res.status).toBe(404)
   })
 })

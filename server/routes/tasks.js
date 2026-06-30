@@ -31,19 +31,21 @@ router.post('/',
     body('deadline').isISO8601(),
     body('skill_tags').optional().isArray(),
     body('campus_zone').optional().trim(),
+    body('expected_duration').optional({ nullable: true }).trim().isLength({ max: 40 }),
+    body('bids_close_at').optional({ nullable: true }).isISO8601(),
   ],
   check,
   async (req, res) => {
-    const { title, description, budget, deadline, skill_tags = [], campus_zone = null } = req.body
+    const { title, description, budget, deadline, skill_tags = [], campus_zone = null, expected_duration = null, bids_close_at = null } = req.body
     if (new Date(deadline) <= new Date()) {
       return res.status(400).json({ message: 'Deadline must be in the future.' })
     }
     if (rejectIfProfane(res, title, description)) return
     try {
       const { rows } = await pool.query(
-        `INSERT INTO tasks (creator_id, title, description, budget, deadline, skill_tags, campus_zone)
-         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-        [req.userId, title, description, budget, deadline, skill_tags, campus_zone]
+        `INSERT INTO tasks (creator_id, title, description, budget, deadline, skill_tags, campus_zone, expected_duration, bids_close_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+        [req.userId, title, description, budget, deadline, skill_tags, campus_zone, expected_duration, bids_close_at]
       )
       return res.status(201).json({ task: rows[0] })
     } catch (err) {
@@ -181,10 +183,11 @@ router.post('/:taskId/bids',
     if (rejectIfProfane(res, pitch)) return
     try {
       const taskResult = await pool.query(
-        'SELECT task_id, creator_id, status, title FROM tasks WHERE task_id = $1', [taskId])
+        'SELECT task_id, creator_id, status, title, bids_close_at FROM tasks WHERE task_id = $1', [taskId])
       if (taskResult.rows.length === 0) return res.status(404).json({ message: 'Task not found.' })
       const task = taskResult.rows[0]
       if (task.status !== 'open') return res.status(409).json({ message: 'Task is no longer accepting bids.' })
+      if (task.bids_close_at && new Date(task.bids_close_at) <= new Date()) return res.status(409).json({ message: 'Bidding has closed for this task.' })
       if (task.creator_id === req.userId) return res.status(403).json({ message: 'You cannot bid on your own task.' })
 
       const { rows } = await pool.query(
@@ -410,6 +413,30 @@ router.patch('/:taskId',
       return res.status(200).json({ task: rows[0] })
     } catch (err) {
       log.error('PATCH /tasks/:taskId', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// PATCH /tasks/:taskId/extend — creator extends an OPEN task's deadline by 7 days
+// (capped to 90 days out) so a task about to expire can stay live (B5).
+router.patch('/:taskId/extend',
+  requireAuth,
+  [param('taskId').isUUID()],
+  check,
+  async (req, res) => {
+    const { taskId } = req.params
+    try {
+      const { rows } = await pool.query(
+        `UPDATE tasks
+            SET deadline = LEAST(GREATEST(deadline, NOW()) + INTERVAL '7 days', NOW() + INTERVAL '90 days'),
+                updated_at = NOW()
+          WHERE task_id = $1 AND creator_id = $2 AND status = 'open'
+          RETURNING *`, [taskId, req.userId])
+      if (rows.length === 0) return res.status(404).json({ message: 'Task not found, not yours, or not open.' })
+      return res.status(200).json({ task: rows[0] })
+    } catch (err) {
+      log.error('PATCH /tasks/:taskId/extend', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     }
   }
