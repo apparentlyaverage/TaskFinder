@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 vi.mock('../email.js', () => ({ sendEmail: vi.fn().mockResolvedValue({ delivered: true }), EMAIL_FROM_UPDATES: 'x' }))
 
-const { expireDueTasks, sendDigests, sendRecurring, expireDeals, archiveExpiredTasks, refreshRecurringDeals } = await import('../jobs.js')
+const { expireDueTasks, sendDigests, sendRecurring, expireDeals, archiveExpiredTasks, refreshRecurringDeals, sendBookingReminders } = await import('../jobs.js')
 const { sendEmail } = await import('../email.js')
 
 describe('expireDueTasks', () => {
@@ -113,5 +113,24 @@ describe('sendRecurring', () => {
   it('does nothing when no templates are due', async () => {
     const db = { query: vi.fn().mockResolvedValue({ rows: [] }) }
     expect(await sendRecurring(db)).toBe(0)
+  })
+})
+
+describe('sendBookingReminders', () => {
+  it('reminds both the guest and host of an imminent booking and stamps reminded_at', async () => {
+    let notes = 0, stamped = false
+    const db = { query: vi.fn(async (sql) => {
+      if (/FROM bookings bk JOIN availability_slots s/.test(sql)) return { rows: [{ booking_id: 'bk1', guest_id: 'g1', host_type: 'user', host_id: 'h1', starts_at: new Date().toISOString() }] }
+      if (/INSERT INTO notifications/.test(sql)) { notes++; return {} }
+      if (/UPDATE bookings SET reminded_at/.test(sql)) { stamped = true; return {} }
+      return { rows: [] }
+    }) }
+    expect(await sendBookingReminders(db)).toBe(1)
+    expect(notes).toBe(2) // guest + host
+    expect(stamped).toBe(true)
+  })
+  it('does nothing when no bookings are imminent', async () => {
+    const db = { query: vi.fn().mockResolvedValue({ rows: [] }) }
+    expect(await sendBookingReminders(db)).toBe(0)
   })
 })

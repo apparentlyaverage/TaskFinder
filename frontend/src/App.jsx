@@ -2019,6 +2019,7 @@ const NAV = {
     { id:'profile',       label:'Profile',   icon:'◷' },
     { id:'local-browse',  label:'Local',     icon:'◇' },
     { id:'following',     label:'Following', icon:'♡' },
+    { id:'schedule',      label:'Schedule',  icon:'◴' },
     { id:'my-bids',       label:'My Bids',   icon:'◈' },
     { id:'dashboard',     label:'Stats',     icon:'⊞' },
     { id:'notifications', label:'Alerts',    icon:'◉' },
@@ -2048,6 +2049,7 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch 
         { id:'local-browse', label:'Local' },
         { id:'deals',        label:'Deals' },
         { id:'following',    label:'Following' },
+        { id:'schedule',     label:'Schedule' },
         { id:'tasks-mine',   label:'My Tasks' },
         { id:'my-bids',      label:'My Bids' },
       ]
@@ -4077,6 +4079,8 @@ function LocalBrowse({ setPage }) {
           </div>
         </div>
 
+        <BookingPanel hostType="business" hostId={b.business_id} hostName={b.name} />
+
         {/* Photo grid */}
         {photos.length === 0
           ? <EmptyState icon="◇" message="No photos yet." />
@@ -4656,6 +4660,7 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
               <FollowButton targetType="user" targetId={userId} showFavourite />
             </div>
           )}
+          {!isMe && <BookingPanel hostType="user" hostId={userId} hostName={name.split(' ')[0]} />}
         </div>
       </DCard>
 
@@ -5176,6 +5181,7 @@ function BusinessDashboard({ onLogout, onViewLanding }) {
         <div style={{ maxWidth:1100, margin:'0 auto', display:'flex', gap:4, padding:'0 20px' }}>
           <button onClick={() => setTab('page')}      style={bizTab(tab==='page')}>My Page</button>
           <button onClick={() => setTab('deals')}     style={bizTab(tab==='deals')}>Deals</button>
+          <button onClick={() => setTab('bookings')}  style={bizTab(tab==='bookings')}>Bookings</button>
           <button onClick={() => setTab('clients')}   style={bizTab(tab==='clients')}>Clients</button>
           <button onClick={() => setTab('analytics')} style={bizTab(tab==='analytics')}>Analytics</button>
         </div>
@@ -5204,6 +5210,7 @@ function BusinessDashboard({ onLogout, onViewLanding }) {
         )
          : tab === 'page' ? <BusinessPageEditor biz={biz} onSaved={setBiz} />
          : tab === 'deals' ? <BusinessDeals biz={biz} />
+         : tab === 'bookings' ? <AvailabilityManager hostType="business" />
          : tab === 'clients' ? <BusinessClients />
          : <BusinessAnalytics />}
       </main>
@@ -5516,6 +5523,139 @@ function DealQRModal({ deal, token, onClose }) {
       </div>
     </div>,
     document.body
+  )
+}
+
+// Format a slot window as "Tue 1 Jul, 14:00–15:00".
+function fmtSlot(start, end) {
+  const s = new Date(start), e = new Date(end)
+  const day = s.toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short' })
+  const t = d => d.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })
+  return `${day}, ${t(s)}–${t(e)}`
+}
+
+// D1/D2: book one of a host's (user or business) open time slots.
+function BookingPanel({ hostType, hostId, hostName }) {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [slots, setSlots] = useState(null)
+  const [busy, setBusy] = useState(null)
+  const load = () => fetch(`${API_BASE}/scheduling/slots/${hostType}/${hostId}`, { headers: { Authorization: `Bearer ${token()}` } })
+    .then(r => r.ok ? r.json() : { slots: [] }).then(d => setSlots(d.slots || [])).catch(() => setSlots([]))
+  useEffect(() => { if (hostId) load() }, [hostType, hostId]) // eslint-disable-line
+  async function book(slot) {
+    setBusy(slot.slot_id)
+    try {
+      const res = await fetch(`${API_BASE}/scheduling/bookings`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ slotId: slot.slot_id }) })
+      const d = await res.json().catch(() => ({})); if (!res.ok) throw new Error(d.message || 'Could not book')
+      toast('Booked! You’ll get a reminder before it starts.', 'success'); load()
+    } catch (e) { toast(e.message, 'error') } finally { setBusy(null) }
+  }
+  if (!slots || slots.length === 0) return null // hide when there's nothing to book
+  return (
+    <DCard hover={false} style={{ marginTop: 16 }}>
+      <Mono size="0.68rem" color="var(--accent)" style={{ display: 'block', marginBottom: 12 }}>Book a time{hostName ? ` with ${hostName}` : ''}</Mono>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {slots.slice(0, 8).map(s => (
+          <div key={s.slot_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: '.86rem' }}>{fmtSlot(s.starts_at, s.ends_at)}</div>
+              {s.note && <Mono style={{ color: 'var(--text-muted)' }}>{s.note}</Mono>}
+            </div>
+            <Btn size="sm" loading={busy === s.slot_id} onClick={() => book(s)}>Book</Btn>
+          </div>
+        ))}
+      </div>
+    </DCard>
+  )
+}
+
+// D1/D2: a host manages their own availability (add / view bookings / remove).
+// hostType 'user' on the member Schedule page; 'business' on the business dashboard.
+function AvailabilityManager({ hostType }) {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [slots, setSlots] = useState(null)
+  const [form, setForm] = useState({ date: '', start: '', end: '', note: '' })
+  const [saving, setSaving] = useState(false)
+  const load = () => fetch(`${API_BASE}/scheduling/slots/mine`, { headers: { Authorization: `Bearer ${token()}` } })
+    .then(r => r.ok ? r.json() : { slots: [] }).then(d => setSlots((d.slots || []).filter(s => s.host_type === hostType))).catch(() => setSlots([]))
+  useEffect(() => { load() }, []) // eslint-disable-line
+  async function addSlot() {
+    if (!form.date || !form.start || !form.end) { toast('Pick a date and start/end times', 'error'); return }
+    const startsAt = new Date(`${form.date}T${form.start}`).toISOString()
+    const endsAt = new Date(`${form.date}T${form.end}`).toISOString()
+    setSaving(true)
+    try {
+      const res = await fetch(`${API_BASE}/scheduling/slots`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ hostType, startsAt, endsAt, note: form.note || null }) })
+      const d = await res.json().catch(() => ({})); if (!res.ok) throw new Error(d.message || 'Could not add slot')
+      toast('Availability added', 'success'); setForm({ date: form.date, start: '', end: '', note: '' }); load()
+    } catch (e) { toast(e.message, 'error') } finally { setSaving(false) }
+  }
+  async function removeSlot(id) {
+    if (!window.confirm('Remove this slot? Anyone booked will be notified.')) return
+    const res = await fetch(`${API_BASE}/scheduling/slots/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token()}` } })
+    if (res.ok) { toast('Slot removed', 'success'); load() } else toast('Could not remove the slot', 'error')
+  }
+  return (
+    <>
+      <DCard hover={false} style={{ marginBottom: 16 }}>
+        <Mono size="0.68rem" color="var(--accent)" style={{ display: 'block', marginBottom: 12 }}>Add availability</Mono>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12, alignItems: 'end' }}>
+          <Input label="Date" type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+          <Input label="From" type="time" value={form.start} onChange={e => setForm(f => ({ ...f, start: e.target.value }))} />
+          <Input label="To" type="time" value={form.end} onChange={e => setForm(f => ({ ...f, end: e.target.value }))} />
+        </div>
+        <Input label="Note (optional)" value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} placeholder={hostType === 'business' ? 'e.g. Walk-in haircut' : 'e.g. Tutoring session'} style={{ marginTop: 12 }} />
+        <Btn size="sm" loading={saving} onClick={addSlot} style={{ marginTop: 12 }}>Add slot</Btn>
+      </DCard>
+      {slots === null ? <div style={{ padding: 30, textAlign: 'center' }}><Spinner /></div>
+        : slots.length === 0 ? <EmptyState icon="◴" message="No availability yet — add a slot above." />
+          : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {slots.map(s => (
+              <DCard key={s.slot_id} hover={false} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 600 }}>{fmtSlot(s.starts_at, s.ends_at)}</div>
+                  <Mono style={{ color: 'var(--text-muted)' }}>{(s.bookings?.length || 0)} of {s.capacity} booked{s.bookings?.length ? ` · ${s.bookings.map(b => b.guest_name || 'Someone').join(', ')}` : ''}</Mono>
+                </div>
+                <Btn variant="ghost" size="sm" onClick={() => removeSlot(s.slot_id)}>Remove</Btn>
+              </DCard>
+            ))}
+          </div>}
+    </>
+  )
+}
+
+// D1: the member Schedule page — own availability + bookings made as a guest.
+function SchedulePage() {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [bookings, setBookings] = useState(null)
+  const loadB = () => fetch(`${API_BASE}/scheduling/bookings/mine`, { headers: { Authorization: `Bearer ${token()}` } })
+    .then(r => r.ok ? r.json() : { bookings: [] }).then(d => setBookings(d.bookings || [])).catch(() => setBookings([]))
+  useEffect(() => { loadB() }, []) // eslint-disable-line
+  async function cancelBooking(id) {
+    const res = await fetch(`${API_BASE}/scheduling/bookings/${id}/cancel`, { method: 'POST', headers: { Authorization: `Bearer ${token()}` } })
+    if (res.ok) { toast('Booking cancelled', 'success'); loadB() } else toast('Could not cancel', 'error')
+  }
+  return (
+    <div className="page-enter" style={{ maxWidth: 760 }}>
+      <PageTitle sub="Publish when you’re free, and manage your bookings">Schedule</PageTitle>
+      <FirstUseNote id="schedule">Add times you’re free and others can book you — you’ll both get a reminder before it starts.</FirstUseNote>
+      <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.05rem', margin: '4px 0 12px' }}>My availability</h3>
+      <AvailabilityManager hostType="user" />
+      <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.05rem', margin: '24px 0 12px' }}>My bookings</h3>
+      {bookings === null ? null
+        : bookings.length === 0 ? <EmptyState icon="◴" message="You haven’t booked anything yet." />
+          : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {bookings.map(b => (
+              <DCard key={b.booking_id} hover={false} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <div><div style={{ fontWeight: 600 }}>{fmtSlot(b.starts_at, b.ends_at)}</div><Mono style={{ color: 'var(--text-muted)' }}>with {b.host_name || 'host'}</Mono></div>
+                <Btn variant="ghost" size="sm" onClick={() => cancelBooking(b.booking_id)}>Cancel</Btn>
+              </DCard>
+            ))}
+          </div>}
+    </div>
   )
 }
 
@@ -6535,6 +6675,7 @@ const DASH_ROUTES = {
   '/local':           'local-browse',
   '/deals':           'deals',
   '/following':       'following',
+  '/schedule':        'schedule',
   '/admin/disputes':  'admin-disputes',
   '/admin/deals':     'admin-deals',
   '/admin/tasks':     'admin-tasks',
@@ -7057,6 +7198,7 @@ export default function App() {
       case 'admin-flags':          return <AdminFlags />
       case 'local-browse':         return <LocalBrowse setPage={setDashPage} />
       case 'deals':                return <DealsPage />
+      case 'schedule':             return <SchedulePage />
       case 'following':            return <FollowingPage openProfile={(uid) => { setSelectedUser(uid); setDashPage('public-profile') }} setPage={setDashPage} />
       case 'admin-deals':          return <AdminDeals />
       case 'admin-tasks':          return <AdminTasks />

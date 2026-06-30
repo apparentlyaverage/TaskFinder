@@ -138,6 +138,38 @@ export async function sendRecurring(db = pool) {
   return spawned
 }
 
+// Remind both parties about bookings starting within the next hour (§D3). In-app
+// notifications inserted directly (db-injectable + testable, like sendRecurring);
+// reminded_at guards against duplicate reminders across ticks.
+export async function sendBookingReminders(db = pool) {
+  const { rows } = await db.query(
+    `SELECT bk.booking_id, bk.guest_id, s.host_type, s.host_id, s.starts_at
+       FROM bookings bk JOIN availability_slots s ON s.slot_id = bk.slot_id
+      WHERE bk.status = 'booked' AND bk.reminded_at IS NULL
+        AND s.starts_at > NOW() AND s.starts_at <= NOW() + INTERVAL '1 hour'`)
+  let sent = 0
+  for (const r of rows) {
+    const when = new Date(r.starts_at).toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' })
+    const targets = [r.guest_id]
+    if (r.host_type === 'business') {
+      const o = await db.query('SELECT owner_id FROM businesses WHERE business_id = $1', [r.host_id])
+      if (o.rows[0]?.owner_id) targets.push(o.rows[0].owner_id)
+    } else {
+      targets.push(r.host_id)
+    }
+    for (const uid of targets) {
+      await db.query(
+        `INSERT INTO notifications (user_id, type, title, body, reference_id)
+         VALUES ($1, 'booking.reminder', 'Upcoming booking', $2, $3)`,
+        [uid, `You have a booking soon — ${when}.`, r.host_id])
+    }
+    await db.query('UPDATE bookings SET reminded_at = NOW() WHERE booking_id = $1', [r.booking_id])
+    sent++
+  }
+  if (sent) log.info('jobs.booking_reminders', { count: sent })
+  return sent
+}
+
 // Start the periodic scheduler. Called from index.js (never from app.js, so
 // tests don't spawn timers). Runs once on boot, then on intervals.
 export function startScheduler({ expiryMs = 5 * 60 * 1000, digestMs = 60 * 60 * 1000, recurringMs = 60 * 60 * 1000 } = {}) {
@@ -147,6 +179,7 @@ export function startScheduler({ expiryMs = 5 * 60 * 1000, digestMs = 60 * 60 * 
     await expireDeals().catch(err => log.error('jobs.deals_expire_failed', { msg: err.message }))
     await refreshRecurringDeals().catch(err => log.error('jobs.deals_refresh_failed', { msg: err.message }))
     archiveExpiredTasks().catch(err => log.error('jobs.archive_failed', { msg: err.message }))
+    sendBookingReminders().catch(err => log.error('jobs.booking_reminders_failed', { msg: err.message }))
   }
   const runDigest = () => sendDigests().catch(err => log.error('jobs.digest_failed', { msg: err.message }))
   const runRecurring = () => sendRecurring().catch(err => log.error('jobs.recurring_failed', { msg: err.message }))
