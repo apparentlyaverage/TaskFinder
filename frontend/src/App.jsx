@@ -2491,11 +2491,13 @@ function TaskDetail({ taskId, setPage, openChat }) {
     } catch (err) { toast(err.message, 'error') } finally { setEditSaving(false) }
   }
   async function cancelTask() {
-    if (!window.confirm('Cancel this task? Any pending bids will be declined. This cannot be undone.')) return
+    const reason = window.prompt('Cancel this task? Any pending bids will be declined.\n\nOptional — tell bidders why (leave blank to skip):')
+    if (reason === null) return   // creator dismissed the dialog
     setCancelling(true)
     try {
       const res = await fetch(`${API_BASE}/tasks/${taskId}/cancel`, {
-        method: 'PATCH', headers: { Authorization: `Bearer ${token()}` },
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({ reason: reason.trim() || null }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.message || 'Could not cancel task')

@@ -160,6 +160,13 @@ describe('PATCH /tasks/:taskId/cancel', () => {
     const res = await request(app).patch(`/tasks/${TASK_ID}/cancel`).set('Authorization', `Bearer ${token}`)
     expect(res.status).toBe(404)
   })
+  it('cancels with a reason (200)', async () => {
+    mockDb(pool)
+    pool.connect.mockResolvedValue(mockClient(sql =>
+      /UPDATE tasks SET status = 'cancelled'/.test(sql) ? { rows: [{ task_id: TASK_ID, title: 'Fix bike' }] } : undefined))
+    const res = await request(app).patch(`/tasks/${TASK_ID}/cancel`).set('Authorization', `Bearer ${token}`).send({ reason: 'No longer needed' })
+    expect(res.status).toBe(200)
+  })
 })
 
 describe('PATCH /tasks/:taskId/extend', () => {

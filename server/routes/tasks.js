@@ -450,13 +450,15 @@ router.patch('/:taskId/cancel',
   check,
   async (req, res) => {
     const { taskId } = req.params
+    const reason = (req.body?.reason || '').toString().trim().slice(0, 200) || null
+    if (rejectIfProfane(res, reason)) return
     const client = await pool.connect()
     try {
       await client.query('BEGIN')
       const { rows } = await client.query(
-        `UPDATE tasks SET status = 'cancelled', updated_at = NOW()
+        `UPDATE tasks SET status = 'cancelled', cancel_reason = $3, updated_at = NOW()
          WHERE task_id = $1 AND creator_id = $2 AND status = 'open'
-         RETURNING *`, [taskId, req.userId])
+         RETURNING *`, [taskId, req.userId, reason])
       if (rows.length === 0) {
         await client.query('ROLLBACK')
         return res.status(404).json({ message: 'Task not found, not yours, or not cancellable.' })
@@ -470,7 +472,7 @@ router.patch('/:taskId/cancel',
           userId: b.bidder_id,
           type: 'task.cancelled',
           title: 'A task was cancelled',
-          body: `"${rows[0].title}" was cancelled by the creator.`,
+          body: reason ? `"${rows[0].title}" was cancelled — reason: ${reason}` : `"${rows[0].title}" was cancelled by the creator.`,
           referenceId: taskId,
         })
       }
