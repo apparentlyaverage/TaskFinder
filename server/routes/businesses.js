@@ -12,6 +12,8 @@ import rateLimit from 'express-rate-limit'
 import { pool } from '../db.js'
 import log from '../log.js'
 import { requireAuth } from '../middleware.js'
+import { createNotification } from '../notify.js'
+import { rejectIfProfane } from '../profanity.js'
 
 const router = Router()
 
@@ -118,10 +120,13 @@ router.get('/',
       const { rows } = await pool.query(
         `SELECT business_id, name, category, description, address, map_hint,
                 phone, whatsapp, email, hours, image_urls, logo_url, cover_image_url,
-                link_url, created_at
+                link_url, public_code, created_at,
+                (boosted_until IS NOT NULL AND boosted_until > NOW()) AS boosted,
+                (SELECT ROUND(AVG(rating)::numeric,1) FROM business_reviews br WHERE br.business_id = businesses.business_id) AS avg_rating,
+                (SELECT COUNT(*)::int FROM business_reviews br WHERE br.business_id = businesses.business_id) AS rating_count
          FROM businesses
          WHERE ${where}
-         ORDER BY created_at DESC`, params)
+         ORDER BY (boosted_until IS NOT NULL AND boosted_until > NOW()) DESC, created_at DESC`, params)
       return res.status(200).json({ businesses: rows })
     } catch (err) {
       log.error('GET /businesses', { reqId: req.id, msg: err.message })
@@ -171,6 +176,9 @@ router.get('/mine', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT *,
+              (boosted_until IS NOT NULL AND boosted_until > NOW()) AS boosted,
+              (SELECT ROUND(AVG(rating)::numeric,1) FROM business_reviews br WHERE br.business_id = businesses.business_id) AS avg_rating,
+              (SELECT COUNT(*)::int FROM business_reviews br WHERE br.business_id = businesses.business_id) AS rating_count,
               (SELECT COUNT(*)::int FROM follows WHERE target_type = 'business' AND target_id = businesses.business_id) AS follower_count
          FROM businesses WHERE owner_id = $1 ORDER BY created_at ASC LIMIT 1`,
       [req.userId])
@@ -388,6 +396,103 @@ router.patch('/:id/owner',
 
 // ── PUBLIC: single business detail ──
 // GET /businesses/:id
+// ── PUBLIC: resolve a business by its short public_code (QR / shareable link, E3/E2) ──
+// GET /businesses/code/:code  →  { business_id, name }
+router.get('/code/:code', [ param('code').trim().isLength({ min: 4, max: 12 }) ], check, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT business_id, name, status FROM businesses WHERE upper(public_code) = upper($1)`, [req.params.code])
+    if (rows.length === 0 || rows[0].status !== 'active') return res.status(404).json({ message: 'Business not found.' })
+    return res.status(200).json({ business_id: rows[0].business_id, name: rows[0].name })
+  } catch (err) {
+    log.error('GET /businesses/code/:code', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
+
+// ── PUBLIC: a business's reviews + aggregate (E1) ──
+// GET /businesses/:id/reviews
+router.get('/:id/reviews', [ param('id').isUUID() ], check, async (req, res) => {
+  try {
+    const [agg, list] = await Promise.all([
+      pool.query('SELECT ROUND(AVG(rating)::numeric,1) AS avg_rating, COUNT(*)::int AS rating_count FROM business_reviews WHERE business_id = $1', [req.params.id]),
+      pool.query(
+        `SELECT r.review_id, r.rating, r.comment, r.created_at, up.display_name AS reviewer_name
+           FROM business_reviews r LEFT JOIN user_profiles up ON up.user_id = r.reviewer_id
+          WHERE r.business_id = $1 ORDER BY r.created_at DESC LIMIT 50`, [req.params.id]),
+    ])
+    return res.status(200).json({ avg_rating: agg.rows[0].avg_rating, rating_count: agg.rows[0].rating_count, reviews: list.rows })
+  } catch (err) {
+    log.error('GET /businesses/:id/reviews', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
+
+// ── CUSTOMER: leave/update a review (one per person per business, E1) ──
+// POST /businesses/:id/reviews  { rating, comment? }
+router.post('/:id/reviews',
+  requireAuth,
+  [ param('id').isUUID(), body('rating').isInt({ min: 1, max: 5 }), body('comment').optional({ nullable: true }).trim().isLength({ max: 2000 }) ],
+  check,
+  async (req, res) => {
+    const comment = (req.body.comment || '').toString().trim().slice(0, 2000) || null
+    if (rejectIfProfane(res, comment)) return
+    try {
+      const biz = await pool.query('SELECT owner_id, status, disabled_features FROM businesses WHERE business_id = $1', [req.params.id])
+      const b = biz.rows[0]
+      if (!b || b.status !== 'active') return res.status(404).json({ message: 'Business not found.' })
+      if ((b.disabled_features || []).includes('reviews')) return res.status(403).json({ message: 'Reviews are turned off for this business.' })
+      if (b.owner_id && b.owner_id === req.userId) return res.status(400).json({ message: "You can't review your own business." })
+      const { rows } = await pool.query(
+        `INSERT INTO business_reviews (business_id, reviewer_id, rating, comment) VALUES ($1,$2,$3,$4)
+         ON CONFLICT (business_id, reviewer_id) DO UPDATE SET rating = EXCLUDED.rating, comment = EXCLUDED.comment, updated_at = NOW()
+         RETURNING *`, [req.params.id, req.userId, req.body.rating, comment])
+      if (b.owner_id) createNotification({ userId: b.owner_id, type: 'business.review', title: 'New review', body: `Your business received a ${req.body.rating}-star review.`, referenceId: req.params.id }).catch(() => {})
+      return res.status(201).json({ review: rows[0] })
+    } catch (err) {
+      log.error('POST /businesses/:id/reviews', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// ── OWNER: boost my business to promoted placement for 7 days (E4) ──
+// POST /businesses/mine/boost  (free during beta; billing hooks in with payments/G1)
+router.post('/mine/boost', requireAuth, async (req, res) => {
+  try {
+    const owned = await pool.query('SELECT business_id, disabled_features FROM businesses WHERE owner_id = $1 ORDER BY created_at ASC LIMIT 1', [req.userId])
+    const b = owned.rows[0]
+    if (!b) return res.status(403).json({ message: 'No business is linked to your account.' })
+    if ((b.disabled_features || []).includes('boost')) return res.status(403).json({ message: 'Promotion is turned off for this business.' })
+    const { rows } = await pool.query(
+      `UPDATE businesses SET boosted_until = GREATEST(COALESCE(boosted_until, NOW()), NOW()) + INTERVAL '7 days', updated_at = NOW()
+        WHERE business_id = $1 RETURNING boosted_until`, [b.business_id])
+    return res.status(200).json({ boosted_until: rows[0].boosted_until })
+  } catch (err) {
+    log.error('POST /businesses/mine/boost', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
+
+// ── ADMIN: toggle a business's feature switches (E5) ──
+// PATCH /businesses/:id/features  { disabledFeatures: string[] }
+router.patch('/:id/features', requireAuth, requireAdmin,
+  [ param('id').isUUID(), body('disabledFeatures').isArray(), body('disabledFeatures.*').isIn(['deals', 'bookings', 'reviews', 'boost']) ],
+  check,
+  async (req, res) => {
+    try {
+      const { rows } = await pool.query(
+        'UPDATE businesses SET disabled_features = $1, updated_at = NOW() WHERE business_id = $2 RETURNING business_id, disabled_features',
+        [req.body.disabledFeatures, req.params.id])
+      if (rows.length === 0) return res.status(404).json({ message: 'Business not found.' })
+      return res.status(200).json({ business: rows[0] })
+    } catch (err) {
+      log.error('PATCH /businesses/:id/features', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
 router.get('/:id',
   [ param('id').isUUID() ],
   check,
@@ -396,7 +501,10 @@ router.get('/:id',
       const { rows } = await pool.query(
         `SELECT business_id, name, category, description, address, map_hint,
                 phone, whatsapp, email, hours, image_urls, logo_url, cover_image_url,
-                link_url, status, created_at
+                link_url, status, public_code, created_at,
+                (boosted_until IS NOT NULL AND boosted_until > NOW()) AS boosted,
+                (SELECT ROUND(AVG(rating)::numeric,1) FROM business_reviews br WHERE br.business_id = businesses.business_id) AS avg_rating,
+                (SELECT COUNT(*)::int FROM business_reviews br WHERE br.business_id = businesses.business_id) AS rating_count
          FROM businesses WHERE business_id = $1`, [req.params.id])
       if (rows.length === 0) return res.status(404).json({ message: 'Business not found.' })
       // Only expose active ones publicly (admins use /admin/all for the rest)
@@ -439,9 +547,10 @@ router.post('/',
         `INSERT INTO businesses
            (name, category, description, address, map_hint, phone, whatsapp, email,
             hours, image_urls, logo_url, link_url, status, fee_paid, paid_at,
-            signed_by_rep, notes)
+            signed_by_rep, notes, public_code)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::numeric,
-                 CASE WHEN $14::numeric IS NOT NULL THEN NOW() ELSE NULL END,$15,$16)
+                 CASE WHEN $14::numeric IS NOT NULL THEN NOW() ELSE NULL END,$15,$16,
+                 upper(substr(replace(gen_random_uuid()::text,'-',''),1,8)))
          RETURNING *`,
         [b.name, b.category, b.description || null, b.address || null, b.mapHint || null,
          b.phone || null, b.whatsapp || null, b.email || null, b.hours || null,

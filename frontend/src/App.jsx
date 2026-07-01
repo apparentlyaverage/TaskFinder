@@ -3949,6 +3949,7 @@ function BizGridTile({ b, onOpen }) {
           ? <img src={cover} alt="" loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
           : <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--text-muted)', fontSize:'2.4rem', fontFamily:'var(--font-display)' }}>{initial}</div>}
         {photos.length > 1 && <div style={{ position:'absolute', top:8, right:8, background:'rgba(0,0,0,.58)', color:'#fff', borderRadius:8, padding:'2px 8px', fontSize:'.7rem', fontWeight:600, fontFamily:'var(--font-mono)' }}>▦ {photos.length}</div>}
+        {b.boosted && <div style={{ position:'absolute', top:8, left:8, background:'var(--accent)', color:'#fff', borderRadius:8, padding:'2px 8px', fontSize:'.62rem', fontWeight:700, letterSpacing:'.04em', textTransform:'uppercase' }}>Promoted</div>}
       </div>
       <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px' }}>
         {b.logo_url
@@ -4006,6 +4007,57 @@ function BizLightbox({ images, index, onClose, onNav }) {
   )
 }
 
+// E1: a business's rating + reviews, with a leave-a-review form (anyone can review).
+function BusinessReviews({ businessId }) {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [data, setData] = useState(null)
+  const [rating, setRating] = useState(5)
+  const [comment, setComment] = useState('')
+  const [saving, setSaving] = useState(false)
+  const load = () => fetch(`${API_BASE}/businesses/${businessId}/reviews`).then(r => r.ok ? r.json() : { reviews: [] }).then(setData).catch(() => setData({ reviews: [] }))
+  useEffect(() => { load() }, [businessId]) // eslint-disable-line
+  async function submit() {
+    if (!token()) { toast('Sign in to leave a review', 'error'); return }
+    setSaving(true)
+    try {
+      const res = await fetch(`${API_BASE}/businesses/${businessId}/reviews`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ rating, comment: comment.trim() || null }) })
+      const d = await res.json().catch(() => ({})); if (!res.ok) throw new Error(d.message || 'Could not submit your review')
+      toast('Review submitted', 'success'); setComment(''); load()
+    } catch (e) { toast(e.message, 'error') } finally { setSaving(false) }
+  }
+  return (
+    <div style={{ marginTop: 22, borderTop: '1px solid var(--border)', paddingTop: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <Mono size="0.68rem" color="var(--accent)">Reviews</Mono>
+        {data?.rating_count > 0 && <span style={{ fontSize: '.85rem', color: 'var(--text-secondary)' }}>★ {data.avg_rating} · {data.rating_count} review{data.rating_count === 1 ? '' : 's'}</span>}
+      </div>
+      {token() && (
+        <DCard hover={false} style={{ marginBottom: 14 }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+            {[1, 2, 3, 4, 5].map(n => <button key={n} onClick={() => setRating(n)} aria-label={`${n} star`} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.3rem', lineHeight: 1, padding: 0, color: n <= rating ? 'var(--amber)' : 'var(--border-strong)' }}>★</button>)}
+          </div>
+          <Textarea label="Your review (optional)" value={comment} onChange={e => setComment(e.target.value)} placeholder="How was it?" style={{ minHeight: 70 }} />
+          <Btn size="sm" loading={saving} onClick={submit} style={{ marginTop: 10 }}>Post review</Btn>
+        </DCard>
+      )}
+      {data === null ? null
+        : data.reviews.length === 0 ? <Mono style={{ color: 'var(--text-muted)' }}>No reviews yet — be the first.</Mono>
+          : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {data.reviews.map(r => (
+              <DCard key={r.review_id} hover={false}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ color: 'var(--amber)' }}>{'★'.repeat(r.rating)}<span style={{ color: 'var(--border-strong)' }}>{'★'.repeat(5 - r.rating)}</span></span>
+                  <Mono style={{ color: 'var(--text-muted)' }}>{r.reviewer_name || 'ReLivR user'}</Mono>
+                </div>
+                {r.comment && <p style={{ fontSize: '.85rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>{r.comment}</p>}
+              </DCard>
+            ))}
+          </div>}
+    </div>
+  )
+}
+
 function LocalBrowse({ setPage }) {
   const [businesses, setBusinesses] = useState([])
   const [loading, setLoading]       = useState(true)
@@ -4028,6 +4080,15 @@ function LocalBrowse({ setPage }) {
       .catch(() => { if (!cancelled) { setBusinesses([]); setLoading(false) } })
     return () => { cancelled = true }
   }, [cat])
+
+  // Deep-link (E2 QR / shareable link): /local?b=<business_id> opens that profile.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('b')
+    if (!id) return
+    const tok = localStorage.getItem('rl_token')
+    fetch(`${API_BASE}/businesses/${id}`, tok ? { headers: { Authorization: `Bearer ${tok}` } } : undefined)
+      .then(r => r.ok ? r.json() : null).then(d => { if (d?.business) { setSelected(d.business); trackBizEvent(id, 'view') } }).catch(() => {})
+  }, [])
 
   // Detail view — an Instagram-style business "profile": header (avatar, name,
   // stats, follow), bio + contact actions, then a 3-column photo grid that opens
@@ -4054,6 +4115,7 @@ function LocalBrowse({ setPage }) {
               </div>
               <div style={{ display:'flex', gap:'clamp(16px,4vw,30px)', flexWrap:'wrap', alignItems:'center', fontSize:'.9rem', color:'var(--text-secondary)' }}>
                 <span><strong style={{ color:'var(--text-primary)' }}>{photos.length}</strong> photo{photos.length===1?'':'s'}</span>
+                {b.rating_count > 0 && <span><strong style={{ color:'var(--text-primary)' }}>★ {b.avg_rating}</strong> ({b.rating_count})</span>}
                 {b.follower_count > 0 && <span><strong style={{ color:'var(--text-primary)' }}>{b.follower_count}</strong> follower{b.follower_count===1?'':'s'}</span>}
               </div>
             </div>
@@ -4092,6 +4154,8 @@ function LocalBrowse({ setPage }) {
                 </div>
               ))}
             </div>}
+
+        <BusinessReviews businessId={b.business_id} />
 
         {lightbox != null && <BizLightbox images={photos} index={lightbox} onClose={() => setLightbox(null)} onNav={(d) => setLightbox(i => (i + d + photos.length) % photos.length)} />}
       </div>
@@ -4152,6 +4216,18 @@ function AdminBusinesses() {
   }
   useEffect(() => { load() }, [])
 
+  // E5: switch a business's capabilities on/off.
+  async function toggleFeature(b, feat) {
+    const cur = Array.isArray(b.disabled_features) ? b.disabled_features : []
+    const next = cur.includes(feat) ? cur.filter(x => x !== feat) : [...cur, feat]
+    try {
+      const res = await fetch(`${API_BASE}/businesses/${b.business_id}/features`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ disabledFeatures: next }) })
+      if (!res.ok) throw new Error('Update failed')
+      setBusinesses(bs => bs.map(x => x.business_id === b.business_id ? { ...x, disabled_features: next } : x))
+      toast(`${b.name}: ${feat} ${next.includes(feat) ? 'disabled' : 'enabled'}`, 'success')
+    } catch { toast('Could not update the feature', 'error') }
+  }
+
   if (editing) return <BusinessForm business={editing==='new'?null:editing} onDone={() => { setEditing(null); load() }} onCancel={() => setEditing(null)} />
 
   const statusColor = { active:'var(--success)', pending:'var(--warning)', expired:'var(--text-muted)' }
@@ -4172,16 +4248,26 @@ function AdminBusinesses() {
       ) : (
         <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
           {businesses.map(b => (
-            <DCard key={b.business_id} hover={false} style={{ display:'flex', alignItems:'center', gap:14, padding:'12px 16px' }}>
-              <div style={{ width:48, height:48, borderRadius:10, overflow:'hidden', flexShrink:0, background:'var(--bg-elevated)' }}>
-                {(b.image_urls?.[0] || b.logo_url) ? <img src={b.logo_url || b.image_urls[0]} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'var(--text-muted)' }}>◇</div>}
+            <DCard key={b.business_id} hover={false} style={{ padding:'12px 16px' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+                <div style={{ width:48, height:48, borderRadius:10, overflow:'hidden', flexShrink:0, background:'var(--bg-elevated)' }}>
+                  {(b.image_urls?.[0] || b.logo_url) ? <img src={b.logo_url || b.image_urls[0]} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'var(--text-muted)' }}>◇</div>}
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:700 }}>{b.name}{b.boosted && <span style={{ marginLeft:8, fontSize:'.62rem', fontWeight:700, color:'var(--accent)', textTransform:'uppercase' }}>★ promoted</span>}</div>
+                  <Mono>{b.category}{b.signed_by_rep?` · ${b.signed_by_rep}`:''}</Mono>
+                </div>
+                <span style={{ fontFamily:'var(--font-mono)', fontSize:'.72rem', fontWeight:700, textTransform:'uppercase', color:statusColor[b.status]||'var(--text-muted)' }}>{b.status}</span>
+                <Btn variant="secondary" size="sm" onClick={() => setEditing(b)}>Edit</Btn>
               </div>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontWeight:700 }}>{b.name}</div>
-                <Mono>{b.category}{b.signed_by_rep?` · ${b.signed_by_rep}`:''}</Mono>
+              <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap', marginTop:10, paddingTop:10, borderTop:'1px solid var(--border)' }}>
+                <Mono style={{ color:'var(--text-muted)' }}>Disable:</Mono>
+                {['deals','bookings','reviews','boost'].map(feat => {
+                  const off = (b.disabled_features||[]).includes(feat)
+                  return <button key={feat} onClick={() => toggleFeature(b, feat)}
+                    style={{ padding:'3px 10px', borderRadius:100, fontSize:'.72rem', fontWeight:600, cursor:'pointer', border:`1px solid ${off?'var(--danger)':'var(--border)'}`, background:off?'var(--danger)':'transparent', color:off?'#fff':'var(--text-secondary)' }}>{feat}{off?' ✕':''}</button>
+                })}
               </div>
-              <span style={{ fontFamily:'var(--font-mono)', fontSize:'.72rem', fontWeight:700, textTransform:'uppercase', color:statusColor[b.status]||'var(--text-muted)' }}>{b.status}</span>
-              <Btn variant="secondary" size="sm" onClick={() => setEditing(b)}>Edit</Btn>
             </DCard>
           ))}
         </div>
@@ -5877,6 +5963,42 @@ function BusinessClients() {
   )
 }
 
+// E2/E3/E4: a business's shareable QR (opens its ReLivR page) + public code, and a
+// one-tap "Boost" to promoted placement (free during beta; billing hooks in at G1).
+function BizShareBoost({ biz, onBoosted }) {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [qr, setQr] = useState('')
+  const [boostedUntil, setBoostedUntil] = useState(biz.boosted_until || null)
+  const [busy, setBusy] = useState(false)
+  const link = `${window.location.origin}/local?b=${biz.business_id}`
+  useEffect(() => { QRCode.toDataURL(link, { width: 220, margin: 1 }).then(setQr).catch(() => {}) }, [link])
+  const active = boostedUntil && new Date(boostedUntil) > new Date()
+  async function boost() {
+    setBusy(true)
+    try {
+      const res = await fetch(`${API_BASE}/businesses/mine/boost`, { method: 'POST', headers: { Authorization: `Bearer ${token()}` } })
+      const d = await res.json().catch(() => ({})); if (!res.ok) throw new Error(d.message || 'Could not boost')
+      setBoostedUntil(d.boosted_until); toast('Your business is now promoted for 7 days', 'success'); onBoosted?.({ ...biz, boosted_until: d.boosted_until, boosted: true })
+    } catch (e) { toast(e.message, 'error') } finally { setBusy(false) }
+  }
+  return (
+    <DCard hover={false} style={{ padding: 22, display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ background: '#fff', borderRadius: 12, padding: 10, flexShrink: 0 }}>
+        {qr ? <img src={qr} alt="Business QR code" style={{ width: 120, height: 120, display: 'block' }} /> : <div style={{ width: 120, height: 120 }} />}
+      </div>
+      <div style={{ flex: 1, minWidth: 220 }}>
+        <Mono size="0.68rem" color="var(--accent)" style={{ display: 'block', marginBottom: 6 }}>Share &amp; promote</Mono>
+        <div style={{ fontSize: '.88rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 10 }}>Print this QR in-store — scanning it opens your ReLivR page. Code: <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>{biz.public_code || '—'}</strong></div>
+        {active
+          ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '.82rem', color: 'var(--accent)', fontWeight: 700 }}>★ Promoted until {new Date(boostedUntil).toLocaleDateString()}</span>
+          : <Btn size="sm" loading={busy} onClick={boost}>★ Boost my business (7 days)</Btn>}
+        {!active && <Mono style={{ display: 'block', marginTop: 6, color: 'var(--text-muted)' }}>Free during beta · surfaces you first in Local</Mono>}
+      </div>
+    </DCard>
+  )
+}
+
 function BusinessPageEditor({ biz, onSaved }) {
   const toast = useToast()
   const token = () => localStorage.getItem('rl_token')
@@ -5937,6 +6059,7 @@ function BusinessPageEditor({ biz, onSaved }) {
 
   return (
     <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(320px, 1fr))', gap:24, alignItems:'start' }}>
+      <div style={{ gridColumn:'1 / -1' }}><BizShareBoost biz={biz} onBoosted={onSaved} /></div>
       <DCard hover={false} style={{ padding:22 }}>
         {sectionLabel('— Basics')}
         <Input label="Business name" value={f.name} onChange={set('name')} />

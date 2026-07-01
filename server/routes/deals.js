@@ -180,6 +180,8 @@ router.post('/',
     try {
       const biz = await ownedBusiness(req.userId)
       if (!biz) return res.status(403).json({ message: 'No business is linked to your account.' })
+      const df = await pool.query('SELECT disabled_features FROM businesses WHERE business_id = $1', [biz.business_id])
+      if ((df.rows[0]?.disabled_features || []).includes('deals')) return res.status(403).json({ message: 'Deals are turned off for your business.' })
       const imageUrl = cleanImageUrl(req.body.imageUrl)
       const b = req.body
       const recurrence = b.recurrence || 'none'

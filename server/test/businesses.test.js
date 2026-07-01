@@ -170,3 +170,75 @@ describe('PATCH /businesses/:id/owner (admin)', () => {
     expect(res.status).toBe(404)
   })
 })
+
+describe('business reviews (E1)', () => {
+  const REV = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+  it('lets a member review a business (201)', async () => {
+    mockDb(pool, sql => {
+      if (/SELECT owner_id, status, disabled_features FROM businesses/.test(sql)) return { rows: [{ owner_id: OWNER, status: 'active', disabled_features: [] }] }
+      if (/INSERT INTO business_reviews/.test(sql)) return { rows: [{ review_id: REV, rating: 5 }] }
+      return { rows: [] }
+    })
+    const res = await request(app).post(`/businesses/${BIZ}/reviews`).set('Authorization', `Bearer ${memberToken}`).send({ rating: 5, comment: 'Great coffee' })
+    expect(res.status).toBe(201)
+  })
+  it('blocks reviewing your own business (400)', async () => {
+    mockDb(pool, sql => /SELECT owner_id, status, disabled_features FROM businesses/.test(sql) ? { rows: [{ owner_id: OWNER, status: 'active', disabled_features: [] }] } : undefined)
+    const res = await request(app).post(`/businesses/${BIZ}/reviews`).set('Authorization', `Bearer ${ownerToken}`).send({ rating: 5 })
+    expect(res.status).toBe(400)
+  })
+  it('403 when reviews are disabled for the business', async () => {
+    mockDb(pool, sql => /SELECT owner_id, status, disabled_features FROM businesses/.test(sql) ? { rows: [{ owner_id: OWNER, status: 'active', disabled_features: ['reviews'] }] } : undefined)
+    const res = await request(app).post(`/businesses/${BIZ}/reviews`).set('Authorization', `Bearer ${memberToken}`).send({ rating: 5 })
+    expect(res.status).toBe(403)
+  })
+  it('returns reviews + aggregate (200)', async () => {
+    mockDb(pool, sql => {
+      if (/AVG\(rating\)/.test(sql)) return { rows: [{ avg_rating: '4.5', rating_count: 2 }] }
+      if (/FROM business_reviews r/.test(sql)) return { rows: [{ review_id: REV, rating: 5, comment: 'nice' }] }
+    })
+    const res = await request(app).get(`/businesses/${BIZ}/reviews`)
+    expect(res.status).toBe(200)
+    expect(res.body.reviews).toHaveLength(1)
+  })
+})
+
+describe('business boost (E4)', () => {
+  it('boosts the owner\'s business (200)', async () => {
+    mockDb(pool, sql => {
+      if (/SELECT business_id, disabled_features FROM businesses WHERE owner_id/.test(sql)) return { rows: [{ business_id: BIZ, disabled_features: [] }] }
+      if (/UPDATE businesses SET boosted_until/.test(sql)) return { rows: [{ boosted_until: new Date().toISOString() }] }
+    })
+    const res = await request(app).post('/businesses/mine/boost').set('Authorization', `Bearer ${ownerToken}`)
+    expect(res.status).toBe(200)
+  })
+  it('403 when the caller owns no business', async () => {
+    mockDb(pool, sql => /SELECT business_id, disabled_features FROM businesses WHERE owner_id/.test(sql) ? { rows: [] } : undefined)
+    const res = await request(app).post('/businesses/mine/boost').set('Authorization', `Bearer ${ownerToken}`)
+    expect(res.status).toBe(403)
+  })
+})
+
+describe('business public_code + feature toggles (E3/E5)', () => {
+  it('resolves a business by public_code (200)', async () => {
+    mockDb(pool, sql => /WHERE upper\(public_code\)/.test(sql) ? { rows: [{ business_id: BIZ, name: 'Joe Coffee', status: 'active' }] } : undefined)
+    const res = await request(app).get('/businesses/code/ABCD1234')
+    expect(res.status).toBe(200)
+    expect(res.body.business_id).toBe(BIZ)
+  })
+  it('404 for an unknown code', async () => {
+    mockDb(pool, sql => /WHERE upper\(public_code\)/.test(sql) ? { rows: [] } : undefined)
+    const res = await request(app).get('/businesses/code/ZZZZ9999')
+    expect(res.status).toBe(404)
+  })
+  it('lets an admin toggle feature switches (200)', async () => {
+    mockDb(pool, sql => /UPDATE businesses SET disabled_features/.test(sql) ? { rows: [{ business_id: BIZ, disabled_features: ['deals'] }] } : undefined)
+    const res = await request(app).patch(`/businesses/${BIZ}/features`).set('Authorization', `Bearer ${adminToken}`).send({ disabledFeatures: ['deals'] })
+    expect(res.status).toBe(200)
+  })
+  it('forbids a non-admin from toggling features (403)', async () => {
+    mockDb(pool)
+    const res = await request(app).patch(`/businesses/${BIZ}/features`).set('Authorization', `Bearer ${memberToken}`).send({ disabledFeatures: ['deals'] })
+    expect(res.status).toBe(403)
+  })
+})
