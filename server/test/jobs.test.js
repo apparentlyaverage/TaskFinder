@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 vi.mock('../email.js', () => ({ sendEmail: vi.fn().mockResolvedValue({ delivered: true }), EMAIL_FROM_UPDATES: 'x' }))
 
-const { expireDueTasks, sendDigests, sendRecurring, expireDeals, archiveExpiredTasks, refreshRecurringDeals, sendBookingReminders } = await import('../jobs.js')
+const { expireDueTasks, sendDigests, sendRecurring, expireDeals, archiveExpiredTasks, refreshRecurringDeals, sendBookingReminders, notifyExpiringDeals, runRetainers } = await import('../jobs.js')
 const { sendEmail } = await import('../email.js')
 
 describe('expireDueTasks', () => {
@@ -132,5 +132,44 @@ describe('sendBookingReminders', () => {
   it('does nothing when no bookings are imminent', async () => {
     const db = { query: vi.fn().mockResolvedValue({ rows: [] }) }
     expect(await sendBookingReminders(db)).toBe(0)
+  })
+})
+
+describe('notifyExpiringDeals', () => {
+  it('warns a business\'s followers about a soon-expiring deal and stamps the guard', async () => {
+    let notes = 0, stamped = false
+    const db = { query: vi.fn(async (sql) => {
+      if (/FROM campus_deals d JOIN businesses b/.test(sql)) return { rows: [{ deal_id: 'd1', title: 'Coffee', business_id: 'b1', business_name: 'Bean' }] }
+      if (/FROM follows WHERE target_type/.test(sql)) return { rows: [{ follower_id: 'f1' }, { follower_id: 'f2' }] }
+      if (/INSERT INTO notifications/.test(sql)) { notes++; return {} }
+      if (/UPDATE campus_deals SET expiring_notified_at/.test(sql)) { stamped = true; return {} }
+      return { rows: [] }
+    }) }
+    expect(await notifyExpiringDeals(db)).toBe(1)
+    expect(notes).toBe(2) // both followers
+    expect(stamped).toBe(true)
+  })
+  it('does nothing when no deals are expiring', async () => {
+    const db = { query: vi.fn().mockResolvedValue({ rows: [] }) }
+    expect(await notifyExpiringDeals(db)).toBe(0)
+  })
+})
+
+describe('runRetainers', () => {
+  it('spawns a task for a due retainer and advances next_run_at', async () => {
+    let spawned = false, advanced = false
+    const db = { query: vi.fn(async (sql) => {
+      if (/FROM retainers WHERE active AND next_run_at/.test(sql)) return { rows: [{ retainer_id: 'r1', client_id: 'c1', provider_id: 'p1', title: 'Tutoring', description: null, amount: 150 }] }
+      if (/INSERT INTO tasks/.test(sql)) { spawned = true; return { rows: [{ task_id: 't1' }] } }
+      if (/UPDATE retainers SET next_run_at/.test(sql)) { advanced = true; return {} }
+      return { rows: [] }
+    }) }
+    expect(await runRetainers(db)).toBe(1)
+    expect(spawned).toBe(true)
+    expect(advanced).toBe(true)
+  })
+  it('does nothing when no retainers are due', async () => {
+    const db = { query: vi.fn().mockResolvedValue({ rows: [] }) }
+    expect(await runRetainers(db)).toBe(0)
   })
 })

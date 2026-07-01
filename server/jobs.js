@@ -170,6 +170,61 @@ export async function sendBookingReminders(db = pool) {
   return sent
 }
 
+// F2: warn a business's followers when one of its deals is within 24h of expiring.
+// Guarded by expiring_notified_at so each deal alerts once.
+export async function notifyExpiringDeals(db = pool) {
+  const { rows } = await db.query(
+    `SELECT d.deal_id, d.title, d.business_id, b.name AS business_name
+       FROM campus_deals d JOIN businesses b ON b.business_id = d.business_id
+      WHERE d.status = 'active' AND d.expiring_notified_at IS NULL
+        AND d.expires_at > NOW() AND d.expires_at <= NOW() + INTERVAL '24 hours'`)
+  let notified = 0
+  for (const d of rows) {
+    const fols = await db.query("SELECT follower_id FROM follows WHERE target_type = 'business' AND target_id = $1", [d.business_id])
+    for (const f of fols.rows) {
+      await db.query(
+        `INSERT INTO notifications (user_id, type, title, body, reference_id)
+         VALUES ($1, 'deal.expiring', 'Deal ending soon', $2, $3)`,
+        [f.follower_id, `${d.business_name}'s deal "${d.title}" ends within 24 hours.`, d.deal_id])
+    }
+    await db.query('UPDATE campus_deals SET expiring_notified_at = NOW() WHERE deal_id = $1', [d.deal_id])
+    notified++
+  }
+  if (notified) log.info('jobs.deals_expiring_notified', { count: notified })
+  return notified
+}
+
+// F1b: spawn one retainer cycle's task — pre-assigned to the provider, with the
+// agreed rate recorded (C2 source of truth). Shared by the route + the runner.
+export async function spawnRetainerTask(db, r) {
+  const deadline = new Date(Date.now() + 7 * 86400000)
+  const { rows } = await db.query(
+    `INSERT INTO tasks (creator_id, title, description, budget, deadline, status, assigned_to, agreed_amount)
+     VALUES ($1,$2,$3,$4,$5,'in_progress',$6,$7) RETURNING task_id`,
+    [r.client_id, r.title, r.description || r.title, r.amount, deadline, r.provider_id, r.amount])
+  const taskId = rows[0].task_id
+  await db.query(
+    `INSERT INTO notifications (user_id, type, title, body, reference_id)
+     VALUES ($1, 'retainer.task', 'New retainer task', $2, $3)`,
+    [r.provider_id, `Your retainer "${r.title}" has a new task ready.`, taskId])
+  return taskId
+}
+
+// F1b: spawn tasks for due retainers, then advance next_run_at by the cadence.
+export async function runRetainers(db = pool) {
+  const { rows } = await db.query('SELECT * FROM retainers WHERE active AND next_run_at <= NOW()')
+  let spawned = 0
+  for (const r of rows) {
+    await spawnRetainerTask(db, r)
+    await db.query(
+      `UPDATE retainers SET next_run_at = NOW() + (CASE cadence WHEN 'weekly' THEN INTERVAL '7 days' ELSE INTERVAL '1 month' END)
+        WHERE retainer_id = $1`, [r.retainer_id])
+    spawned++
+  }
+  if (spawned) log.info('jobs.retainers_spawned', { count: spawned })
+  return spawned
+}
+
 // Start the periodic scheduler. Called from index.js (never from app.js, so
 // tests don't spawn timers). Runs once on boot, then on intervals.
 export function startScheduler({ expiryMs = 5 * 60 * 1000, digestMs = 60 * 60 * 1000, recurringMs = 60 * 60 * 1000 } = {}) {
@@ -180,9 +235,13 @@ export function startScheduler({ expiryMs = 5 * 60 * 1000, digestMs = 60 * 60 * 
     await refreshRecurringDeals().catch(err => log.error('jobs.deals_refresh_failed', { msg: err.message }))
     archiveExpiredTasks().catch(err => log.error('jobs.archive_failed', { msg: err.message }))
     sendBookingReminders().catch(err => log.error('jobs.booking_reminders_failed', { msg: err.message }))
+    notifyExpiringDeals().catch(err => log.error('jobs.deals_expiring_failed', { msg: err.message }))
   }
   const runDigest = () => sendDigests().catch(err => log.error('jobs.digest_failed', { msg: err.message }))
-  const runRecurring = () => sendRecurring().catch(err => log.error('jobs.recurring_failed', { msg: err.message }))
+  const runRecurring = async () => {
+    await sendRecurring().catch(err => log.error('jobs.recurring_failed', { msg: err.message }))
+    await runRetainers().catch(err => log.error('jobs.retainers_failed', { msg: err.message }))
+  }
   runExpiry(); runDigest(); runRecurring()
   const handles = [
     setInterval(runExpiry, expiryMs),

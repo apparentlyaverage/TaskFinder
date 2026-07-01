@@ -3871,6 +3871,7 @@ function FollowingPage({ openProfile, setPage }) {
   return (
     <div className="page-enter">
       <PageTitle sub="People and businesses you follow">Following</PageTitle>
+      <div style={{ marginBottom: 22 }}><MyRetainers /></div>
       {empty ? <EmptyState icon="👥" message="You're not following anyone yet — follow people and businesses to see them here" />
         : <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
           {data.users.length > 0 && <div>
@@ -4661,6 +4662,7 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
             </div>
           )}
           {!isMe && <BookingPanel hostType="user" hostId={userId} hostName={name.split(' ')[0]} />}
+          {!isMe && <RetainerSetup providerId={userId} providerName={name.split(' ')[0]} />}
         </div>
       </DCard>
 
@@ -5655,6 +5657,74 @@ function SchedulePage() {
               </DCard>
             ))}
           </div>}
+    </div>
+  )
+}
+
+// F1b: set up a recurring retainer with a provider (shown on their profile).
+function RetainerSetup({ providerId, providerName }) {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [open, setOpen] = useState(false)
+  const [f, setF] = useState({ title: '', amount: '', cadence: 'weekly' })
+  const [saving, setSaving] = useState(false)
+  async function submit() {
+    if (!f.title.trim() || !f.amount || parseFloat(f.amount) <= 0) { toast('Add what you need and a rate', 'error'); return }
+    setSaving(true)
+    try {
+      const res = await fetch(`${API_BASE}/retainers`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ providerId, title: f.title.trim(), amount: parseFloat(f.amount), cadence: f.cadence }) })
+      const d = await res.json().catch(() => ({})); if (!res.ok) throw new Error(d.message || 'Could not set up the retainer')
+      toast(`Retainer set up with ${providerName}`, 'success'); setOpen(false); setF({ title: '', amount: '', cadence: 'weekly' })
+    } catch (e) { toast(e.message, 'error') } finally { setSaving(false) }
+  }
+  if (!open) return <div style={{ marginTop: 12 }}><Btn variant="secondary" size="sm" onClick={() => setOpen(true)}>↻ Set up a retainer</Btn></div>
+  return (
+    <DCard hover={false} style={{ marginTop: 12 }}>
+      <Mono size="0.68rem" color="var(--accent)" style={{ display: 'block', marginBottom: 10 }}>Recurring retainer with {providerName}</Mono>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <Input label="What's the recurring work?" value={f.title} onChange={e => setF(p => ({ ...p, title: e.target.value }))} placeholder="e.g. Weekly maths tutoring" />
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 120 }}><Input label="Rate (R)" type="number" min="1" value={f.amount} onChange={e => setF(p => ({ ...p, amount: e.target.value }))} placeholder="150" /></div>
+          <div style={{ flex: 1, minWidth: 120 }}><SelectField label="Every" value={f.cadence} onChange={e => setF(p => ({ ...p, cadence: e.target.value }))}><option value="weekly">Week</option><option value="monthly">Month</option></SelectField></div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Btn size="sm" loading={saving} onClick={submit}>Start retainer</Btn>
+          <Btn variant="ghost" size="sm" onClick={() => setOpen(false)}>Cancel</Btn>
+        </div>
+        <Mono style={{ color: 'var(--text-muted)', lineHeight: 1.5 }}>A task is created now and every {f.cadence === 'weekly' ? 'week' : 'month'} until you cancel. Arrange payment directly for now.</Mono>
+      </div>
+    </DCard>
+  )
+}
+
+// F1b: the client's retainers, with cancel — shown on the Following page.
+function MyRetainers() {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [rets, setRets] = useState(null)
+  const load = () => fetch(`${API_BASE}/retainers/mine`, { headers: { Authorization: `Bearer ${token()}` } })
+    .then(r => r.ok ? r.json() : { retainers: [] }).then(d => setRets(d.retainers || [])).catch(() => setRets([]))
+  useEffect(() => { load() }, []) // eslint-disable-line
+  async function cancel(id) {
+    if (!window.confirm('Cancel this retainer? No further tasks will be created.')) return
+    const res = await fetch(`${API_BASE}/retainers/${id}/cancel`, { method: 'POST', headers: { Authorization: `Bearer ${token()}` } })
+    if (res.ok) { toast('Retainer cancelled', 'success'); load() } else toast('Could not cancel', 'error')
+  }
+  if (!rets || rets.length === 0) return null
+  return (
+    <div>
+      <Mono style={{ display: 'block', marginBottom: 10 }}>Retainers ({rets.length})</Mono>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {rets.map(r => (
+          <DCard key={r.retainer_id} hover={false} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 600 }}>{r.title} {!r.active && <Tag>ended</Tag>}</div>
+              <Mono style={{ color: 'var(--text-muted)' }}>R{r.amount} · {r.cadence} · with {r.provider_name || 'provider'}</Mono>
+            </div>
+            {r.active && <Btn variant="ghost" size="sm" onClick={() => cancel(r.retainer_id)}>Cancel</Btn>}
+          </DCard>
+        ))}
+      </div>
     </div>
   )
 }

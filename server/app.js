@@ -32,6 +32,7 @@ import uploadsRouter from './routes/uploads.js'
 import dealsRouter from './routes/deals.js'
 import followsRouter from './routes/follows.js'
 import schedulingRouter from './routes/scheduling.js'
+import retainersRouter from './routes/retainers.js'
 import jwt from 'jsonwebtoken'
 import { pool } from './db.js'
 
@@ -193,6 +194,7 @@ app.use('/uploads', uploadsRouter)
 app.use('/deals', dealsRouter)
 app.use('/follows', followsRouter)
 app.use('/scheduling', schedulingRouter)
+app.use('/retainers', retainersRouter)
 app.use('/', betaRouter)   // /feedback + /waitlist
 
 // 404 + error handlers

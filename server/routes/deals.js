@@ -62,6 +62,25 @@ function cleanImageUrl(value) {
 // express-validator helper: a valid ISO date strictly in the future.
 const futureDate = v => { if (new Date(v).getTime() <= Date.now()) throw new Error('expiresAt must be in the future.'); return true }
 
+// F2: when a business posts a deal, alert everyone who follows that business
+// (in-app + email per their preference). Best-effort; never blocks the create.
+async function notifyDealFollowers(deal) {
+  try {
+    if (!deal || deal.status !== 'active') return
+    const biz = await pool.query('SELECT name FROM businesses WHERE business_id = $1', [deal.business_id])
+    const name = biz.rows[0]?.name || 'A business you follow'
+    const fols = await pool.query("SELECT follower_id FROM follows WHERE target_type = 'business' AND target_id = $1", [deal.business_id])
+    for (const f of fols.rows) {
+      createNotification({
+        userId: f.follower_id, type: 'deal.new',
+        title: 'New deal from a business you follow',
+        body: `${name} just posted "${deal.title}".`,
+        referenceId: deal.deal_id,
+      }).catch(() => {})
+    }
+  } catch (err) { log.error('notifyDealFollowers', { msg: err.message }) }
+}
+
 const PUBLIC_COLS = `d.deal_id, d.title, d.description, d.image_url, d.price_cents,
   d.original_price_cents, d.starts_at, d.expires_at, d.location_id, d.recurrence, d.student_only, d.created_at,
   b.business_id, b.name AS business_name, b.logo_url, b.category`
@@ -177,6 +196,7 @@ router.post('/',
         [biz.business_id, req.userId, b.locationId || null, b.title, b.description || null,
          imageUrl, b.priceCents ?? null, b.originalPriceCents ?? null, b.status || 'active', b.expiresAt,
          recurrence, b.recurrenceUntil || null, activeWindowS, b.studentOnly === true])
+      notifyDealFollowers(rows[0])   // F2 — fire-and-forget fan-out to followers
       return res.status(201).json({ deal: rows[0] })
     } catch (err) {
       if (/image URL|future/i.test(err.message)) return res.status(422).json({ message: err.message })
