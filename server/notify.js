@@ -5,6 +5,7 @@
 import { pool } from './db.js'
 import log from './log.js'
 import { sendEmail, EMAIL_FROM_UPDATES } from './email.js'
+import { sendPush } from './push.js'
 
 export async function createNotification({ userId, type, title, body, referenceId = null }) {
   try {
@@ -18,6 +19,9 @@ export async function createNotification({ userId, type, title, body, referenceI
   }
   // Fire-and-forget activity email — respects the user's opt-out.
   sendActivityEmail({ userId, title, body }).catch(() => {})
+  // Fire-and-forget Web Push — no-op unless the user has a subscription and
+  // VAPID is configured. tag=type so repeat notifications collapse per device.
+  sendPush(userId, { title, body, url: '/', tag: type }).catch(() => {})
 }
 
 // Instant activity email — only for users on the 'instant' cadence. 'daily'

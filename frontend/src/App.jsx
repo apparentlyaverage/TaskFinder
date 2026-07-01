@@ -4872,6 +4872,9 @@ function Profile({ openProfile }) {
   const [deletePw, setDeletePw]   = useState('')
   const [deleting, setDeleting]   = useState(false)
   const [loadingProfile, setLoadingProfile] = useState(true)
+  // Push: loading | unsupported | default | denied | on | busy. The service
+  // worker is registered in production only, so dev/unsupported browsers show N/A.
+  const [pushStatus, setPushStatus] = useState('loading')
   const myReviews = state.reviews.filter(r=>r.reviewee_id==='u1'||r.reviewer_id==='u1')
   const avgRating = myReviews.length?(myReviews.reduce((s,r)=>s+r.rating,0)/myReviews.length).toFixed(1):null
 
@@ -4903,6 +4906,23 @@ function Profile({ openProfile }) {
     load()
     return () => { cancelled = true }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Detect current push-notification state on mount ─────────────────────────
+  useEffect(() => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window) || !import.meta.env.PROD) {
+      setPushStatus('unsupported'); return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const reg = await navigator.serviceWorker.ready
+        const sub = await reg.pushManager.getSubscription()
+        if (cancelled) return
+        setPushStatus(sub ? 'on' : (Notification.permission === 'denied' ? 'denied' : 'default'))
+      } catch { if (!cancelled) setPushStatus('default') }
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   // ── Save profile to backend ─────────────────────────────────────────────────
   async function saveProfile() {
@@ -5000,6 +5020,54 @@ function Profile({ openProfile }) {
     } catch { /* revoked regardless; fall through to local logout */ }
     toast('Signed out of all devices', 'success')
     logout()
+  }
+
+  // ── Push notifications (H1) ─────────────────────────────────────────────────
+  // Standard VAPID base64url → Uint8Array for applicationServerKey.
+  function urlB64ToUint8Array(base64) {
+    const padding = '='.repeat((4 - (base64.length % 4)) % 4)
+    const raw = atob((base64 + padding).replace(/-/g, '+').replace(/_/g, '/'))
+    const out = new Uint8Array(raw.length)
+    for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i)
+    return out
+  }
+  async function enablePush() {
+    setPushStatus('busy')
+    try {
+      const perm = await Notification.requestPermission()
+      if (perm !== 'granted') { setPushStatus(perm === 'denied' ? 'denied' : 'default'); toast('Notifications not enabled', 'info'); return }
+      const { publicKey, enabled } = await (await fetch(API_BASE + '/push/public-key')).json()
+      if (!enabled || !publicKey) { setPushStatus('default'); toast('Push notifications aren’t set up yet', 'error'); return }
+      const reg = await navigator.serviceWorker.ready
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8Array(publicKey) })
+      const res = await fetch(API_BASE + '/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify(sub.toJSON ? sub.toJSON() : sub),
+      })
+      if (!res.ok) throw new Error()
+      setPushStatus('on'); toast('Push notifications enabled', 'success')
+    } catch {
+      setPushStatus('default'); toast('Could not enable notifications', 'error')
+    }
+  }
+  async function disablePush() {
+    setPushStatus('busy')
+    try {
+      const reg = await navigator.serviceWorker.ready
+      const sub = await reg.pushManager.getSubscription()
+      if (sub) {
+        await fetch(API_BASE + '/push/unsubscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        }).catch(() => {})
+        await sub.unsubscribe().catch(() => {})
+      }
+      setPushStatus('default'); toast('Push notifications turned off', 'success')
+    } catch {
+      setPushStatus('on'); toast('Could not turn off notifications', 'error')
+    }
   }
 
   // ── Delete account (POPIA erasure) ──────────────────────────────────────────
@@ -5127,6 +5195,21 @@ function Profile({ openProfile }) {
               <option value="daily">Daily digest</option>
               <option value="off">Don't email me</option>
             </select>
+          </div>
+
+          <Divider style={{ margin:'18px 0' }} />
+
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+            <div style={{ fontSize:'0.85rem', color:'var(--text-secondary)', maxWidth:380 }}>
+              Push notifications — get alerts on this device even when ReLivR isn’t open.
+              {pushStatus==='denied' && <span style={{ display:'block', color:'var(--danger)', marginTop:4 }}>Blocked in your browser. Allow notifications for this site, then try again.</span>}
+              {pushStatus==='unsupported' && <span style={{ display:'block', color:'var(--text-muted)', marginTop:4 }}>Install the app or use a supported browser to enable these.</span>}
+            </div>
+            {pushStatus==='on'
+              ? <Btn variant="secondary" size="sm" onClick={disablePush}>Turn off</Btn>
+              : (pushStatus==='unsupported' || pushStatus==='denied')
+                ? <Mono style={{ opacity:0.7 }}>{pushStatus==='denied' ? 'Blocked' : 'N/A'}</Mono>
+                : <Btn variant="secondary" size="sm" loading={pushStatus==='busy' || pushStatus==='loading'} onClick={enablePush}>Enable</Btn>}
           </div>
 
           <Divider style={{ margin:'18px 0' }} />

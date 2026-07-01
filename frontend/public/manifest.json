@@ -1,6 +1,6 @@
 {
-  "name": "ReLiv",
-  "short_name": "ReLiv",
+  "name": "ReLivR — Campus Marketplace",
+  "short_name": "ReLivR",
   "description": "Campus peer-to-peer marketplace for Rhodes University students",
   "start_url": "/",
   "display": "standalone",

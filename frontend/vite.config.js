@@ -32,6 +32,7 @@ export default defineConfig({
       '/follows':       { target: 'http://localhost:3001', changeOrigin: true },
       '/scheduling':    { target: 'http://localhost:3001', changeOrigin: true },
       '/retainers':     { target: 'http://localhost:3001', changeOrigin: true },
+      '/push':          { target: 'http://localhost:3001', changeOrigin: true },
       '/feedback':      { target: 'http://localhost:3001', changeOrigin: true },
       '/waitlist':      { target: 'http://localhost:3001', changeOrigin: true },
       '/health':        { target: 'http://localhost:3001', changeOrigin: true },
