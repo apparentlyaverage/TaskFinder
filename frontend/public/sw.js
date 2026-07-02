@@ -4,7 +4,13 @@ const CACHE = 'relivr-shell-v1'
 const SHELL = ['/', '/index.html', '/manifest.json', '/favicon.svg', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()))
+  // Best-effort per-item cache (not addAll, which is atomic): a single renamed
+  // or missing shell asset must not brick SW install and offline support.
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => Promise.allSettled(SHELL.map(u => c.add(u))))
+      .then(() => self.skipWaiting())
+  )
 })
 
 self.addEventListener('activate', (e) => {
