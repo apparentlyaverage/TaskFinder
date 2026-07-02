@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import { body, validationResult } from 'express-validator'
 import { pool } from '../db.js'
 import { emailWaitlistConfirmation } from '../emails.js'
+import { requireHuman } from '../turnstile.js'
 import log from '../log.js'
 
 const router = Router()
@@ -22,8 +23,10 @@ function maybeUserId(req) {
   try { return jwt.verify(t, process.env.JWT_SECRET).userId } catch { return null }
 }
 
-// POST /feedback — anyone can send beta feedback.
+// POST /feedback — anyone can send beta feedback. Turnstile-guarded when
+// configured (these are the only unauthenticated write endpoints on the site).
 router.post('/feedback',
+  requireHuman,
   [
     body('message').trim().notEmpty().isLength({ min: 3, max: 4000 }),
     body('name').optional({ nullable: true }).trim().isLength({ max: 120 }),
@@ -46,6 +49,7 @@ router.post('/feedback',
 
 // POST /waitlist — join the launch-reminder list (idempotent on email).
 router.post('/waitlist',
+  requireHuman,
   [body('email').trim().isEmail().normalizeEmail()],
   check,
   async (req, res) => {

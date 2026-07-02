@@ -145,6 +145,11 @@ input, textarea, select { font-family: var(--font-body); font-size: inherit; }
 .nav-link:hover { color:var(--text-primary); }
 .slabel { font-family:var(--fm); font-size:.68rem; font-weight:500; letter-spacing:.14em; text-transform:uppercase; color:var(--amber); display:flex; align-items:center; gap:8px; }
 .slabel::before { content:''; display:block; width:18px; height:1px; background:var(--amber); }
+/* Scroll-reveal — the landing's one signature motion. Sections start soft +
+   12px low and settle in as they enter the viewport (IntersectionObserver adds
+   .in). Mirrors the hero's fadeUp language; disabled under reduced motion. */
+.reveal { opacity:0; transform:translateY(14px); transition:opacity .55s var(--ease), transform .55s var(--ease); }
+.reveal.in { opacity:1; transform:none; }
 .lcard { background:var(--bg-surface); border:1px solid var(--border); border-radius:16px; padding:28px; box-shadow:var(--shadow-xs); transition:border-color 200ms var(--ease),transform 200ms var(--ease),box-shadow 200ms var(--ease); }
 .lcard:hover { border-color:var(--border-strong); transform:translateY(-4px); box-shadow:var(--shadow-lg); }
 .photo-card img { transition:transform .55s var(--ease); will-change:transform; }
@@ -265,6 +270,7 @@ button:active { transform: scale(.97); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  .reveal { opacity:1 !important; transform:none !important; } /* never hide content from reduced-motion users */
 }
 `
 document.head.appendChild(_style)
@@ -982,19 +988,21 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
 // LANDING PAGE SECTIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Illustrative examples of typical campus tasks — deliberately NOT dressed up as
+// live data (no fake timestamps): pre-launch there are no real tasks to show.
 const TASK_EXAMPLES = [
-  { title:'Fix Python script crashing on import', budget:'R180', tags:['python','debugging'], time:'2h ago' },
-  { title:'Proofread 3000-word essay',            budget:'R120', tags:['writing','editing'],  time:'4h ago' },
-  { title:'Laundry pickup & delivery',            budget:'R80',  tags:['errands','delivery'], time:'1h ago' },
-  { title:'React component for student portal',   budget:'R350', tags:['react','javascript'], time:'6h ago' },
-  { title:'Guitar lesson — 1 hour',               budget:'R150', tags:['music','tutoring'],   time:'3h ago' },
-  { title:'Translate doc Zulu → English',         budget:'R200', tags:['translation','lang'],  time:'5h ago' },
+  { title:'Fix Python script crashing on import', budget:'R180', tags:['python','debugging'] },
+  { title:'Proofread 3000-word essay',            budget:'R120', tags:['writing','editing'] },
+  { title:'Laundry pickup & delivery',            budget:'R80',  tags:['errands','delivery'] },
+  { title:'React component for student portal',   budget:'R350', tags:['react','javascript'] },
+  { title:'Guitar lesson — 1 hour',               budget:'R150', tags:['music','tutoring'] },
+  { title:'Translate doc Zulu → English',         budget:'R200', tags:['translation','lang'] },
 ]
 
 const FEATURES_DATA = [
   { icon:'⚡', title:'Post in 60 Seconds',   desc:'Describe your task, set a budget, and go live instantly. No lengthy forms, no approval process.' },
   { icon:'🎯', title:'Smart Matching',       desc:'Our engine surfaces your task to earners with the exact skills you need — automatically.' },
-  { icon:'🔒', title:'Escrow Protection',    desc:'Funds are held securely until you confirm the work is done. No pay-and-pray.' },
+  { icon:'🔒', title:'Escrow — Coming Soon', desc:'Secure held-until-done payments are on the roadmap. During beta, you agree a price and settle directly.' },
   { icon:'⭐', title:'Trust Scores',         desc:'Every user builds a verified reputation. Know who you\'re working with before you commit.' },
   { icon:'💬', title:'Built-in Messaging',   desc:'Negotiate, clarify, and collaborate — all in one place without switching apps.' },
   { icon:'⚖️', title:'Dispute Resolution',  desc:'If something goes wrong, our admin team steps in. Fair outcomes, every time.' },
@@ -1014,10 +1022,12 @@ const STATS_DATA = [
   { v:'Soon', l:'Secure Escrow Coming' },
 ]
 
-const TESTIMONIALS_DATA = [
-  { name:'Sipho M.',   role:'3rd Year CS · Earner',       rating:5, text:'I made R2400 in my first two weeks just fixing bugs and building small scripts for other students. ReLivR is the side hustle I didn\'t know I needed.' },
-  { name:'Anika V.',   role:'PostGrad Law · Creator',      rating:5, text:'Got my thesis transcribed, my room cleaned, and my laptop fixed all through ReLivR. The escrow system means I never worried about paying upfront.' },
-  { name:'Lethabo K.', role:'2nd Year Commerce · Earner',  rating:5, text:'The trust score system is what makes it different. People know I\'m a real Rhodes student, not some random from the internet.' },
+// Honest pre-launch social proof: scenario cards, not invented testimonials.
+// Swap for real founding-member quotes (with consent) once the beta produces them.
+const SCENARIOS_DATA = [
+  { icon:'💻', who:'The coder',   title:'Turn your skills into rent money',  text:'Debug a script between lectures. Build a component over the weekend. Your degree is already earning — you just haven\'t invoiced it yet.' },
+  { icon:'📚', who:'The swamped', title:'Buy back your afternoon',           text:'Laundry run, essay proofread, groceries collected — post it in a minute and get your hours back for the things only you can do.' },
+  { icon:'🎓', who:'The campus',  title:'Trade with people you can trust',   text:'Everyone here is a verified student on your campus, building a public track record with every task. Not a stranger from the internet.' },
 ]
 
 function CampusStrip() {
@@ -1027,9 +1037,9 @@ function CampusStrip() {
     { img:'/img/campus-tutoring.webp', caption:'Skills, shared',      tag:'Tutoring' },
   ]
   return (
-    <section style={{ padding:'88px 24px', borderBottom:'1px solid var(--border)' }}>
+    <section className="reveal" style={{ padding:'88px 24px', borderBottom:'1px solid var(--border)' }}>
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
-        <div className="slabel" style={{ marginBottom:28 }}>Real campus, real tasks</div>
+        <div className="slabel" style={{ marginBottom:28 }}>Real campus, real people</div>
         <div className="tasks-grid" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:20 }}>
           {slots.map((s,i) => (
             <figure key={i} className="lcard photo-card" style={{ margin:0, padding:0, overflow:'hidden', borderRadius:18 }}>
@@ -1044,6 +1054,23 @@ function CampusStrip() {
       </div>
     </section>
   )
+}
+
+// Mount-once scroll-reveal driver for the landing page: watches every `.reveal`
+// section and adds `.in` as it enters the viewport (then stops watching it —
+// reveals play once, never reverse). Falls back to showing everything when
+// IntersectionObserver is unavailable, so content can never be stranded hidden.
+function RevealObserver() {
+  useEffect(() => {
+    const nodes = document.querySelectorAll('.reveal:not(.in)')
+    if (!('IntersectionObserver' in window)) { nodes.forEach(n => n.classList.add('in')); return }
+    const io = new IntersectionObserver(entries => {
+      for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) }
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 })
+    nodes.forEach(n => io.observe(n))
+    return () => io.disconnect()
+  }, [])
+  return null
 }
 
 function Hero({ onOpenAuth }) {
@@ -1069,7 +1096,7 @@ function Hero({ onOpenAuth }) {
               <button className="btn-s" style={{ fontSize:'.95rem', padding:'14px 30px' }} onClick={() => onOpenAuth('register')}>Start Earning</button>
             </div>
             <p style={{ marginTop:20, fontSize:'.78rem', color:'var(--text-muted)', fontFamily:'var(--fm)', animation:'fadeUp .6s .4s ease both', opacity:0, animationFillMode:'forwards' }}>
-              No credit card required · Free to post · Pay only when done
+              No credit card required · Free to post · Free while in beta
             </p>
           </div>
           <div className="hide-m" style={{ width:316, flexShrink:0, display:'flex', flexDirection:'column', gap:10, animation:'slideL .8s .4s ease both', opacity:0, animationFillMode:'forwards', border:'10px solid #211c2e', borderRadius:40, padding:'34px 14px 22px', background:'var(--bg-base)', boxShadow:'0 24px 64px rgba(33,28,46,.18)', position:'relative' }}>
@@ -1081,12 +1108,11 @@ function Hero({ onOpenAuth }) {
                 </div>
                 <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
                   {t.tags.map(tag => <span key={tag} style={{ background:'var(--bg-elevated)', border:'1px solid var(--border-strong)', color:'#7c7585', fontFamily:'var(--fm)', fontSize:'.58rem', padding:'2px 7px', borderRadius:3, textTransform:'uppercase', letterSpacing:'.06em' }}>{tag}</span>)}
-                  <span style={{ marginLeft:'auto', fontFamily:'var(--fm)', fontSize:'.58rem', color:'var(--text-muted)' }}>{t.time}</span>
                 </div>
               </div>
             ))}
             <div style={{ textAlign:'center', padding:'6px 0' }}>
-              <span style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', letterSpacing:'.1em', textTransform:'uppercase' }}>Live tasks on campus →</span>
+              <span style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', letterSpacing:'.1em', textTransform:'uppercase' }}>The kind of tasks campus posts →</span>
             </div>
           </div>
         </div>
@@ -1097,7 +1123,7 @@ function Hero({ onOpenAuth }) {
 
 function StatsBar() {
   return (
-    <section style={{ borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)', padding:'36px 24px', background:'var(--bg-surface)' }}>
+    <section className="reveal" style={{ borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)', padding:'36px 24px', background:'var(--bg-surface)' }}>
       <div className="stats-grid" style={{ maxWidth:1200, margin:'0 auto', display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:24 }}>
         {STATS_DATA.map((s,i) => (
           <div key={i} style={{ textAlign:'center' }}>
@@ -1112,7 +1138,7 @@ function StatsBar() {
 
 function HowItWorks() {
   return (
-    <section id="how-it-works" style={{ padding:'100px 24px' }}>
+    <section id="how-it-works" className="reveal" style={{ padding:'100px 24px' }}>
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
         <div style={{ marginBottom:56 }}>
           <div className="slabel" style={{ marginBottom:14 }}>How It Works</div>
@@ -1137,7 +1163,7 @@ function HowItWorks() {
 
 function Features() {
   return (
-    <section id="features" style={{ padding:'100px 24px', background:'var(--bg-surface)', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)' }}>
+    <section id="features" className="reveal" style={{ padding:'100px 24px', background:'var(--bg-surface)', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)' }}>
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
         <div style={{ marginBottom:56, display:'flex', justifyContent:'space-between', alignItems:'flex-end', flexWrap:'wrap', gap:20 }}>
           <div>
@@ -1164,20 +1190,20 @@ function Features() {
 
 function LiveTasks({ onOpenAuth }) {
   return (
-    <section style={{ padding:'100px 24px' }}>
+    <section className="reveal" style={{ padding:'100px 24px' }}>
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
         <div style={{ marginBottom:44, display:'flex', justifyContent:'space-between', alignItems:'flex-end', flexWrap:'wrap', gap:16 }}>
           <div>
-            <div className="slabel" style={{ marginBottom:14 }}>Live Right Now</div>
-            <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.6rem,3vw,2.4rem)', fontWeight:800, lineHeight:1.1 }}>Tasks posted today</h2>
+            <div className="slabel" style={{ marginBottom:14 }}>Example tasks</div>
+            <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.6rem,3vw,2.4rem)', fontWeight:800, lineHeight:1.1 }}>What gets posted on campus</h2>
           </div>
-          <button className="btn-s" onClick={() => onOpenAuth('register')}>View All Tasks →</button>
+          <button className="btn-s" onClick={() => onOpenAuth('register')}>Browse Real Tasks →</button>
         </div>
         <div className="tasks-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:12 }}>
           {TASK_EXAMPLES.map((t,i) => (
             <div key={i} className="lcard" style={{ cursor:'pointer' }} onClick={() => onOpenAuth('register')}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
-                <span style={{ background:'rgba(16,185,129,.1)', border:'1px solid rgba(16,185,129,.2)', borderRadius:100, padding:'2px 9px', fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--green)', textTransform:'uppercase', letterSpacing:'.08em' }}>Open</span>
+                <span style={{ background:'rgba(16,185,129,.1)', border:'1px solid rgba(16,185,129,.2)', borderRadius:100, padding:'2px 9px', fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--green)', textTransform:'uppercase', letterSpacing:'.08em' }}>Example</span>
                 <span style={{ fontFamily:'var(--fm)', fontSize:'1rem', color:'var(--amber)', fontWeight:500 }}>{t.budget}</span>
               </div>
               <h3 style={{ fontFamily:'var(--fd)', fontSize:'.98rem', fontWeight:700, marginBottom:10, lineHeight:1.3 }}>{t.title}</h3>
@@ -1186,7 +1212,7 @@ function LiveTasks({ onOpenAuth }) {
               </div>
               <div style={{ display:'flex', justifyContent:'space-between', paddingTop:10, borderTop:'1px solid var(--border)' }}>
                 <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)' }}>📍 Rhodes Campus</span>
-                <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)' }}>{t.time}</span>
+                <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)' }}>sign up to see live tasks</span>
               </div>
             </div>
           ))}
@@ -1198,7 +1224,7 @@ function LiveTasks({ onOpenAuth }) {
 
 function Pricing({ onOpenAuth }) {
   return (
-    <section id="pricing" style={{ padding:'100px 24px', background:'var(--bg-surface)', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)' }}>
+    <section id="pricing" className="reveal" style={{ padding:'100px 24px', background:'var(--bg-surface)', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)' }}>
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
         <div style={{ marginBottom:56, textAlign:'center' }}>
           <div className="slabel" style={{ justifyContent:'center', marginBottom:14 }}>Pricing</div>
@@ -1242,25 +1268,25 @@ function Pricing({ onOpenAuth }) {
   )
 }
 
+// Pre-launch: scenario cards instead of testimonials — we have no users yet, so
+// invented quotes would be false advertising. Same card language; swap to real
+// founding-member quotes post-beta.
 function Testimonials() {
   return (
-    <section style={{ padding:'100px 24px' }}>
+    <section className="reveal" style={{ padding:'100px 24px' }}>
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
         <div style={{ marginBottom:56 }}>
-          <div className="slabel" style={{ marginBottom:14 }}>Testimonials</div>
-          <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.8rem)', fontWeight:800, lineHeight:1.1 }}>Real students.<br />Real results.</h2>
+          <div className="slabel" style={{ marginBottom:14 }}>Made for campus life</div>
+          <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.8rem)', fontWeight:800, lineHeight:1.1 }}>Whoever you are on campus,<br />ReLivR works for you.</h2>
         </div>
         <div className="test-grid" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16 }}>
-          {TESTIMONIALS_DATA.map((t,i) => (
+          {SCENARIOS_DATA.map((t,i) => (
             <div key={i} className="lcard">
-              <div style={{ color:'#d97706', letterSpacing:2, marginBottom:14 }}>{'★'.repeat(t.rating)}</div>
-              <p style={{ fontSize:'.9rem', color:'#454050', lineHeight:1.8, marginBottom:22, fontStyle:'italic' }}>"{t.text}"</p>
-              <div style={{ display:'flex', alignItems:'center', gap:11, paddingTop:18, borderTop:'1px solid var(--border)' }}>
-                <div style={{ width:36, height:36, borderRadius:'50%', background:'rgba(91,33,182,.12)', border:'1px solid rgba(91,33,182,.25)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--fd)', fontWeight:700, fontSize:'.85rem', color:'var(--amber)' }}>{t.name.charAt(0)}</div>
-                <div>
-                  <div style={{ fontWeight:600, fontSize:'.875rem' }}>{t.name}</div>
-                  <div style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em' }}>{t.role}</div>
-                </div>
+              <div style={{ fontSize:'1.7rem', marginBottom:14 }}>{t.icon}</div>
+              <h3 style={{ fontFamily:'var(--fd)', fontSize:'1.1rem', fontWeight:700, marginBottom:10 }}>{t.title}</h3>
+              <p style={{ fontSize:'.9rem', color:'#454050', lineHeight:1.8, marginBottom:22 }}>{t.text}</p>
+              <div style={{ paddingTop:14, borderTop:'1px solid var(--border)' }}>
+                <span style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em' }}>{t.who}</span>
               </div>
             </div>
           ))}
@@ -1272,7 +1298,7 @@ function Testimonials() {
 
 function LandingAbout() {
   return (
-    <section id="about" style={{ padding:'100px 24px', background:'var(--bg-surface)', borderTop:'1px solid var(--border)' }}>
+    <section id="about" className="reveal" style={{ padding:'100px 24px', background:'var(--bg-surface)', borderTop:'1px solid var(--border)' }}>
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
         <div className="about-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:72, alignItems:'center' }}>
           <div>
@@ -1329,24 +1355,57 @@ function Countdown({ target, onComplete }) {
   )
 }
 
+// Cloudflare Turnstile bot-check for the public landing forms. Env-gated: with
+// no VITE_TURNSTILE_SITE_KEY this renders nothing and the script never loads
+// (the server side is equally a no-op without TURNSTILE_SECRET). The script tag
+// is injected once and shared by every widget instance.
+const TURNSTILE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || ''
+function Turnstile({ onToken }) {
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!TURNSTILE_KEY) return
+    const el = ref.current
+    function render() {
+      if (el && window.turnstile && !el.dataset.rendered) {
+        el.dataset.rendered = '1'
+        window.turnstile.render(el, { sitekey: TURNSTILE_KEY, callback: onToken, 'refresh-expired': 'auto' })
+      }
+    }
+    if (window.turnstile) { render(); return }
+    let s = document.querySelector('script[data-turnstile]')
+    if (!s) {
+      s = document.createElement('script')
+      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+      s.async = true
+      s.dataset.turnstile = '1'
+      document.head.appendChild(s)
+    }
+    s.addEventListener('load', render)
+    return () => s.removeEventListener('load', render)
+  }, [onToken])
+  if (!TURNSTILE_KEY) return null
+  return <div ref={ref} style={{ display:'flex', justifyContent:'center', width:'100%' }} />
+}
+
 // Launch countdown + reminder waitlist.
 function LaunchSection() {
   const [email, setEmail]     = useState('')
   const [done, setDone]       = useState(false)
   const [loading, setLoading] = useState(false)
   const [err, setErr]         = useState('')
+  const [tsToken, setTsToken] = useState('')
   async function submit(e) {
     e.preventDefault()
     if (!/.+@.+\..+/.test(email)) { setErr('Enter a valid email'); return }
     setLoading(true); setErr('')
     try {
-      const res = await fetch(API_BASE + '/waitlist', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ email }) })
+      const res = await fetch(API_BASE + '/waitlist', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ email, turnstileToken: tsToken || undefined }) })
       if (!res.ok) throw new Error()
       setDone(true)
     } catch { setErr('Something went wrong — please try again') } finally { setLoading(false) }
   }
   return (
-    <section style={{ padding:'56px 24px', textAlign:'center', background:'var(--bg-surface)', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)' }}>
+    <section className="reveal" style={{ padding:'56px 24px', textAlign:'center', background:'var(--bg-surface)', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)' }}>
       <div style={{ maxWidth:680, margin:'0 auto' }}>
         <div className="slabel" style={{ justifyContent:'center', marginBottom:14 }}>Full launch · 7 July 2026</div>
         <h2 style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(1.6rem,4vw,2.4rem)', marginBottom:22 }}>The countdown is on</h2>
@@ -1361,6 +1420,7 @@ function LaunchSection() {
             <input type="email" value={email} onChange={e=>{ setEmail(e.target.value); setErr('') }} placeholder="you@email.com" aria-label="Email for launch reminder"
               style={{ maxWidth:280, padding:'12px 16px', borderRadius:10, border:'1px solid var(--border-strong)', background:'var(--bg-elevated)' }} />
             <button type="submit" className="btn-p" disabled={loading}>{loading ? '…' : 'Remind me at launch'}</button>
+            <Turnstile onToken={setTsToken} />
             {err && <div style={{ width:'100%', color:'var(--red)', fontSize:'.8rem' }}>{err}</div>}
           </form>
         )}
@@ -1375,17 +1435,18 @@ function FeedbackSection() {
   const [email, setEmail] = useState('')
   const [done, setDone]   = useState(false)
   const [loading, setLoading] = useState(false)
+  const [tsToken, setTsToken] = useState('')
   async function submit(e) {
     e.preventDefault()
     if (msg.trim().length < 3) return
     setLoading(true)
     try {
-      const res = await fetch(API_BASE + '/feedback', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ message: msg.trim(), email: email.trim() || undefined }) })
+      const res = await fetch(API_BASE + '/feedback', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ message: msg.trim(), email: email.trim() || undefined, turnstileToken: tsToken || undefined }) })
       if (res.ok) setDone(true)
     } catch { /* ignore */ } finally { setLoading(false) }
   }
   return (
-    <section id="feedback" style={{ padding:'64px 24px' }}>
+    <section id="feedback" className="reveal" style={{ padding:'64px 24px' }}>
       <div style={{ maxWidth:560, margin:'0 auto', textAlign:'center' }}>
         <div className="slabel" style={{ justifyContent:'center', marginBottom:14 }}>Beta feedback</div>
         <h2 style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(1.6rem,4vw,2.4rem)', marginBottom:12 }}>Help us shape ReLivR</h2>
@@ -1400,6 +1461,7 @@ function FeedbackSection() {
               style={{ minHeight:120, padding:'12px 14px', borderRadius:10, border:'1px solid var(--border-strong)', background:'var(--bg-elevated)' }} />
             <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email (optional — if you'd like a reply)" aria-label="Your email, optional"
               style={{ padding:'12px 14px', borderRadius:10, border:'1px solid var(--border-strong)', background:'var(--bg-elevated)' }} />
+            <Turnstile onToken={setTsToken} />
             <button type="submit" className="btn-p" disabled={loading} style={{ alignSelf:'center' }}>{loading ? 'Sending…' : 'Send feedback'}</button>
           </form>
         )}
@@ -1441,7 +1503,7 @@ function LaunchGate({ user, onLogout, onViewLanding }) {
 
 function LandingCTA({ onOpenAuth }) {
   return (
-    <section style={{ padding:'80px 24px' }}>
+    <section className="reveal" style={{ padding:'80px 24px' }}>
       <div style={{ maxWidth:1100, margin:'0 auto', position:'relative', borderRadius:28, overflow:'hidden', boxShadow:'var(--shadow-xl)' }}>
         <img src="/img/community.webp" alt="Rhodes students together on campus" loading="lazy" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }} />
         <div style={{ position:'absolute', inset:0, background:'linear-gradient(115deg, rgba(33,28,46,.88) 0%, rgba(33,28,46,.6) 52%, rgba(76,29,149,.5) 100%)' }} />
@@ -1450,7 +1512,7 @@ function LandingCTA({ onOpenAuth }) {
           <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(2rem,4vw,3.4rem)', fontWeight:800, lineHeight:1.06, marginBottom:18, letterSpacing:'-.02em', color:'#fff' }}>
             Ready to join your<br /><span style={{ color:'var(--highlight)' }}>campus economy?</span>
           </h2>
-          <p style={{ color:'rgba(255,255,255,.82)', maxWidth:440, marginBottom:32, lineHeight:1.7, fontSize:'.98rem' }}>Join hundreds of Rhodes students already posting tasks, earning money, and getting things done — all in one place they trust.</p>
+          <p style={{ color:'rgba(255,255,255,.82)', maxWidth:440, marginBottom:32, lineHeight:1.7, fontSize:'.98rem' }}>Be part of the founding class — the Rhodes students who shape ReLivR from day one, post the first tasks, and earn the first ratings.</p>
           <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
             <button className="btn-p" style={{ fontSize:'.95rem', padding:'14px 34px' }} onClick={() => onOpenAuth('register')}>Create Free Account →</button>
             <button onClick={() => onOpenAuth('login')} style={{ fontSize:'.95rem', padding:'14px 34px', borderRadius:12, border:'1px solid rgba(255,255,255,.35)', background:'rgba(255,255,255,.08)', backdropFilter:'blur(8px)', color:'#fff', fontFamily:'var(--fd)', fontWeight:700, cursor:'pointer' }}>Sign In</button>
@@ -7565,6 +7627,7 @@ export default function App() {
           {view==='landing' && (
             <div>
               <LandingNavbar onOpenAuth={openAuth} onNav={navigate} user={user} onEnterApp={goAppHome} />
+              <RevealObserver />
               <Hero         onOpenAuth={openAuth} />
               <LaunchSection />
               <StatsBar />
