@@ -125,6 +125,63 @@ describe('feature flags', () => {
     expect(res.body.flags.everyone).toBe(true)
     expect(res.body.flags.biz_only).toBe(false) // a member isn't in [business]
   })
+
+  const CAMPUS_A = '11111111-1111-4111-8111-111111111111'
+  const CAMPUS_B = '22222222-2222-4222-8222-222222222222'
+  const campusFlagRow = { flag_key: 'campus_flag', enabled: true, rollout_roles: null, rollout_percent: 100, rollout_campuses: [CAMPUS_A], enable_at: null, disable_at: null }
+
+  it('resolves per-campus flags at GET /flags — viewer on the targeted campus (on)', async () => {
+    mockDb(pool, sql => {
+      if (/FROM feature_flags/.test(sql)) return { rows: [campusFlagRow] }
+      if (/FROM user_profiles up JOIN locations/.test(sql)) return { rows: [{ campus_id: CAMPUS_A }] }
+    })
+    const res = await request(app).get('/flags').set('Authorization', `Bearer ${memberToken}`)
+    expect(res.status).toBe(200)
+    expect(res.body.flags.campus_flag).toBe(true)
+  })
+  it('resolves per-campus flags at GET /flags — viewer on a different campus (off)', async () => {
+    mockDb(pool, sql => {
+      if (/FROM feature_flags/.test(sql)) return { rows: [campusFlagRow] }
+      if (/FROM user_profiles up JOIN locations/.test(sql)) return { rows: [{ campus_id: CAMPUS_B }] }
+    })
+    const res = await request(app).get('/flags').set('Authorization', `Bearer ${memberToken}`)
+    expect(res.body.flags.campus_flag).toBe(false)
+  })
+  it('scheduled flag is off before enable_at', async () => {
+    const future = new Date(Date.now() + 3600_000).toISOString()
+    mockDb(pool, sql => /FROM feature_flags/.test(sql) ? { rows: [{ flag_key: 'sched', enabled: true, rollout_roles: null, rollout_percent: 100, rollout_campuses: null, enable_at: future, disable_at: null }] } : undefined)
+    const res = await request(app).get('/flags').set('Authorization', `Bearer ${memberToken}`)
+    expect(res.body.flags.sched).toBe(false)
+  })
+  it('scheduled flag is off after disable_at', async () => {
+    const past = new Date(Date.now() - 3600_000).toISOString()
+    mockDb(pool, sql => /FROM feature_flags/.test(sql) ? { rows: [{ flag_key: 'sched', enabled: true, rollout_roles: null, rollout_percent: 100, rollout_campuses: null, enable_at: null, disable_at: past }] } : undefined)
+    const res = await request(app).get('/flags').set('Authorization', `Bearer ${memberToken}`)
+    expect(res.body.flags.sched).toBe(false)
+  })
+  it('scheduled flag is on within its window', async () => {
+    const past = new Date(Date.now() - 3600_000).toISOString()
+    const future = new Date(Date.now() + 3600_000).toISOString()
+    mockDb(pool, sql => /FROM feature_flags/.test(sql) ? { rows: [{ flag_key: 'sched', enabled: true, rollout_roles: null, rollout_percent: 100, rollout_campuses: null, enable_at: past, disable_at: future }] } : undefined)
+    const res = await request(app).get('/flags').set('Authorization', `Bearer ${memberToken}`)
+    expect(res.body.flags.sched).toBe(true)
+  })
+  it('updates flag targeting — campuses + schedule (200)', async () => {
+    mockDb(pool, sql => /UPDATE feature_flags/.test(sql) ? { rows: [{ flag_key: 'recurring_tasks', enabled: true, rollout_roles: null, rollout_percent: 100, rollout_campuses: [CAMPUS_A], enable_at: '2026-08-01T00:00:00.000Z', disable_at: null }] } : undefined)
+    const res = await request(app).patch('/admin/flags/recurring_tasks').set('Authorization', `Bearer ${adminToken}`).send({ rollout_campuses: [CAMPUS_A], enable_at: '2026-08-01T00:00:00Z' })
+    expect(res.status).toBe(200)
+    expect(res.body.flag.rollout_campuses).toEqual([CAMPUS_A])
+  })
+  it('rejects a non-UUID campus (422)', async () => {
+    mockDb(pool)
+    const res = await request(app).patch('/admin/flags/recurring_tasks').set('Authorization', `Bearer ${adminToken}`).send({ rollout_campuses: ['not-a-uuid'] })
+    expect(res.status).toBe(422)
+  })
+  it('rejects a bad enable_at (422)', async () => {
+    mockDb(pool)
+    const res = await request(app).patch('/admin/flags/recurring_tasks').set('Authorization', `Bearer ${adminToken}`).send({ enable_at: 'not-a-date' })
+    expect(res.status).toBe(422)
+  })
 })
 
 describe('PATCH /admin/users/:id (moderation)', () => {

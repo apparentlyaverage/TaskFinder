@@ -6858,17 +6858,33 @@ function AdminLocations() {
 }
 
 // Admin: toggle feature flags (§7.8).
+// Stored ISO (UTC) → the `YYYY-MM-DDTHH:mm` a datetime-local input expects, in
+// the admin's local time. Empty string when unset.
+function toLocalInput(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+}
+
 function AdminFlags() {
   const toast = useToast()
   const token = () => localStorage.getItem('rl_token')
   const [flags, setFlags]   = useState([])
+  const [campuses, setCampuses] = useState([])
   const [loading, setLoading] = useState(true)
 
   async function load() {
     try { const res = await fetch(API_BASE + '/admin/flags', { headers:{ Authorization:`Bearer ${token()}` } }); if (res.ok) { const d = await res.json(); setFlags(d.flags || []) } }
     catch { /* offline */ } finally { setLoading(false) }
   }
-  useEffect(() => { load() }, []) // eslint-disable-line
+  useEffect(() => {
+    load()
+    // Campuses drive the per-campus targeting picker.
+    fetch(API_BASE + '/locations?kind=campus')
+      .then(r => r.ok ? r.json() : { locations: [] })
+      .then(d => setCampuses(d.locations || []))
+      .catch(() => {})
+  }, []) // eslint-disable-line
 
   async function patch(f, changes, label) {
     try {
@@ -6884,6 +6900,15 @@ function AdminFlags() {
     const cur = Array.isArray(f.rollout_roles) ? f.rollout_roles : []
     const next = cur.includes(role) ? cur.filter(r => r !== role) : [...cur, role]
     patch(f, { rollout_roles: next }, `${f.flag_key} roles updated`)
+  }
+  const toggleCampus = (f, id) => {
+    const cur = Array.isArray(f.rollout_campuses) ? f.rollout_campuses : []
+    const next = cur.includes(id) ? cur.filter(c => c !== id) : [...cur, id]
+    patch(f, { rollout_campuses: next }, `${f.flag_key} campuses updated`)
+  }
+  const setSchedule = (f, field, localVal) => {
+    patch(f, { [field]: localVal ? new Date(localVal).toISOString() : null },
+      `${f.flag_key} ${field==='enable_at'?'enable':'disable'} time ${localVal ? 'set' : 'cleared'}`)
   }
 
   return (
@@ -6901,25 +6926,57 @@ function AdminFlags() {
                 </div>
                 <Btn variant={f.enabled ? 'success' : 'secondary'} size="sm" onClick={() => patch(f, { enabled: !f.enabled }, `${f.flag_key} turned ${!f.enabled ? 'on' : 'off'}`)}>{f.enabled ? 'On' : 'Off'}</Btn>
               </div>
-              {/* Targeting — who sees it (roles) + gradual % rollout. Dimmed when the flag is off. */}
-              <div style={{ display:'flex', alignItems:'center', gap:18, flexWrap:'wrap', marginTop:12, paddingTop:12, borderTop:'1px solid var(--border)', opacity:f.enabled?1:.5 }}>
+              {/* Targeting — roles + % rollout + per-campus + scheduled window. Dimmed when the flag is off. */}
+              <div style={{ display:'flex', flexDirection:'column', gap:12, marginTop:12, paddingTop:12, borderTop:'1px solid var(--border)', opacity:f.enabled?1:.5 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:18, flexWrap:'wrap' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:7, flexWrap:'wrap' }}>
+                    <Mono style={{ color:'var(--text-muted)' }}>Roles</Mono>
+                    {FLAG_ROLES.map(role => {
+                      const on = Array.isArray(f.rollout_roles) && f.rollout_roles.includes(role)
+                      return (
+                        <button key={role} onClick={() => toggleRole(f, role)} disabled={!f.enabled}
+                          style={{ padding:'4px 10px', borderRadius:100, fontSize:'.74rem', fontWeight:600, cursor:f.enabled?'pointer':'default', border:`1px solid ${on?'var(--accent)':'var(--border)'}`, background:on?'var(--accent)':'transparent', color:on?'#fff':'var(--text-secondary)' }}>{role}</button>
+                      )
+                    })}
+                    {(!f.rollout_roles || f.rollout_roles.length===0) && <Mono style={{ color:'var(--text-muted)' }}>everyone</Mono>}
+                  </div>
+                  <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+                    <Mono style={{ color:'var(--text-muted)' }}>Rollout</Mono>
+                    <input type="number" min={0} max={100} defaultValue={f.rollout_percent ?? 100} disabled={!f.enabled}
+                      onBlur={e => { const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0)); if (v !== (f.rollout_percent ?? 100)) patch(f, { rollout_percent: v }, `${f.flag_key} rollout ${v}%`) }}
+                      style={{ width:60, padding:'5px 8px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg-elevated)', color:'var(--text-primary)', fontSize:'.8rem' }} />
+                    <Mono style={{ color:'var(--text-muted)' }}>%</Mono>
+                  </div>
+                </div>
+                {/* Per-campus — empty = all campuses. */}
                 <div style={{ display:'flex', alignItems:'center', gap:7, flexWrap:'wrap' }}>
-                  <Mono style={{ color:'var(--text-muted)' }}>Roles</Mono>
-                  {FLAG_ROLES.map(role => {
-                    const on = Array.isArray(f.rollout_roles) && f.rollout_roles.includes(role)
+                  <Mono style={{ color:'var(--text-muted)' }}>Campuses</Mono>
+                  {campuses.map(c => {
+                    const on = Array.isArray(f.rollout_campuses) && f.rollout_campuses.includes(c.location_id)
                     return (
-                      <button key={role} onClick={() => toggleRole(f, role)} disabled={!f.enabled}
-                        style={{ padding:'4px 10px', borderRadius:100, fontSize:'.74rem', fontWeight:600, cursor:f.enabled?'pointer':'default', border:`1px solid ${on?'var(--accent)':'var(--border)'}`, background:on?'var(--accent)':'transparent', color:on?'#fff':'var(--text-secondary)' }}>{role}</button>
+                      <button key={c.location_id} onClick={() => toggleCampus(f, c.location_id)} disabled={!f.enabled}
+                        style={{ padding:'4px 10px', borderRadius:100, fontSize:'.74rem', fontWeight:600, cursor:f.enabled?'pointer':'default', border:`1px solid ${on?'var(--accent)':'var(--border)'}`, background:on?'var(--accent)':'transparent', color:on?'#fff':'var(--text-secondary)' }}>{c.name}</button>
                     )
                   })}
-                  {(!f.rollout_roles || f.rollout_roles.length===0) && <Mono style={{ color:'var(--text-muted)' }}>everyone</Mono>}
+                  {campuses.length>0 && (!f.rollout_campuses || f.rollout_campuses.length===0) && <Mono style={{ color:'var(--text-muted)' }}>all campuses</Mono>}
+                  {campuses.length===0 && <Mono style={{ color:'var(--text-muted)' }}>—</Mono>}
                 </div>
-                <div style={{ display:'flex', alignItems:'center', gap:7 }}>
-                  <Mono style={{ color:'var(--text-muted)' }}>Rollout</Mono>
-                  <input type="number" min={0} max={100} defaultValue={f.rollout_percent ?? 100} disabled={!f.enabled}
-                    onBlur={e => { const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0)); if (v !== (f.rollout_percent ?? 100)) patch(f, { rollout_percent: v }, `${f.flag_key} rollout ${v}%`) }}
-                    style={{ width:60, padding:'5px 8px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg-elevated)', color:'var(--text-primary)', fontSize:'.8rem' }} />
-                  <Mono style={{ color:'var(--text-muted)' }}>%</Mono>
+                {/* Scheduled window — off until Enable-at, auto-off at Disable-at. */}
+                <div style={{ display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+                    <Mono style={{ color:'var(--text-muted)' }}>Enable at</Mono>
+                    <input type="datetime-local" value={toLocalInput(f.enable_at)} disabled={!f.enabled}
+                      onChange={e => setSchedule(f, 'enable_at', e.target.value)}
+                      style={{ padding:'4px 8px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg-elevated)', color:'var(--text-primary)', fontSize:'.78rem' }} />
+                    {f.enable_at && <button onClick={() => setSchedule(f, 'enable_at', '')} disabled={!f.enabled} title="Clear" style={{ border:'none', background:'none', color:'var(--text-muted)', cursor:'pointer', fontSize:'1rem', lineHeight:1 }}>×</button>}
+                  </div>
+                  <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+                    <Mono style={{ color:'var(--text-muted)' }}>Disable at</Mono>
+                    <input type="datetime-local" value={toLocalInput(f.disable_at)} disabled={!f.enabled}
+                      onChange={e => setSchedule(f, 'disable_at', e.target.value)}
+                      style={{ padding:'4px 8px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg-elevated)', color:'var(--text-primary)', fontSize:'.78rem' }} />
+                    {f.disable_at && <button onClick={() => setSchedule(f, 'disable_at', '')} disabled={!f.enabled} title="Clear" style={{ border:'none', background:'none', color:'var(--text-muted)', cursor:'pointer', fontSize:'1rem', lineHeight:1 }}>×</button>}
+                  </div>
                 </div>
               </div>
             </DCard>

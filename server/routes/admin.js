@@ -247,7 +247,7 @@ router.get('/waitlist', async (req, res) => {
 // GET /admin/flags — all feature flags (incl. targeting).
 router.get('/flags', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT flag_key, enabled, description, rollout_roles, rollout_percent, updated_at FROM feature_flags ORDER BY flag_key')
+    const { rows } = await pool.query('SELECT flag_key, enabled, description, rollout_roles, rollout_percent, rollout_campuses, enable_at, disable_at, updated_at FROM feature_flags ORDER BY flag_key')
     return res.status(200).json({ flags: rows })
   } catch (err) {
     log.error('admin.flags_failed', { reqId: req.id, msg: err.message })
@@ -256,7 +256,9 @@ router.get('/flags', async (req, res) => {
 })
 
 // PATCH /admin/flags/:key — update a flag: kill-switch (enabled), role targeting
-// (rollout_roles), and/or gradual rollout (rollout_percent). Any subset; audited.
+// (rollout_roles), gradual rollout (rollout_percent), per-campus targeting
+// (rollout_campuses), and scheduled enable/disable (enable_at/disable_at). Any
+// subset; pass null to clear a target/schedule. Audited.
 const VALID_FLAG_ROLES = ['member', 'business', 'admin']
 router.patch('/flags/:key',
   [
@@ -265,14 +267,22 @@ router.patch('/flags/:key',
     body('rollout_percent').optional().isInt({ min: 0, max: 100 }),
     body('rollout_roles').optional({ nullable: true }).isArray(),
     body('rollout_roles.*').optional().isIn(VALID_FLAG_ROLES),
+    body('rollout_campuses').optional({ nullable: true }).isArray(),
+    body('rollout_campuses.*').optional().isUUID(),
+    body('enable_at').optional({ nullable: true }).isISO8601(),
+    body('disable_at').optional({ nullable: true }).isISO8601(),
   ],
   check,
   async (req, res) => {
-    // Build the SET clause from only the fields actually provided.
+    // Build the SET clause from only the fields actually provided. `null` is a
+    // deliberate value here (clears a target/schedule), so gate on !== undefined.
     const sets = [], vals = []
     if (typeof req.body.enabled === 'boolean') { vals.push(req.body.enabled); sets.push(`enabled = $${vals.length}`) }
     if (req.body.rollout_percent !== undefined) { vals.push(req.body.rollout_percent); sets.push(`rollout_percent = $${vals.length}`) }
     if (req.body.rollout_roles !== undefined) { vals.push(req.body.rollout_roles); sets.push(`rollout_roles = $${vals.length}`) }
+    if (req.body.rollout_campuses !== undefined) { vals.push(req.body.rollout_campuses); sets.push(`rollout_campuses = $${vals.length}`) }
+    if (req.body.enable_at !== undefined) { vals.push(req.body.enable_at); sets.push(`enable_at = $${vals.length}`) }
+    if (req.body.disable_at !== undefined) { vals.push(req.body.disable_at); sets.push(`disable_at = $${vals.length}`) }
     if (sets.length === 0) return res.status(422).json({ message: 'Nothing to update.' })
     sets.push('updated_at = NOW()')
     vals.push(req.params.key)
@@ -280,7 +290,7 @@ router.patch('/flags/:key',
       const { rows } = await pool.query(
         `UPDATE feature_flags SET ${sets.join(', ')} WHERE flag_key = $${vals.length} RETURNING *`, vals)
       if (rows.length === 0) return res.status(404).json({ message: 'Flag not found.' })
-      const after = { key: req.params.key, enabled: rows[0].enabled, rollout_roles: rows[0].rollout_roles, rollout_percent: rows[0].rollout_percent }
+      const after = { key: req.params.key, enabled: rows[0].enabled, rollout_roles: rows[0].rollout_roles, rollout_percent: rows[0].rollout_percent, rollout_campuses: rows[0].rollout_campuses, enable_at: rows[0].enable_at, disable_at: rows[0].disable_at }
       await writeAudit({ actorId: req.userId, actorRole: req.userRole, action: 'admin.flag.update',
         entityType: 'feature_flag', entityId: null, after, reqId: req.id })
       return res.status(200).json({ flag: rows[0] })
