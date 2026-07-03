@@ -63,27 +63,34 @@ const _style = document.createElement('style')
 _style.textContent = `
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --black:         #211c2e;
-  --white:         #faf9f6;
-  --amber:         #5b21b6;
-  --amber2:        #4c1d95;
+  /* Brand palette derived from the two-leaf logo: crisp white ground, near-black
+     ink, and the orchid leaf (#c084fc) as the accent family. The interactive
+     accent is the orchid's darker sibling (#9333ea) so text/buttons keep AA
+     contrast on white; the leaf orchid itself does the decorative work
+     (highlight sweep, glows, tints). "amber" stays the accent alias for
+     historical reasons — it IS the purple. */
+  --black:         #131118;
+  --white:         #ffffff;
+  --amber:         #9333ea;
+  --amber2:        #7e22ce;
   --green:         #15803d;
   --red:           #b91c1c;
   --blue:          #1d4ed8;
   --purple:        #b45309;
-  --highlight:     #ffd84d;
-  --bg-base:       #faf9f6;
+  --orchid:        #c084fc;
+  --highlight:     #ddb8fb;
+  --bg-base:       #fdfcff;
   --bg-surface:    #ffffff;
-  --bg-elevated:   #f3f1ec;
-  --bg-hover:      #ebe8e1;
-  --border:        #e7e4dc;
-  --border-strong: #d5d1c6;
-  --text-primary:  #211c2e;
-  --text-secondary:#5a5468;
-  --text-muted:    #948f9e;
-  --accent:        #5b21b6;
-  --accent-dim:    #ece4fb;
-  --accent-glow:   rgba(91,33,182,0.10);
+  --bg-elevated:   #f6f3fa;
+  --bg-hover:      #eee9f6;
+  --border:        #eae6f1;
+  --border-strong: #d8d2e4;
+  --text-primary:  #131118;
+  --text-secondary:#575163;
+  --text-muted:    #96909f;
+  --accent:        #9333ea;
+  --accent-dim:    #f3e8ff;
+  --accent-glow:   rgba(147,51,234,0.10);
   --success:       #15803d;
   --danger:        #b91c1c;
   --info:          #1d4ed8;
@@ -95,8 +102,8 @@ _style.textContent = `
   --fb: 'DM Sans', sans-serif;
   --fm: 'DM Mono', monospace;
   --surface:       #ffffff;
-  --surface2:      #f3f1ec;
-  --muted:         #948f9e;
+  --surface2:      #f6f3fa;
+  --muted:         #96909f;
   --radius-sm:     10px;
   --radius-md:     14px;
   --radius-lg:     20px;
@@ -105,12 +112,12 @@ _style.textContent = `
   --transition:    150ms ease;
   --ease:          cubic-bezier(.4,0,.2,1);
   /* Soft, layered elevation scale — the backbone of the premium/clean feel */
-  --shadow-xs:     0 1px 2px rgba(33,28,46,.05);
-  --shadow-sm:     0 1px 3px rgba(33,28,46,.06), 0 1px 2px rgba(33,28,46,.04);
-  --shadow-md:     0 6px 16px rgba(33,28,46,.07), 0 2px 6px rgba(33,28,46,.04);
-  --shadow-lg:     0 16px 40px rgba(33,28,46,.10), 0 4px 12px rgba(33,28,46,.05);
-  --shadow-xl:     0 30px 70px rgba(33,28,46,.14), 0 10px 24px rgba(33,28,46,.06);
-  --ring:          0 0 0 3px rgba(91,33,182,.14);
+  --shadow-xs:     0 1px 2px rgba(19,17,24,.05);
+  --shadow-sm:     0 1px 3px rgba(19,17,24,.06), 0 1px 2px rgba(19,17,24,.04);
+  --shadow-md:     0 6px 16px rgba(19,17,24,.07), 0 2px 6px rgba(19,17,24,.04);
+  --shadow-lg:     0 16px 40px rgba(19,17,24,.10), 0 4px 12px rgba(19,17,24,.05);
+  --shadow-xl:     0 30px 70px rgba(19,17,24,.14), 0 10px 24px rgba(19,17,24,.06);
+  --ring:          0 0 0 3px rgba(147,51,234,.16);
 }
 html { scroll-behavior: smooth; font-size: 16px; }
 body {
@@ -155,7 +162,7 @@ input, textarea, select { font-family: var(--font-body); font-size: inherit; }
 .photo-card img { transition:transform .55s var(--ease); will-change:transform; }
 .photo-card:hover img { transform:scale(1.05); }
 .btn-p { background:var(--amber); color:#fff; border:none; padding:13px 28px; border-radius:12px; font-family:var(--fd); font-weight:700; font-size:.9rem; letter-spacing:.01em; cursor:pointer; box-shadow:var(--shadow-sm); transition:all 160ms var(--ease); display:inline-flex; align-items:center; gap:7px; }
-.btn-p:hover { background:var(--amber2); transform:translateY(-1px); box-shadow:0 10px 24px rgba(91,33,182,.26); }
+.btn-p:hover { background:var(--amber2); transform:translateY(-1px); box-shadow:0 10px 24px rgba(147,51,234,.26); }
 .btn-p:active { transform:translateY(0); box-shadow:var(--shadow-sm); }
 .btn-p:disabled { opacity:.5; cursor:not-allowed; transform:none; box-shadow:none; }
 .btn-s { background:var(--bg-surface); color:var(--text-primary); border:1px solid var(--border-strong); padding:13px 28px; border-radius:12px; font-family:var(--fd); font-weight:700; font-size:.9rem; letter-spacing:.01em; cursor:pointer; transition:all 160ms var(--ease); }
@@ -176,7 +183,7 @@ label { font-family:var(--fm); font-size:.62rem; color:var(--text-muted); text-t
 .prose ul { color:#5f5970; line-height:1.8; margin-bottom:16px; padding-left:20px; font-size:.925rem; }
 .prose li { margin-bottom:6px; }
 .prose a  { color:var(--amber); }
-.prose .highlight { background:rgba(91,33,182,.08); border:1px solid rgba(91,33,182,.2); border-radius:6px; padding:16px 20px; margin:20px 0; }
+.prose .highlight { background:rgba(147,51,234,.08); border:1px solid rgba(147,51,234,.2); border-radius:6px; padding:16px 20px; margin:20px 0; }
 .prose .highlight p { color:#3b3548; margin:0; }
 .prose table { width:100%; border-collapse:collapse; font-size:.875rem; margin-bottom:16px; }
 .prose th { text-align:left; padding:8px 12px; font-family:var(--fm); font-size:.62rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.1em; font-weight:400; border-bottom:1px solid var(--border-strong); }
@@ -185,11 +192,11 @@ label { font-family:var(--fm); font-size:.62rem; color:var(--text-muted); text-t
 /* Drawer */
 .drawer { position:fixed; top:0; right:0; bottom:0; width:280px; background:var(--bg-surface); border-left:1px solid var(--border-strong); z-index:200; padding:24px; transform:translateX(100%); transition:transform 300ms ease; overflow-y:auto; }
 .drawer.open { transform:translateX(0); }
-.doverlay { position:fixed; inset:0; background:rgba(33,28,46,.35); z-index:199; opacity:0; pointer-events:none; transition:opacity 300ms; }
+.doverlay { position:fixed; inset:0; background:rgba(19,17,24,.35); z-index:199; opacity:0; pointer-events:none; transition:opacity 300ms; }
 .doverlay.open { opacity:1; pointer-events:all; }
 
 /* Modal */
-.moverlay { position:fixed; inset:0; background:rgba(33,28,46,.45); display:flex; align-items:center; justify-content:center; z-index:300; padding:16px; animation:fadeIn .2s ease; backdrop-filter:blur(6px); }
+.moverlay { position:fixed; inset:0; background:rgba(19,17,24,.45); display:flex; align-items:center; justify-content:center; z-index:300; padding:16px; animation:fadeIn .2s ease; backdrop-filter:blur(6px); }
 .modal { background:var(--bg-surface); border:1px solid var(--border-strong); border-radius:18px; width:100%; max-width:440px; animation:fadeUp .22s ease; overflow:hidden; max-height:92vh; overflow-y:auto; }
 
 /* Responsive */
@@ -327,7 +334,7 @@ function ToastProvider({ children }) {
     success: { bg:'rgba(16,185,129,0.15)',  border:'rgba(16,185,129,0.4)',  icon:'✓', color:'var(--success)' },
     error:   { bg:'rgba(239,68,68,0.15)',   border:'rgba(239,68,68,0.4)',   icon:'✗', color:'var(--danger)' },
     info:    { bg:'rgba(59,130,246,0.15)',   border:'rgba(59,130,246,0.4)',  icon:'ℹ', color:'var(--info)' },
-    warning: { bg:'rgba(91,33,182,0.15)',  border:'rgba(91,33,182,0.4)',  icon:'⚠', color:'var(--accent)' },
+    warning: { bg:'rgba(147,51,234,0.15)',  border:'rgba(147,51,234,0.4)',  icon:'⚠', color:'var(--accent)' },
   }
   return (
     <ToastCtx.Provider value={add}>
@@ -364,10 +371,25 @@ function Spinner({ size = 14 }) {
   return <span style={{ width:size, height:size, border:'2px solid transparent', borderTopColor:'currentColor', borderRadius:'50%', animation:'spin .6s linear infinite', display:'inline-block' }} />
 }
 
+// The brand mark: two leaves on one stem — the poster and the earner, one
+// campus economy. Orchid + ink (mirrors /logo.svg; keep the two in sync).
+function LogoMark({ size = 30 }) {
+  return (
+    <svg width={size} height={size} viewBox="60 90 400 340" aria-hidden="true" style={{ flexShrink:0, display:'block' }}>
+      <g transform="translate(178 262) rotate(-28) scale(0.82)">
+        <path fill="#c084fc" fillRule="evenodd" d="M0,-122 C-74,-58 -74,58 0,126 C74,58 74,-58 0,-122 Z M-4,102 C-15,26 -8,-46 6,-102 L11,-95 C-1,-44 -6,28 4,102 Z" />
+      </g>
+      <g transform="translate(318 240) rotate(22)">
+        <path fill="var(--black, #131118)" fillRule="evenodd" d="M0,-130 C-78,-62 -80,54 -8,122 C-30,158 -52,186 -84,212 C-46,190 -20,162 8,120 C82,54 78,-62 0,-130 Z M-4,104 C-16,26 -9,-48 6,-106 L11,-99 C-1,-46 -7,28 4,104 Z" />
+      </g>
+    </svg>
+  )
+}
+
 function Logo({ onClick }) {
   return (
-    <div onClick={onClick} style={{ display:'flex', alignItems:'center', gap:9, cursor:'pointer', flexShrink:0 }}>
-      <div style={{ background:'var(--amber)', color:'#fff', fontFamily:'var(--fd)', fontWeight:800, fontSize:'.88rem', padding:'4px 8px', borderRadius:8, letterSpacing:'.02em' }}>R</div>
+    <div onClick={onClick} style={{ display:'flex', alignItems:'center', gap:7, cursor:'pointer', flexShrink:0 }}>
+      <LogoMark size={32} />
       <span style={{ fontFamily:'var(--fd)', fontSize:'1.15rem', fontWeight:800, letterSpacing:'.02em' }}>ReLivR</span>
     </div>
   )
@@ -384,7 +406,7 @@ function Btn({ children, variant='primary', size='md', loading=false, fullWidth=
     ghost:     { background:hov?'var(--bg-hover)':'transparent', color:hov?'var(--text-primary)':'var(--text-secondary)' },
     danger:    { background:hov?'rgba(239,68,68,0.12)':'transparent', color:'var(--danger)', border:'1px solid var(--danger)' },
     success:   { background:hov?'rgba(16,185,129,0.25)':'rgba(16,185,129,0.15)', color:'var(--success)', border:'1px solid rgba(16,185,129,0.3)' },
-    warning:   { background:hov?'rgba(91,33,182,0.2)':'rgba(91,33,182,0.1)', color:'var(--accent)', border:'1px solid rgba(91,33,182,0.3)' },
+    warning:   { background:hov?'rgba(147,51,234,0.2)':'rgba(147,51,234,0.1)', color:'var(--accent)', border:'1px solid rgba(147,51,234,0.3)' },
   }
   const v = variants[variant] || variants.primary
   return (
@@ -440,11 +462,11 @@ function Badge({ children, variant='default' }) {
     open:        { background:'rgba(16,185,129,0.15)',         color:'var(--success)' },
     in_progress: { background:'rgba(59,130,246,0.15)',         color:'var(--info)' },
     disputed:    { background:'rgba(239,68,68,0.15)',          color:'var(--danger)' },
-    completed:   { background:'rgba(91,33,182,0.15)',         color:'var(--accent)' },
+    completed:   { background:'rgba(147,51,234,0.15)',         color:'var(--accent)' },
     expired:     { background:'var(--bg-elevated)',            color:'var(--text-muted)' },
     admin:       { background:'rgba(239,68,68,0.15)',          color:'var(--danger)' },
     earner:      { background:'rgba(16,185,129,0.15)',         color:'var(--success)' },
-    creator:     { background:'rgba(91,33,182,0.15)',         color:'var(--accent)' },
+    creator:     { background:'rgba(147,51,234,0.15)',         color:'var(--accent)' },
     pending:     { background:'rgba(59,130,246,0.12)',         color:'var(--info)' },
     accepted:    { background:'rgba(16,185,129,0.15)',         color:'var(--success)' },
     rejected:    { background:'var(--bg-elevated)',            color:'var(--text-muted)' },
@@ -458,7 +480,7 @@ function DCard({ children, style={}, onClick, hover=true, className='' }) {
   const [hov, setHov] = useState(false)
   return (
     <div className={className} onClick={onClick} onMouseEnter={() => hover&&setHov(true)} onMouseLeave={() => hover&&setHov(false)}
-      style={{ background:'var(--bg-surface)', border:`1px solid ${hov?'var(--border-strong)':'var(--border)'}`, borderRadius:'var(--radius-md)', padding:20, transition:'all 150ms ease', ...(hover&&hov?{transform:'translateY(-2px)',boxShadow:'0 8px 32px rgba(33,28,46,.10)'}:{}), ...(onClick?{cursor:'pointer'}:{}), ...style }}>
+      style={{ background:'var(--bg-surface)', border:`1px solid ${hov?'var(--border-strong)':'var(--border)'}`, borderRadius:'var(--radius-md)', padding:20, transition:'all 150ms ease', ...(hover&&hov?{transform:'translateY(-2px)',boxShadow:'0 8px 32px rgba(19,17,24,.10)'}:{}), ...(onClick?{cursor:'pointer'}:{}), ...style }}>
       {children}
     </div>
   )
@@ -535,7 +557,7 @@ function Modal({ open, onClose, title, children, maxWidth=480 }) {
   }, [open, onClose])
   if (!open) return null
   return (
-    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(33,28,46,.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:20, backdropFilter:'blur(4px)', animation:'fadeIn 0.2s ease' }}>
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(19,17,24,.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:20, backdropFilter:'blur(4px)', animation:'fadeIn 0.2s ease' }}>
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
         onClick={e => e.stopPropagation()} style={{ background:'var(--bg-surface)', border:'1px solid var(--border-strong)', borderRadius:'var(--radius-lg)', width:'100%', maxWidth, animation:'slideUp 0.2s ease both', overflow:'hidden', outline:'none' }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'16px 20px', borderBottom:'1px solid var(--border)' }}>
@@ -1177,7 +1199,7 @@ function CampusStrip() {
             <figure key={i} className="lcard photo-card" style={{ margin:0, padding:0, overflow:'hidden', borderRadius:18 }}>
               <div style={{ position:'relative', aspectRatio:'4/3', overflow:'hidden' }}>
                 <img src={s.img} alt={s.caption} loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
-                <span style={{ position:'absolute', top:12, left:12, background:'rgba(33,28,46,.5)', backdropFilter:'blur(8px)', color:'#fff', fontFamily:'var(--fm)', fontSize:'.6rem', letterSpacing:'.08em', textTransform:'uppercase', padding:'5px 11px', borderRadius:100 }}>{s.tag}</span>
+                <span style={{ position:'absolute', top:12, left:12, background:'rgba(19,17,24,.5)', backdropFilter:'blur(8px)', color:'#fff', fontFamily:'var(--fm)', fontSize:'.6rem', letterSpacing:'.08em', textTransform:'uppercase', padding:'5px 11px', borderRadius:100 }}>{s.tag}</span>
               </div>
               <figcaption style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:'1.02rem', padding:'16px 18px' }}>{s.caption}</figcaption>
             </figure>
@@ -1208,12 +1230,12 @@ function RevealObserver() {
 function Hero({ onOpenAuth }) {
   return (
     <section className="hero-section" style={{ minHeight:'100vh', display:'flex', alignItems:'center', padding:'128px 24px 72px', position:'relative', overflow:'hidden' }}>
-      <div style={{ position:'absolute', inset:0, zIndex:0, backgroundImage:'linear-gradient(rgba(33,28,46,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(33,28,46,.05) 1px,transparent 1px)', backgroundSize:'56px 56px' }} />
-      <div style={{ position:'absolute', top:'15%', right:'8%', width:500, height:500, background:'radial-gradient(circle,rgba(91,33,182,.07) 0%,transparent 70%)', zIndex:0 }} />
+      <div style={{ position:'absolute', inset:0, zIndex:0, backgroundImage:'linear-gradient(rgba(19,17,24,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(19,17,24,.05) 1px,transparent 1px)', backgroundSize:'56px 56px' }} />
+      <div style={{ position:'absolute', top:'15%', right:'8%', width:500, height:500, background:'radial-gradient(circle,rgba(147,51,234,.07) 0%,transparent 70%)', zIndex:0 }} />
       <div style={{ maxWidth:1200, margin:'0 auto', width:'100%', position:'relative', zIndex:1 }}>
         <div className="hero-inner" style={{ display:'flex', alignItems:'center', gap:60 }}>
           <div style={{ flex:1 }}>
-            <div style={{ display:'inline-flex', alignItems:'center', gap:8, background:'rgba(91,33,182,.1)', border:'1px solid rgba(91,33,182,.25)', borderRadius:100, padding:'5px 14px', marginBottom:28, animation:'fadeUp .6s ease both' }}>
+            <div style={{ display:'inline-flex', alignItems:'center', gap:8, background:'rgba(147,51,234,.1)', border:'1px solid rgba(147,51,234,.25)', borderRadius:100, padding:'5px 14px', marginBottom:28, animation:'fadeUp .6s ease both' }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--amber)', animation:'pulse 2s infinite', flexShrink:0 }} />
               <span style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', letterSpacing:'.1em', textTransform:'uppercase' }}>Now in beta on Rhodes Campus</span>
             </div>
@@ -1231,7 +1253,7 @@ function Hero({ onOpenAuth }) {
               No credit card required · Free to post · Free while in beta
             </p>
           </div>
-          <div className="hide-m" style={{ width:316, flexShrink:0, display:'flex', flexDirection:'column', gap:10, animation:'slideL .8s .4s ease both', opacity:0, animationFillMode:'forwards', border:'10px solid #211c2e', borderRadius:40, padding:'34px 14px 22px', background:'var(--bg-base)', boxShadow:'0 24px 64px rgba(33,28,46,.18)', position:'relative' }}>
+          <div className="hide-m" style={{ width:316, flexShrink:0, display:'flex', flexDirection:'column', gap:10, animation:'slideL .8s .4s ease both', opacity:0, animationFillMode:'forwards', border:'10px solid #131118', borderRadius:40, padding:'34px 14px 22px', background:'var(--bg-base)', boxShadow:'0 24px 64px rgba(19,17,24,.18)', position:'relative' }}>
             {TASK_EXAMPLES.slice(0,3).map((t,i) => (
               <div key={i} style={{ background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:14, padding:'14px 16px', animation:`float ${3+i*.5}s ${i*.3}s ease-in-out infinite` }}>
                 <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
@@ -1280,7 +1302,7 @@ function HowItWorks() {
           {STEPS_DATA.map((s,i) => (
             <div key={i} style={{ padding:'32px 26px', background:i%2===0?'var(--bg-surface)':'var(--bg-base)', border:'1px solid var(--border)', position:'relative' }}>
               <div style={{ fontFamily:'var(--fd)', fontSize:'3.5rem', fontWeight:800, color:'var(--border-strong)', lineHeight:1, marginBottom:16, userSelect:'none' }}>{s.n}</div>
-              <div style={{ display:'inline-block', background:s.color==='var(--amber)'?'rgba(91,33,182,.1)':s.color==='var(--green)'?'rgba(16,185,129,.1)':'rgba(180,83,9,.1)', border:`1px solid ${s.color==='var(--amber)'?'rgba(91,33,182,.3)':s.color==='var(--green)'?'rgba(16,185,129,.3)':'rgba(180,83,9,.3)'}`, borderRadius:100, padding:'3px 11px', marginBottom:12 }}>
+              <div style={{ display:'inline-block', background:s.color==='var(--amber)'?'rgba(147,51,234,.1)':s.color==='var(--green)'?'rgba(16,185,129,.1)':'rgba(180,83,9,.1)', border:`1px solid ${s.color==='var(--amber)'?'rgba(147,51,234,.3)':s.color==='var(--green)'?'rgba(16,185,129,.3)':'rgba(180,83,9,.3)'}`, borderRadius:100, padding:'3px 11px', marginBottom:12 }}>
                 <span style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:s.color, textTransform:'uppercase', letterSpacing:'.1em' }}>{s.role}</span>
               </div>
               <h3 style={{ fontFamily:'var(--fd)', fontSize:'1.15rem', fontWeight:700, marginBottom:10 }}>{s.title}</h3>
@@ -1377,7 +1399,7 @@ function Pricing({ onOpenAuth }) {
             ))}
             <button className="btn-s" style={{ width:'100%', marginTop:24, justifyContent:'center', display:'flex' }} onClick={() => onOpenAuth('register')}>Post a Task Free</button>
           </div>
-          <div style={{ background:'var(--bg-base)', border:'1px solid var(--amber)', borderRadius:14, padding:'32px 28px', position:'relative', boxShadow:'0 0 40px rgba(91,33,182,.08)' }}>
+          <div style={{ background:'var(--bg-base)', border:'1px solid var(--amber)', borderRadius:14, padding:'32px 28px', position:'relative', boxShadow:'0 0 40px rgba(147,51,234,.08)' }}>
             <div style={{ position:'absolute', top:-11, left:'50%', transform:'translateX(-50%)', background:'var(--amber)', color:'#fff', fontFamily:'var(--fm)', fontSize:'.58rem', fontWeight:500, textTransform:'uppercase', letterSpacing:'.1em', padding:'3px 12px', borderRadius:100 }}>Most Popular</div>
             <div style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:16 }}>For Earners</div>
             <div style={{ display:'flex', alignItems:'baseline', gap:5, marginBottom:5 }}>
@@ -1639,7 +1661,7 @@ function LandingCTA({ onOpenAuth }) {
     <section className="reveal" style={{ padding:'80px 24px' }}>
       <div style={{ maxWidth:1100, margin:'0 auto', position:'relative', borderRadius:28, overflow:'hidden', boxShadow:'var(--shadow-xl)' }}>
         <img src="/img/community.webp" alt="Rhodes students together on campus" loading="lazy" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }} />
-        <div style={{ position:'absolute', inset:0, background:'linear-gradient(115deg, rgba(33,28,46,.88) 0%, rgba(33,28,46,.6) 52%, rgba(76,29,149,.5) 100%)' }} />
+        <div style={{ position:'absolute', inset:0, background:'linear-gradient(115deg, rgba(19,17,24,.88) 0%, rgba(19,17,24,.6) 52%, rgba(126,34,206,.5) 100%)' }} />
         <div style={{ position:'relative', zIndex:1, padding:'clamp(44px,7vw,86px) clamp(26px,6vw,72px)', maxWidth:640 }}>
           <div className="slabel" style={{ color:'var(--highlight)', marginBottom:18 }}>Get Started</div>
           <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(2rem,4vw,3.4rem)', fontWeight:800, lineHeight:1.06, marginBottom:18, letterSpacing:'-.02em', color:'#fff' }}>
@@ -1692,7 +1714,7 @@ function SidebarPage({ title, subtitle, sections, children, onNav }) {
             <div style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.12em', padding:'0 20px', marginBottom:12 }}>On this page</div>
             {sections.map(s => (
               <button key={s.id} onClick={() => { setActive(s.id); document.getElementById(s.id)?.scrollIntoView({ behavior:'smooth', block:'start' }) }}
-                style={{ display:'block', width:'100%', textAlign:'left', background:active===s.id?'rgba(91,33,182,.06)':'none', border:'none', borderLeft:active===s.id?'2px solid var(--amber)':'2px solid transparent', color:active===s.id?'var(--amber)':'var(--text-muted)', padding:'9px 20px', fontSize:'.85rem', cursor:'pointer', transition:'all 150ms' }}>
+                style={{ display:'block', width:'100%', textAlign:'left', background:active===s.id?'rgba(147,51,234,.06)':'none', border:'none', borderLeft:active===s.id?'2px solid var(--amber)':'2px solid transparent', color:active===s.id?'var(--amber)':'var(--text-muted)', padding:'9px 20px', fontSize:'.85rem', cursor:'pointer', transition:'all 150ms' }}>
                 {s.label}
               </button>
             ))}
@@ -2303,7 +2325,7 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch 
             {menuOpen && (
               <>
                 <div onClick={() => setMenuOpen(false)} style={{ position:'fixed', inset:0, zIndex:91 }} />
-                <div style={{ position:'absolute', right:0, top:44, zIndex:92, background:'var(--bg-surface)', border:'1px solid var(--border-strong)', borderRadius:14, boxShadow:'0 12px 32px rgba(33,28,46,.14)', minWidth:200, overflow:'hidden', animation:'fadeUp .15s ease both' }}>
+                <div style={{ position:'absolute', right:0, top:44, zIndex:92, background:'var(--bg-surface)', border:'1px solid var(--border-strong)', borderRadius:14, boxShadow:'0 12px 32px rgba(19,17,24,.14)', minWidth:200, overflow:'hidden', animation:'fadeUp .15s ease both' }}>
                   <div style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)' }}>
                     <div style={{ fontWeight:700, fontSize:'.9rem' }}>{user.displayName || user.email?.split('@')[0]}</div>
                     <Mono>{user.email}</Mono>
@@ -2349,8 +2371,8 @@ function DashSidebar({ page, setPage, unreadCount, onGoHome }) {
   return (
     <aside className="dash-sidebar" style={{ background:'var(--bg-surface)', borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', padding:'20px 14px', position:'sticky', top:0, height:'100vh', overflowY:'auto', width:220, flexShrink:0 }}>
       <div className="sidebar-logo" style={{ display:'flex', alignItems:'center', gap:10, marginBottom:24 }}>
-        <div onClick={onGoHome} style={{ display:'flex', alignItems:'center', gap:9, cursor:'pointer' }}>
-          <div style={{ background:'var(--accent)', color:'#fff', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'0.85rem', padding:'4px 8px', borderRadius:'var(--radius-sm)', letterSpacing:'0.06em' }}>R</div>
+        <div onClick={onGoHome} style={{ display:'flex', alignItems:'center', gap:7, cursor:'pointer' }}>
+          <LogoMark size={28} />
           <span style={{ fontFamily:'var(--font-display)', fontSize:'1.05rem', fontWeight:700, letterSpacing:'-0.01em' }}>ReLivR</span>
         </div>
       </div>
@@ -2575,7 +2597,7 @@ function TaskBrowse({ setPage, setSelectedTask }) {
         <div style={{ position:'relative', maxWidth:560 }}>
           <span style={{ position:'absolute', left:16, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', fontSize:'1.05rem' }}>⌕</span>
           <input id="feed-search" placeholder="Search — laundry, python, tutoring…" value={skill} onChange={e => setSkill(e.target.value)}
-            style={{ padding:'14px 16px 14px 44px', borderRadius:14, fontSize:'1rem', background:'var(--bg-surface)', boxShadow:'0 1px 4px rgba(33,28,46,.07)' }} />
+            style={{ padding:'14px 16px 14px 44px', borderRadius:14, fontSize:'1rem', background:'var(--bg-surface)', boxShadow:'0 1px 4px rgba(19,17,24,.07)' }} />
         </div>
       </div>
 
@@ -3031,7 +3053,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
       )}
 
       {escrow&&isCreator&&(
-        <div style={{ marginBottom:20, padding:'14px 18px', borderRadius:'var(--radius-md)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap', ...(escrow.status==='funded'?{background:'rgba(16,185,129,0.1)',border:'1px solid rgba(16,185,129,0.3)'}:escrow.status==='released'?{background:'rgba(91,33,182,0.1)',border:'1px solid rgba(91,33,182,0.3)'}:escrow.status==='disputed'?{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)'}:{background:'rgba(59,130,246,0.1)',border:'1px solid rgba(59,130,246,0.3)'}) }}>
+        <div style={{ marginBottom:20, padding:'14px 18px', borderRadius:'var(--radius-md)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap', ...(escrow.status==='funded'?{background:'rgba(16,185,129,0.1)',border:'1px solid rgba(16,185,129,0.3)'}:escrow.status==='released'?{background:'rgba(147,51,234,0.1)',border:'1px solid rgba(147,51,234,0.3)'}:escrow.status==='disputed'?{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)'}:{background:'rgba(59,130,246,0.1)',border:'1px solid rgba(59,130,246,0.3)'}) }}>
           <div style={{ display:'flex', gap:10, alignItems:'center' }}>
             <span style={{ fontSize:'1.1rem' }}>{escrow.status==='funded'?'🔒':escrow.status==='released'?'✓':escrow.status==='disputed'?'⚠':'💳'}</span>
             <div>
@@ -3502,7 +3524,7 @@ function MyTasks({ setPage, setSelectedTask }) {
       <div className="feed-scroll" style={{ display:'flex', gap:2, marginBottom:20, background:'var(--bg-elevated)', borderRadius:12, padding:3, overflowX:'auto', maxWidth:'fit-content' }}>
         {['all','open','in_progress','completed','disputed','expired'].map(s => (
           <button key={s} onClick={() => setFilter(s)}
-            style={{ padding:'7px 14px', borderRadius:9, fontSize:'0.8rem', fontFamily:'var(--font-body)', fontWeight:600, cursor:'pointer', transition:'all 150ms ease', border:'none', whiteSpace:'nowrap', background:filter===s?'var(--bg-surface)':'transparent', color:filter===s?'var(--accent)':'var(--text-muted)', boxShadow:filter===s?'0 1px 3px rgba(33,28,46,.14)':'none' }}>
+            style={{ padding:'7px 14px', borderRadius:9, fontSize:'0.8rem', fontFamily:'var(--font-body)', fontWeight:600, cursor:'pointer', transition:'all 150ms ease', border:'none', whiteSpace:'nowrap', background:filter===s?'var(--bg-surface)':'transparent', color:filter===s?'var(--accent)':'var(--text-muted)', boxShadow:filter===s?'0 1px 3px rgba(19,17,24,.14)':'none' }}>
             {s.replace('_',' ')} ({s==='all'?myTasks.length:myTasks.filter(t=>t.status===s).length})
           </button>
         ))}
@@ -3580,7 +3602,7 @@ function MyBids({ setPage, setSelectedTask }) {
       <div className="feed-scroll" style={{ display:'flex', gap:2, marginBottom:20, background:'var(--bg-elevated)', borderRadius:12, padding:3, overflowX:'auto', maxWidth:'fit-content' }}>
         {['all','pending','accepted','rejected','withdrawn'].map(s => (
           <button key={s} onClick={() => setFilter(s)}
-            style={{ padding:'7px 14px', borderRadius:9, fontSize:'0.8rem', fontFamily:'var(--font-body)', fontWeight:600, cursor:'pointer', transition:'all 150ms ease', border:'none', whiteSpace:'nowrap', background:filter===s?'var(--bg-surface)':'transparent', color:filter===s?'var(--accent)':'var(--text-muted)', boxShadow:filter===s?'0 1px 3px rgba(33,28,46,.14)':'none' }}>
+            style={{ padding:'7px 14px', borderRadius:9, fontSize:'0.8rem', fontFamily:'var(--font-body)', fontWeight:600, cursor:'pointer', transition:'all 150ms ease', border:'none', whiteSpace:'nowrap', background:filter===s?'var(--bg-surface)':'transparent', color:filter===s?'var(--accent)':'var(--text-muted)', boxShadow:filter===s?'0 1px 3px rgba(19,17,24,.14)':'none' }}>
             {s} ({s==='all'?myBids.length:myBids.filter(b=>b.status===s).length})
           </button>
         ))}
@@ -4361,7 +4383,7 @@ function LocalBrowse({ setPage }) {
     <div className="page-enter">
       <div style={{ position:'relative', borderRadius:22, overflow:'hidden', marginBottom:22, boxShadow:'var(--shadow-md)' }}>
         <img src="/img/local-cafe.webp" alt="Local café near campus" loading="lazy" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }} />
-        <div style={{ position:'absolute', inset:0, background:'linear-gradient(105deg, rgba(33,28,46,.82) 0%, rgba(33,28,46,.5) 55%, rgba(33,28,46,.2) 100%)' }} />
+        <div style={{ position:'absolute', inset:0, background:'linear-gradient(105deg, rgba(19,17,24,.82) 0%, rgba(19,17,24,.5) 55%, rgba(19,17,24,.2) 100%)' }} />
         <div style={{ position:'relative', zIndex:1, padding:'clamp(26px,5vw,44px)' }}>
           <div className="slabel" style={{ color:'var(--highlight)', marginBottom:12 }}>Local Directory</div>
           <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'clamp(1.6rem,3vw,2.2rem)', marginBottom:6, color:'#fff', letterSpacing:'-.01em' }}>Local in Makhanda</h1>
@@ -4722,7 +4744,7 @@ function BusinessForm({ business, onDone, onCancel }) {
 
 // Trust/verification badge definitions — rendered on public profiles
 const BADGE_DEFS = {
-  ru_student:    { icon:'🎓', label:'Rhodes student',  color:'#5b21b6', desc:'Verified @ru.ac.za email' },
+  ru_student:    { icon:'🎓', label:'Rhodes student',  color:'#9333ea', desc:'Verified @ru.ac.za email' },
   email_verified:{ icon:'✓',  label:'Verified',        color:'#15803d', desc:'Email verified via Google' },
   google_linked: { icon:'🔗', label:'Google-linked',   color:'#1d4ed8', desc:'Signed in with Google' },
   top_rated:     { icon:'⭐', label:'Top rated',        color:'#d97706', desc:'4.5+ stars across 5+ reviews' },
@@ -4898,12 +4920,12 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
         <div style={{ height:88, background:'linear-gradient(120deg, var(--accent-dim), var(--bg-elevated))' }} />
         <div style={{ padding:'0 24px 22px', marginTop:-44 }}>
           {avatar
-            ? <img src={avatar} alt="" style={{ width:96, height:96, borderRadius:'50%', objectFit:'cover', border:'4px solid var(--bg-surface)', boxShadow:'0 2px 10px rgba(33,28,46,.12)' }} />
-            : <div style={{ width:96, height:96, borderRadius:'50%', background:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:800, fontSize:'2.3rem', color:'#fff', border:'4px solid var(--bg-surface)', boxShadow:'0 2px 10px rgba(33,28,46,.12)' }}>{name.charAt(0).toUpperCase()}</div>}
+            ? <img src={avatar} alt="" style={{ width:96, height:96, borderRadius:'50%', objectFit:'cover', border:'4px solid var(--bg-surface)', boxShadow:'0 2px 10px rgba(19,17,24,.12)' }} />
+            : <div style={{ width:96, height:96, borderRadius:'50%', background:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:800, fontSize:'2.3rem', color:'#fff', border:'4px solid var(--bg-surface)', boxShadow:'0 2px 10px rgba(19,17,24,.12)' }}>{name.charAt(0).toUpperCase()}</div>}
           <div style={{ display:'flex', gap:10, alignItems:'center', marginTop:12, flexWrap:'wrap' }}>
             <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.7rem', lineHeight:1.1 }}>{name}</h1>
             {profile.beta_founder && (
-              <span title="Joined during the ReLivR beta" style={{ display:'inline-flex', alignItems:'center', gap:5, background:'rgba(91,33,182,.1)', border:'1px solid rgba(91,33,182,.3)', color:'var(--amber)', borderRadius:100, padding:'3px 11px', fontFamily:'var(--font-mono)', fontSize:'.6rem', fontWeight:600, textTransform:'uppercase', letterSpacing:'.08em' }}>★ Founding Member</span>
+              <span title="Joined during the ReLivR beta" style={{ display:'inline-flex', alignItems:'center', gap:5, background:'rgba(147,51,234,.1)', border:'1px solid rgba(147,51,234,.3)', color:'var(--amber)', borderRadius:100, padding:'3px 11px', fontFamily:'var(--font-mono)', fontSize:'.6rem', fontWeight:600, textTransform:'uppercase', letterSpacing:'.08em' }}>★ Founding Member</span>
             )}
           </div>
           {profile.headline && <p style={{ color:'var(--text-secondary)', fontSize:'1rem', marginTop:4, marginBottom:0 }}>{profile.headline}</p>}
@@ -5005,7 +5027,7 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
       <div className="feed-scroll" style={{ display:'flex', gap:2, marginBottom:18, background:'var(--bg-elevated)', borderRadius:12, padding:3, overflowX:'auto', maxWidth:'fit-content' }}>
         {tabs.map(tb => (
           <button key={tb.id} onClick={() => setTab(tb.id)}
-            style={{ padding:'7px 14px', borderRadius:9, fontSize:'0.8rem', fontFamily:'var(--font-body)', fontWeight:600, cursor:'pointer', border:'none', whiteSpace:'nowrap', background:tab===tb.id?'var(--bg-surface)':'transparent', color:tab===tb.id?'var(--accent)':'var(--text-muted)', boxShadow:tab===tb.id?'0 1px 3px rgba(33,28,46,.14)':'none' }}>{tb.label}</button>
+            style={{ padding:'7px 14px', borderRadius:9, fontSize:'0.8rem', fontFamily:'var(--font-body)', fontWeight:600, cursor:'pointer', border:'none', whiteSpace:'nowrap', background:tab===tb.id?'var(--bg-surface)':'transparent', color:tab===tb.id?'var(--accent)':'var(--text-muted)', boxShadow:tab===tb.id?'0 1px 3px rgba(19,17,24,.14)':'none' }}>{tb.label}</button>
         ))}
       </div>
 
@@ -5533,8 +5555,8 @@ function BusinessDashboard({ onLogout, onViewLanding }) {
     <div style={{ minHeight:'100vh', background:'var(--bg-base)', color:'var(--text-primary)', display:'flex', flexDirection:'column' }}>
       <header style={{ position:'sticky', top:0, zIndex:90, background:'var(--bg-surface)', borderBottom:'1px solid var(--border)' }}>
         <div style={{ maxWidth:1100, margin:'0 auto', display:'flex', alignItems:'center', gap:14, minHeight:60, padding:'0 20px' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:9 }}>
-            <div style={{ background:'var(--accent)', color:'#fff', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'0.85rem', padding:'4px 8px', borderRadius:'var(--radius-sm)', letterSpacing:'0.06em' }}>R</div>
+          <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+            <LogoMark size={28} />
             <span style={{ fontFamily:'var(--font-display)', fontSize:'1.05rem', fontWeight:700 }}>ReLivR <span style={{ color:'var(--text-muted)', fontWeight:500 }}>· Business</span></span>
           </div>
           <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
@@ -6610,7 +6632,7 @@ function AdminDisputes({ setPage, setSelectedDispute }) {
       <div className="feed-scroll" style={{ display:'flex', gap:2, marginBottom:20, background:'var(--bg-elevated)', borderRadius:12, padding:3, overflowX:'auto', maxWidth:'fit-content' }}>
         {['all','open','under_review','resolved_creator','resolved_earner','closed'].map(s => (
           <button key={s} onClick={() => setFilter(s)}
-            style={{ padding:'7px 14px', borderRadius:9, fontSize:'0.8rem', fontFamily:'var(--font-body)', fontWeight:600, cursor:'pointer', transition:'all 150ms ease', border:'none', whiteSpace:'nowrap', background:filter===s?'var(--bg-surface)':'transparent', color:filter===s?'var(--accent)':'var(--text-muted)', boxShadow:filter===s?'0 1px 3px rgba(33,28,46,.14)':'none' }}>
+            style={{ padding:'7px 14px', borderRadius:9, fontSize:'0.8rem', fontFamily:'var(--font-body)', fontWeight:600, cursor:'pointer', transition:'all 150ms ease', border:'none', whiteSpace:'nowrap', background:filter===s?'var(--bg-surface)':'transparent', color:filter===s?'var(--accent)':'var(--text-muted)', boxShadow:filter===s?'0 1px 3px rgba(19,17,24,.14)':'none' }}>
             {s.replace('_',' ')} ({s==='all'?disputes.length:disputes.filter(d=>d.status===s).length})
           </button>
         ))}
@@ -7278,7 +7300,7 @@ const ONBOARDING_KEY = 'rl_onboarding_seen_v1'
 // in localStorage by the onboarding flows). Unknown/absent intent → full tour.
 function buildWalkthroughSlides(intent) {
   const slides = [
-    { icon:'⌂', title:'Welcome to ReLivR', body:'Your campus marketplace — post what you need done, or earn by helping out. Here’s the 30-second tour.' },
+    { icon:'logo', title:'Welcome to ReLivR', body:'Your campus marketplace — post what you need done, or earn by helping out. Here’s the 30-second tour.' },
   ]
   if (intent !== 'earn') slides.push(
     { icon:'＋', title:'Post a task in seconds', body:'Describe what you need and set a budget. Students nearby send offers — you pick who to work with, chat, and confirm when it’s done.' })
@@ -7317,7 +7339,7 @@ function OnboardingWalkthrough() {
     <div role="dialog" aria-modal="true" aria-label="Welcome to ReLivR"
       style={{ position:'fixed', inset:0, zIndex:1100, background:'rgba(20,16,30,.6)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
       <div style={{ width:'100%', maxWidth:400, background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:'var(--radius-md)', boxShadow:'var(--shadow-xl)', padding:'28px 26px', textAlign:'center' }}>
-        <div style={{ width:64, height:64, margin:'0 auto 18px', borderRadius:'50%', background:'var(--accent-glow)', color:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.8rem' }}>{s.icon}</div>
+        <div style={{ width:64, height:64, margin:'0 auto 18px', borderRadius:'50%', background:'var(--accent-glow)', color:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.8rem' }}>{s.icon === 'logo' ? <LogoMark size={40} /> : s.icon}</div>
         <h2 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.3rem', margin:'0 0 10px' }}>{s.title}</h2>
         <p style={{ color:'var(--text-secondary)', lineHeight:1.6, margin:'0 0 22px', fontSize:'.95rem' }}>{s.body}</p>
         <div style={{ display:'flex', justifyContent:'center', gap:6, marginBottom:22 }}>
@@ -7394,7 +7416,7 @@ function CookieConsent() {
     </label>
   )
   return (
-    <div role="dialog" aria-label="Cookie preferences" style={{ position:'fixed', left:0, right:0, bottom:0, zIndex:1200, background:'var(--bg-surface)', borderTop:'1px solid var(--border)', boxShadow:'0 -4px 24px rgba(33,28,46,.14)', padding:'16px 20px' }}>
+    <div role="dialog" aria-label="Cookie preferences" style={{ position:'fixed', left:0, right:0, bottom:0, zIndex:1200, background:'var(--bg-surface)', borderTop:'1px solid var(--border)', boxShadow:'0 -4px 24px rgba(19,17,24,.14)', padding:'16px 20px' }}>
       <div style={{ maxWidth:1000, margin:'0 auto' }}>
         <div style={{ display:'flex', gap:18, flexWrap:'wrap', alignItems:'center', justifyContent:'space-between' }}>
           <div style={{ flex:1, minWidth:240 }}>
@@ -7765,7 +7787,7 @@ export default function App() {
     return (
       <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', background:'var(--bg-base)' }}>
         <div style={{ textAlign:'center' }}>
-          <div style={{ background:'var(--amber)', color:'#fff', fontFamily:'var(--fd)', fontWeight:800, fontSize:'1rem', padding:'8px 14px', borderRadius:8, marginBottom:16, display:'inline-block' }}>R</div>
+          <div style={{ display:'inline-block', marginBottom:14 }}><LogoMark size={54} /></div>
           <div style={{ display:'block' }}><Spinner size={20} /></div>
         </div>
       </div>

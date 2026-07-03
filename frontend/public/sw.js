@@ -1,7 +1,7 @@
 // ReLivR service worker (H1 PWA) — offline app-shell + Web Push.
 // Registered in production only (see main.jsx) so it never fights Vite HMR in dev.
-const CACHE = 'relivr-shell-v1'
-const SHELL = ['/', '/index.html', '/manifest.json', '/favicon.svg', '/icon-192.png', '/icon-512.png']
+const CACHE = 'relivr-shell-v2' // v2: two-leaf brand assets
+const SHELL = ['/', '/index.html', '/manifest.json', '/favicon.svg', '/logo.svg', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (e) => {
   // Best-effort per-item cache (not addAll, which is atomic): a single renamed

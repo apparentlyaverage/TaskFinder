@@ -1,11 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- ReLivR two-leaf mark (see logo.svg). Scaled up to fill the tab icon. -->
-  <g transform="translate(256 268) scale(1.22) translate(-256 -268)">
+  <!-- ReLivR brand mark: two leaves on one stem — the poster and the earner,
+       one campus economy. Orchid + ink, vein slits cut out (evenodd) so the
+       mark works on any surface and in dark-mode tabs. -->
+  <g>
+    <!-- left leaf (orchid) -->
     <g transform="translate(178 262) rotate(-28) scale(0.82)">
       <path fill="#c084fc" fill-rule="evenodd" d="
         M0,-122 C-74,-58 -74,58 0,126 C74,58 74,-58 0,-122 Z
         M-4,102 C-15,26 -8,-46 6,-102 L11,-95 C-1,-44 -6,28 4,102 Z" />
     </g>
+    <!-- right leaf (ink), larger, its base sweeping into the shared stem -->
     <g transform="translate(318 240) rotate(22)">
       <path fill="#131118" fill-rule="evenodd" d="
         M0,-130 C-78,-62 -80,54 -8,122
