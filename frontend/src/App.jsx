@@ -732,6 +732,38 @@ function LandingFooter({ onNav }) {
 
 // ─── AUTH MODAL (unified — used from landing + dashboard sign out) ────────────
 
+// "What brings you to ReLivR?" — the one onboarding question that tailors the
+// rest (walkthrough slides, which profile fields we ask for). Shared by the
+// email signup (step 2) and the Google post-OAuth onboarding modal.
+const INTENT_OPTIONS = [
+  { value:'post', icon:'＋', label:'Get things done',  desc:'Post tasks, receive offers' },
+  { value:'earn', icon:'◈', label:'Earn money',       desc:'Bid on tasks, build a rep' },
+  { value:'both', icon:'⇄', label:'Both',             desc:'The full campus economy' },
+]
+function IntentChips({ value, onChange }) {
+  return (
+    <div>
+      <label>What brings you to ReLivR?</label>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginTop:6 }}>
+        {INTENT_OPTIONS.map(o => {
+          const on = value === o.value
+          return (
+            <button key={o.value} type="button" onClick={() => onChange(on ? '' : o.value)} aria-pressed={on}
+              style={{ padding:'12px 8px', borderRadius:12, cursor:'pointer', textAlign:'center', transition:'all 150ms var(--ease)',
+                       border:`1.5px solid ${on ? 'var(--accent)' : 'var(--border-strong)'}`,
+                       background:on ? 'var(--accent-glow)' : 'var(--bg-elevated)',
+                       boxShadow:on ? 'var(--ring)' : 'none' }}>
+              <div style={{ fontSize:'1.15rem', color:on ? 'var(--accent)' : 'var(--text-secondary)', lineHeight:1, marginBottom:6 }}>{o.icon}</div>
+              <div style={{ fontFamily:'var(--fd)', fontWeight:700, fontSize:'.78rem', color:on ? 'var(--accent)' : 'var(--text-primary)', lineHeight:1.2 }}>{o.label}</div>
+              <div style={{ fontSize:'.62rem', color:'var(--text-muted)', marginTop:3, lineHeight:1.3 }}>{o.desc}</div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function AuthModal({ mode, onClose, onSwitch, onLogin }) {
   const { loginWithGoogle } = useAuth()
   useEffect(() => {
@@ -753,6 +785,7 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
   const [campus, setCampus]     = useState('')
   const [skills, setSkills]     = useState('')
   const [bio, setBio]           = useState('')
+  const [intent, setIntent]     = useState('')
 
   const CAMPUS_ZONES = useLocations()
 
@@ -797,6 +830,7 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
             campusZone:  campus || null,
             skills:      skills || null,
             bio:         bio || null,
+            intent:      intent || null,
             popiaConsent: consent,
           }
 
@@ -819,6 +853,9 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
         setLoading(false)
         return
       }
+
+      // Remember the signup intent locally — the walkthrough tailors its slides to it.
+      if (mode === 'register' && intent) { try { localStorage.setItem('rl_intent', intent) } catch { /* ignore */ } }
 
       // Pass token + user info to handleLogin in App root
       onLogin({
@@ -911,14 +948,13 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
             {mode==='register' && step===1 && (
               <>
                 <div><label>Full name</label><input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Thabo Mkhize" required /></div>
-                <div><label>Email</label><input type="email" aria-label="Email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@ru.ac.za" required /></div>
-                <div><label>Password <span style={{ color:'var(--text-muted)' }}>(min 8 chars)</span></label><input type="password" aria-label="Password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
-                <div style={{ background:'var(--accent-glow)', border:'1px solid var(--accent-dim)', borderRadius:12, padding:'12px 14px', display:'flex', gap:10, alignItems:'flex-start' }}>
-                  <span style={{ fontSize:'1.1rem' }}>✨</span>
-                  <div style={{ fontSize:'.8rem', color:'var(--text-secondary)', lineHeight:1.5 }}>
-                    With one ReLivR account you can <strong style={{ color:'var(--text-primary)' }}>post tasks</strong> when you need help and <strong style={{ color:'var(--text-primary)' }}>bid on tasks</strong> to earn — switch anytime.
+                <div>
+                  <label>Email</label><input type="email" aria-label="Email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@ru.ac.za" required />
+                  <div style={{ fontSize:'.72rem', color:'var(--text-muted)', marginTop:5, lineHeight:1.45 }}>
+                    🎓 Use your <strong style={{ color:'var(--text-secondary)' }}>@ru.ac.za</strong> address — verified students unlock student-only deals.
                   </div>
                 </div>
+                <div><label>Password <span style={{ color:'var(--text-muted)' }}>(min 8 chars)</span></label><input type="password" aria-label="Password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
                 <label style={{ display:'flex', gap:8, alignItems:'flex-start', cursor:'pointer' }}>
                   <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} style={{ width:'auto', marginTop:3, flexShrink:0, accentColor:'var(--accent)' }} />
                   <span style={{ fontSize:'.76rem', color:'var(--text-secondary)', lineHeight:1.5 }}>I agree to the <span style={{ color:'var(--accent)', fontWeight:600 }}>Terms of Service</span> and <span style={{ color:'var(--accent)', fontWeight:600 }}>Privacy Policy</span>, and consent to ReLivR processing my data under POPIA.</span>
@@ -926,24 +962,31 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
               </>
             )}
 
-            {/* ===== REGISTER · STEP 2 — marketplace profile ===== */}
+            {/* ===== REGISTER · STEP 2 — the onboarding questions ===== */}
             {mode==='register' && step===2 && (
               <>
-                <p style={{ fontSize:'.82rem', color:'var(--text-secondary)', lineHeight:1.5, margin:'0 0 4px' }}>
-                  A complete profile gets you more tasks and better bids. You can skip and finish this later in your profile.
-                </p>
-                <div><label>Phone number <span style={{ color:'var(--text-muted)' }}>(optional)</span></label><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+27 ..." /></div>
+                <IntentChips value={intent} onChange={setIntent} />
                 <div>
                   <label>Campus residence / area</label>
                   <select value={campus} onChange={e => setCampus(e.target.value)}>
                     <option value="">Select your area…</option>
                     {CAMPUS_ZONES.map(z => <option key={z} value={z}>{z}</option>)}
                   </select>
+                  <div style={{ fontSize:'.72rem', color:'var(--text-muted)', marginTop:5 }}>Helps match you with tasks and deals near you.</div>
                 </div>
-                <div><label>Your skills <span style={{ color:'var(--text-muted)' }}>(comma separated)</span></label><input value={skills} onChange={e => setSkills(e.target.value)} placeholder="e.g. python, tutoring, design" /></div>
-                <div><label>Short bio <span style={{ color:'var(--text-muted)' }}>(optional)</span></label>
-                  <textarea value={bio} onChange={e => setBio(e.target.value)} rows={3} placeholder="Tell others what you’re good at…" style={{ resize:'vertical' }} />
-                </div>
+                <div><label>Phone number <span style={{ color:'var(--text-muted)' }}>(optional)</span></label><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+27 ..." /></div>
+                {/* Skills/bio only matter for earners — keep the posting path frictionless */}
+                {intent !== 'post' && (
+                  <>
+                    <div><label>Your skills <span style={{ color:'var(--text-muted)' }}>(comma separated)</span></label><input value={skills} onChange={e => setSkills(e.target.value)} placeholder="e.g. python, tutoring, design" /></div>
+                    <div><label>Short bio <span style={{ color:'var(--text-muted)' }}>(optional)</span></label>
+                      <textarea value={bio} onChange={e => setBio(e.target.value)} rows={3} placeholder="Tell others what you’re good at…" style={{ resize:'vertical' }} />
+                    </div>
+                  </>
+                )}
+                <p style={{ fontSize:'.76rem', color:'var(--text-muted)', lineHeight:1.5, margin:0 }}>
+                  Everything here is optional — skip it and finish later in your profile.
+                </p>
               </>
             )}
 
@@ -987,6 +1030,95 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // LANDING PAGE SECTIONS
 // ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── GOOGLE ONBOARDING (post-OAuth) ───────────────────────────────────────────
+// OAuth signup can't ask questions, so first-time Google users get this modal
+// right after the redirect: POPIA consent (legally required before we process
+// their data) + the same onboarding questions email signups answer in step 2.
+// One call to POST /auth/onboarding completes it; skippable except consent.
+function GoogleOnboardingModal({ user, onDone }) {
+  const [consent, setConsent] = useState(false)
+  const [intent, setIntent]   = useState('')
+  const [campus, setCampus]   = useState('')
+  const [phone, setPhone]     = useState('')
+  const [skills, setSkills]   = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState('')
+  const CAMPUS_ZONES = useLocations()
+  const needsConsent = user.popia_consent === false
+  const firstName = (user.displayName || '').split(' ')[0] || 'there'
+
+  async function finish(skipAll) {
+    if (needsConsent && !consent) { setError('Please accept the Terms and Privacy Policy to continue'); return }
+    setError(''); setLoading(true)
+    try {
+      const body = skipAll
+        ? { popiaConsent: needsConsent ? consent : undefined }
+        : { popiaConsent: needsConsent ? consent : undefined,
+            intent: intent || null, campusZone: campus || null,
+            phoneNumber: phone || null, skills: skills || null }
+      const res = await fetch(API_BASE + '/auth/onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', Authorization: `Bearer ${localStorage.getItem('rl_token')}` },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(data.message || 'Something went wrong. Please try again.'); setLoading(false); return }
+      if (!skipAll && intent) { try { localStorage.setItem('rl_intent', intent) } catch { /* ignore */ } }
+      onDone()
+    } catch {
+      setError('Couldn’t reach the server. Check your connection and try again.')
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="moverlay">
+      <div className="modal" role="dialog" aria-modal="true" aria-label="Finish setting up your account">
+        <div style={{ padding:'18px 22px 14px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:12 }}>
+          {user.avatarUrl
+            ? <img src={user.avatarUrl} alt="" referrerPolicy="no-referrer" style={{ width:40, height:40, borderRadius:'50%', objectFit:'cover', flexShrink:0 }} />
+            : <div style={{ width:40, height:40, borderRadius:'50%', background:'var(--accent-glow)', color:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--fd)', fontWeight:800, flexShrink:0 }}>{firstName.charAt(0).toUpperCase()}</div>}
+          <div>
+            <div style={{ fontFamily:'var(--fd)', fontSize:'1.2rem', fontWeight:800 }}>Welcome, {firstName} 👋</div>
+            <div style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em', marginTop:2 }}>ReLivR · One quick step</div>
+          </div>
+        </div>
+        <div style={{ padding:22, display:'flex', flexDirection:'column', gap:13 }}>
+          <p style={{ fontSize:'.85rem', color:'var(--text-secondary)', lineHeight:1.55, margin:0 }}>
+            Your Google account is connected. Tell us a little about you so ReLivR fits your campus life — it takes 20 seconds.
+          </p>
+          <IntentChips value={intent} onChange={setIntent} />
+          <div>
+            <label>Campus residence / area</label>
+            <select value={campus} onChange={e => setCampus(e.target.value)}>
+              <option value="">Select your area…</option>
+              {CAMPUS_ZONES.map(z => <option key={z} value={z}>{z}</option>)}
+            </select>
+          </div>
+          <div><label>Phone number <span style={{ color:'var(--text-muted)' }}>(optional)</span></label><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+27 ..." /></div>
+          {intent !== 'post' && (
+            <div><label>Your skills <span style={{ color:'var(--text-muted)' }}>(comma separated)</span></label><input value={skills} onChange={e => setSkills(e.target.value)} placeholder="e.g. python, tutoring, design" /></div>
+          )}
+          {needsConsent && (
+            <label style={{ display:'flex', gap:8, alignItems:'flex-start', cursor:'pointer' }}>
+              <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} style={{ width:'auto', marginTop:3, flexShrink:0, accentColor:'var(--accent)' }} />
+              <span style={{ fontSize:'.76rem', color:'var(--text-secondary)', lineHeight:1.5 }}>I agree to the <span style={{ color:'var(--accent)', fontWeight:600 }}>Terms of Service</span> and <span style={{ color:'var(--accent)', fontWeight:600 }}>Privacy Policy</span>, and consent to ReLivR processing my data under POPIA.</span>
+            </label>
+          )}
+          {error && <div style={{ background:'rgba(185,28,28,.08)', border:'1px solid rgba(185,28,28,.25)', borderRadius:8, padding:'9px 13px', fontSize:'.82rem', color:'var(--red)' }}>{error}</div>}
+          <button type="button" className="btn-p" style={{ width:'100%', justifyContent:'center' }} disabled={loading} onClick={() => finish(false)}>
+            {loading ? <Spinner /> : 'Finish setup →'}
+          </button>
+          <button type="button" onClick={() => finish(true)} disabled={loading}
+            style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'.8rem', cursor:'pointer', textDecoration:'underline' }}>
+            Skip for now{needsConsent ? ' (consent still required)' : ''}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // Illustrative examples of typical campus tasks — deliberately NOT dressed up as
 // live data (no fake timestamps): pre-launch there are no real tasks to show.
@@ -1493,6 +1625,7 @@ function LaunchGate({ user, onLogout, onViewLanding }) {
           <Countdown target={LAUNCH_AT} onComplete={() => window.location.reload()} />
         </div>
         <div style={{ display:'flex', gap:10, justifyContent:'center', flexWrap:'wrap' }}>
+          <button className="btn-p" onClick={() => window.dispatchEvent(new Event('relivr:show-walkthrough'))}>▶ See how ReLivR works</button>
           <button className="btn-s" onClick={onViewLanding}>← Back to site</button>
           <button className="btn-g" onClick={onLogout}>Sign out</button>
         </div>
@@ -7141,20 +7274,32 @@ function openCookiePrefs() { window.dispatchEvent(new Event('relivr:cookie-prefs
 // 'relivr:show-walkthrough' window event. Mounted only inside the authed member shell,
 // so it never renders on the public landing (no clash with the auth modal).
 const ONBOARDING_KEY = 'rl_onboarding_seen_v1'
-const ONBOARDING_SLIDES = [
-  { icon:'⌂', title:'Welcome to ReLivR', body:'Your campus marketplace — post what you need done, or earn by helping out. Here’s the 30-second tour.' },
-  { icon:'＋', title:'Post a task in seconds', body:'Describe what you need and set a budget. Students nearby can start sending offers right away.' },
-  { icon:'◈', title:'Bid & get hired', body:'Browse open tasks, send a bid, and message the poster to lock in the details before you start.' },
-  { icon:'◇', title:'Discover Local & Deals', body:'Browse campus businesses Instagram-style and grab student-only deals — all in one place.' },
-]
+// The guide tailors itself to the signup intent ('post' | 'earn' | 'both', kept
+// in localStorage by the onboarding flows). Unknown/absent intent → full tour.
+function buildWalkthroughSlides(intent) {
+  const slides = [
+    { icon:'⌂', title:'Welcome to ReLivR', body:'Your campus marketplace — post what you need done, or earn by helping out. Here’s the 30-second tour.' },
+  ]
+  if (intent !== 'earn') slides.push(
+    { icon:'＋', title:'Post a task in seconds', body:'Describe what you need and set a budget. Students nearby send offers — you pick who to work with, chat, and confirm when it’s done.' })
+  if (intent !== 'post') slides.push(
+    { icon:'◈', title:'Bid & get hired', body:'Browse open tasks that match your skills, send a pitch with your price, and message the poster to lock in details. Every job builds your public rating.' })
+  slides.push(
+    { icon:'◇', title:'Discover Local & Deals', body:'Browse campus businesses Instagram-style and grab student-only deals — verified students get exclusive QR discounts.' },
+    { icon:'☂', title:'Stay safe on campus', body:'Everyone is a real, verified student. Ratings and trust scores are public, and if anything goes wrong our dispute team steps in. Your data stays protected under POPIA.' },
+  )
+  return slides
+}
 function OnboardingWalkthrough() {
   const [open, setOpen] = useState(false)
   const [i, setI] = useState(0)
+  const [slides, setSlides] = useState(() => buildWalkthroughSlides(null))
   useEffect(() => {
+    const readIntent = () => { try { return localStorage.getItem('rl_intent') } catch { return null } }
     let seen = true
     try { seen = !!localStorage.getItem(ONBOARDING_KEY) } catch { /* storage blocked → don't nag */ }
-    if (!seen) setOpen(true)
-    const replay = () => { setI(0); setOpen(true) }
+    if (!seen) { setSlides(buildWalkthroughSlides(readIntent())); setOpen(true) }
+    const replay = () => { setSlides(buildWalkthroughSlides(readIntent())); setI(0); setOpen(true) }
     window.addEventListener('relivr:show-walkthrough', replay)
     return () => window.removeEventListener('relivr:show-walkthrough', replay)
   }, [])
@@ -7165,9 +7310,9 @@ function OnboardingWalkthrough() {
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
   if (!open) return null
-  const last = i >= ONBOARDING_SLIDES.length - 1
+  const last = i >= slides.length - 1
   const close = () => { try { localStorage.setItem(ONBOARDING_KEY, '1') } catch { /* ignore */ } setOpen(false) }
-  const s = ONBOARDING_SLIDES[i]
+  const s = slides[i]
   return (
     <div role="dialog" aria-modal="true" aria-label="Welcome to ReLivR"
       style={{ position:'fixed', inset:0, zIndex:1100, background:'rgba(20,16,30,.6)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
@@ -7176,7 +7321,7 @@ function OnboardingWalkthrough() {
         <h2 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.3rem', margin:'0 0 10px' }}>{s.title}</h2>
         <p style={{ color:'var(--text-secondary)', lineHeight:1.6, margin:'0 0 22px', fontSize:'.95rem' }}>{s.body}</p>
         <div style={{ display:'flex', justifyContent:'center', gap:6, marginBottom:22 }}>
-          {ONBOARDING_SLIDES.map((_, n) => <span key={n} style={{ width:7, height:7, borderRadius:'50%', background:n===i?'var(--accent)':'var(--border-strong)', transition:'background 160ms var(--ease)' }} />)}
+          {slides.map((_, n) => <span key={n} style={{ width:7, height:7, borderRadius:'50%', background:n===i?'var(--accent)':'var(--border-strong)', transition:'background 160ms var(--ease)' }} />)}
         </div>
         <div style={{ display:'flex', gap:10, justifyContent:'center' }}>
           {!last && <Btn variant="ghost" size="sm" onClick={close}>Skip</Btn>}
@@ -7280,6 +7425,9 @@ function CookieConsent() {
 
 export default function App() {
   const [user, setUser]         = useState(null)
+  // Google signups still owe us the onboarding questions (set from the OAuth
+  // redirect params or a session restore with onboarded_at missing).
+  const [pendingOnboarding, setPendingOnboarding] = useState(false)
   const [userLoading, setUserLoading] = useState(true) // true while restoring session
   const initialLoc = parseLocation()
   const [view, setView] = useState(initialLoc.view)
@@ -7384,6 +7532,10 @@ export default function App() {
             provider:    u.google_id ? 'google' : 'email',
             popia_consent: u.popia_consent !== false,
           })
+          // Onboarding state: keep the walkthrough intent fresh, and re-offer the
+          // onboarding questions to anyone who bailed mid-flow (Google signups).
+          if (u.intent) { try { localStorage.setItem('rl_intent', u.intent) } catch { /* ignore */ } }
+          if (u.google_id && !u.onboarded_at && u.role !== 'admin' && u.role !== 'business') setPendingOnboarding(true)
           // Logged-in users must not see the landing page — redirect to app.
           const loc = parseLocation()
           if (loc.view === 'landing') {
@@ -7470,12 +7622,16 @@ export default function App() {
       const displayName = params.get('displayName') || email?.split('@')[0] || 'User'
       const avatarUrl   = params.get('avatarUrl') || null
       const needsConsent = params.get('needsConsent') === '1'
+      const needsOnboarding = params.get('needsOnboarding') === '1'
 
       if (!token || !userId) return false
 
       localStorage.setItem('rl_token', token)
       saveUser({ userId, email, role, displayName, avatarUrl, provider: 'google',
                  popia_consent: !needsConsent })
+      // First-time (or mid-flow) Google users owe the onboarding questions —
+      // the modal handles POPIA consent too, so it covers needsConsent as well.
+      if (needsOnboarding || needsConsent) setPendingOnboarding(true)
       setView('dashboard')
       setDashPage(role === 'admin' ? 'dashboard' : 'tasks-browse')
       setAuthModal(null)
@@ -7500,6 +7656,7 @@ export default function App() {
     localStorage.removeItem('rl_user')
     sessionStorage.removeItem('rl_view')
     setUser(null)
+    setPendingOnboarding(false)
     setView('landing')
     setDashPage('tasks-browse')
     setSelectedTask(null)
@@ -7657,7 +7814,12 @@ export default function App() {
           {/* Pre-launch lock: only admins reach the real app. Everyone else who
               signs in/up lands on the founding-member holding screen instead. */}
           {view==='dashboard' && user && isAppLocked(user) && (
-            <LaunchGate user={user} onLogout={logout} onViewLanding={() => navigate('landing')} />
+            <>
+              <LaunchGate user={user} onLogout={logout} onViewLanding={() => navigate('landing')} />
+              {/* New signups wait here until launch — the guided tour must be
+                  available (and auto-offer once) on this screen, not just in-app. */}
+              <OnboardingWalkthrough />
+            </>
           )}
           {/* Business partners get their own self-contained dashboard surface. */}
           {view==='dashboard' && user && !isAppLocked(user) && user.role==='business' && (
@@ -7675,10 +7837,24 @@ export default function App() {
             </div>
           )}
 
+          {/* Google onboarding — first-time Google users answer the same questions
+              email signups get in the modal (consent + intent + campus). Shows over
+              the LaunchGate too: founding members complete their profile pre-launch. */}
+          {user && pendingOnboarding && (
+            <GoogleOnboardingModal
+              user={user}
+              onDone={() => {
+                setUser(u => ({ ...u, popia_consent: true }))
+                setPendingOnboarding(false)
+              }}
+            />
+          )}
+
           {/* POPIA consent gate — blocks the app until consent is explicitly given
               (chiefly the Google path, which can't capture consent at OAuth).
+              Safety net only: the onboarding modal above normally captures consent.
               Suppressed while the launch gate is up — they'll consent at launch. */}
-          {user && user.popia_consent === false && !isAppLocked(user) && (
+          {user && user.popia_consent === false && !isAppLocked(user) && !pendingOnboarding && (
             <ConsentGate
               onConsented={() => setUser(u => ({ ...u, popia_consent: true }))}
               onDecline={logout}

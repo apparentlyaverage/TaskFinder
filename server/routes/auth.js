@@ -182,9 +182,12 @@ router.get('/google/callback',
       user.token_version = tvRow.rows[0]?.token_version ?? 0
       const token = issueToken(user)
       const { rows } = await pool.query(
-        'SELECT display_name, avatar_url FROM user_profiles WHERE user_id = $1', [user.user_id])
+        'SELECT display_name, avatar_url, onboarded_at FROM user_profiles WHERE user_id = $1', [user.user_id])
       const displayName = rows[0]?.display_name || user.display_name || user.email?.split('@')[0] || 'User'
       const avatarUrl   = rows[0]?.avatar_url   || user.google_avatar_url || ''
+      // OAuth signup can't ask onboarding questions — flag profiles that still
+      // need them (new Google users; also anyone who bailed mid-onboarding).
+      const needsOnboarding = !rows[0]?.onboarded_at
 
       // Does this user still need to give POPIA consent? (new Google users do)
       const consentRow = await pool.query('SELECT popia_consent FROM users WHERE user_id = $1', [user.user_id])
@@ -199,6 +202,7 @@ router.get('/google/callback',
       const params = new URLSearchParams({
         token, userId: user.user_id, email: user.email, role: user.role, displayName, avatarUrl,
         needsConsent: needsConsent ? '1' : '0',
+        needsOnboarding: needsOnboarding ? '1' : '0',
       })
       res.redirect(`${FRONTEND_URL}/oauth-callback?${params.toString()}`)
     } catch (err) {
@@ -217,12 +221,13 @@ router.post('/register',
     body('phoneNumber').optional({ nullable: true }).trim().isLength({ max: 25 }),
     body('campusZone').optional({ nullable: true }).trim().custom(validateLocationName),
     body('bio').optional({ nullable: true }).trim().isLength({ max: 1000 }),
+    body('intent').optional({ nullable: true }).isIn(['post', 'earn', 'both']),
     body('popiaConsent').custom(v => v === true || v === 'true')
       .withMessage('You must accept the privacy policy to register.'),
   ],
   check,
   async (req, res) => {
-    const { email, password, role = 'member', displayName, campusZone, bio } = req.body
+    const { email, password, role = 'member', displayName, campusZone, bio, intent } = req.body
 
     // Validate + normalise the phone (throws → caught below as 422)
     let phoneNumber
@@ -254,10 +259,12 @@ router.post('/register',
         [email, hash, role, phoneNumber || null, clientIp(req), POPIA_CONSENT_VERSION])
       const newUser = rows[0]
       const locationId = await resolveLocationId(campusZone)   // best-effort FK (TD-12)
+      // Email signups answer the onboarding questions inside the modal, so the
+      // profile is created already-onboarded (intent nullable — skippable).
       await client.query(
-        `INSERT INTO user_profiles (user_id, display_name, campus_zone, location_id, skills, bio)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [newUser.user_id, displayName || email.split('@')[0], campusZone || null, locationId, skills, bio || null])
+        `INSERT INTO user_profiles (user_id, display_name, campus_zone, location_id, skills, bio, intent, onboarded_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+        [newUser.user_id, displayName || email.split('@')[0], campusZone || null, locationId, skills, bio || null, intent || null])
       await client.query('COMMIT')
 
       pool.query(
@@ -364,7 +371,8 @@ router.get('/me', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT u.user_id, u.email, u.role, u.google_id, u.google_avatar_url,
               u.popia_consent, u.token_version, u.beta_founder,
-              up.display_name, up.avg_rating, up.avatar_url, up.skills, up.bio
+              up.display_name, up.avg_rating, up.avatar_url, up.skills, up.bio,
+              up.intent, up.onboarded_at, up.campus_zone
        FROM users u LEFT JOIN user_profiles up ON u.user_id = up.user_id
        WHERE u.user_id = $1`, [payload.userId])
     if (rows.length === 0) return res.status(404).json({ message: 'User not found.' })
@@ -409,6 +417,98 @@ router.post('/consent', requireAuth, async (req, res) => {
     return res.status(500).json({ message: 'Internal server error.' })
   }
 })
+
+// POST /auth/onboarding — complete the onboarding questions in one call.
+// Chiefly the Google path: OAuth signup can't ask anything, so after the
+// redirect the app shows an onboarding modal that lands here. Superset of
+// /auth/consent (kept for the older ConsentGate): records POPIA consent when
+// given, updates the profile fields that were answered, and stamps
+// onboarded_at so the app stops offering the step. Every field is optional —
+// "skip" still completes onboarding (consent aside, the questions are optional
+// by design). Mounted under /auth so it works during the pre-launch gate.
+router.post('/onboarding', requireAuth,
+  [
+    body('displayName').optional({ nullable: true }).trim().isLength({ min: 1, max: 100 }),
+    body('campusZone').optional({ nullable: true }).trim().custom(validateLocationName),
+    body('intent').optional({ nullable: true }).isIn(['post', 'earn', 'both']),
+    body('bio').optional({ nullable: true }).trim().isLength({ max: 1000 }),
+    body('phoneNumber').optional({ nullable: true }).trim().isLength({ max: 25 }),
+    body('popiaConsent').optional().isBoolean(),
+  ],
+  check,
+  async (req, res) => {
+    const { displayName, campusZone, intent, bio } = req.body
+    let phoneNumber
+    try { phoneNumber = normalizePhone(req.body.phoneNumber) }
+    catch (e) { return res.status(422).json({ message: e.message }) }
+    let skills = null
+    if (req.body.skills !== undefined && req.body.skills !== null) {
+      skills = Array.isArray(req.body.skills)
+        ? req.body.skills
+        : String(req.body.skills).split(',').map(s => s.trim()).filter(Boolean)
+      // Sanity caps — skills are display tags, not documents.
+      skills = skills.slice(0, 20).map(s => String(s).slice(0, 80))
+    }
+    try {
+      // Real consent action (Google users arrive with popia_consent = FALSE).
+      // Same semantics + audit trail as /auth/consent. Accept 'true' like
+      // register does — a stringly-typed client must not silently lose consent.
+      if (req.body.popiaConsent === true || req.body.popiaConsent === 'true') {
+        const ip = clientIp(req)
+        const upd = await pool.query(
+          `UPDATE users SET popia_consent = TRUE, popia_consent_at = NOW(),
+                  popia_consent_ip = $2, popia_consent_version = $3
+            WHERE user_id = $1 AND popia_consent = FALSE`,
+          [req.userId, ip, POPIA_CONSENT_VERSION])
+        // Audit only an actual state change — re-consent no-ops must not write
+        // misleading 'granted' rows into the append-only trail.
+        if (upd.rowCount > 0) {
+          pool.query(
+            `INSERT INTO activity_logs (actor_id, actor_role, action, entity_type, entity_id, metadata)
+             VALUES ($1, $2, 'popia.consent.granted', 'user', $1, $3)`,
+            [req.userId, req.userRole, JSON.stringify({ version: POPIA_CONSENT_VERSION, ip, via: 'onboarding' })]
+          ).catch(() => {})
+        }
+      }
+
+      // Build the profile update from only the answered fields; onboarded_at
+      // always stamps — that's what "completing onboarding" means.
+      const sets = ['onboarded_at = COALESCE(onboarded_at, NOW())'], vals = [req.userId]
+      if (displayName)         { vals.push(displayName); sets.push(`display_name = $${vals.length}`) }
+      if (campusZone) {
+        const locationId = await resolveLocationId(campusZone)   // best-effort FK, same as register
+        vals.push(campusZone);  sets.push(`campus_zone = $${vals.length}`)
+        vals.push(locationId);  sets.push(`location_id = $${vals.length}`)
+      }
+      if (intent)              { vals.push(intent); sets.push(`intent = $${vals.length}`) }
+      if (skills)              { vals.push(skills); sets.push(`skills = $${vals.length}`) }
+      if (bio)                 { vals.push(bio);    sets.push(`bio = $${vals.length}`) }
+      const upd = await pool.query(
+        `UPDATE user_profiles SET ${sets.join(', ')} WHERE user_id = $1
+         RETURNING display_name, campus_zone, intent, onboarded_at`, vals)
+      if (upd.rows.length === 0) {
+        // Profile row missing (legacy edge) — create it completed.
+        await pool.query(
+          `INSERT INTO user_profiles (user_id, display_name, campus_zone, intent, skills, bio, onboarded_at)
+           VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+          [req.userId, displayName || null, campusZone || null, intent || null, skills, bio || null])
+      }
+      if (phoneNumber) {
+        await pool.query('UPDATE users SET phone_number = $2 WHERE user_id = $1', [req.userId, phoneNumber]).catch(() => {})
+      }
+      return res.status(200).json({
+        message: 'Welcome to ReLivR.',
+        user: { displayName: upd.rows[0]?.display_name || displayName || null,
+                campusZone: upd.rows[0]?.campus_zone || campusZone || null,
+                intent: upd.rows[0]?.intent || intent || null,
+                onboarded: true },
+      })
+    } catch (err) {
+      log.error('auth.onboarding_failed', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
 
 // Logout actually REVOKES the session now (TD-5): bumping token_version
 // invalidates every JWT previously issued to this user. Best-effort + always
