@@ -71,26 +71,26 @@ _style.textContent = `
      historical reasons — it IS the purple. */
   --black:         #131118;
   --white:         #ffffff;
-  --amber:         #9333ea;
-  --amber2:        #7e22ce;
+  --amber:         #7e22ce;
+  --amber2:        #6b21a8;
   --green:         #15803d;
   --red:           #b91c1c;
   --blue:          #1d4ed8;
   --purple:        #b45309;
   --orchid:        #c084fc;
-  --highlight:     #ddb8fb;
-  --bg-base:       #fdfcff;
+  --highlight:     #d8b4fe;
+  --bg-base:       #faf8fe;
   --bg-surface:    #ffffff;
-  --bg-elevated:   #f6f3fa;
-  --bg-hover:      #eee9f6;
-  --border:        #eae6f1;
-  --border-strong: #d8d2e4;
+  --bg-elevated:   #f3eefb;
+  --bg-hover:      #eae2f6;
+  --border:        #e7e0f0;
+  --border-strong: #d3cae3;
   --text-primary:  #131118;
   --text-secondary:#575163;
   --text-muted:    #96909f;
-  --accent:        #9333ea;
+  --accent:        #7e22ce;
   --accent-dim:    #f3e8ff;
-  --accent-glow:   rgba(147,51,234,0.10);
+  --accent-glow:   rgba(126,34,206,0.10);
   --success:       #15803d;
   --danger:        #b91c1c;
   --info:          #1d4ed8;
@@ -117,7 +117,7 @@ _style.textContent = `
   --shadow-md:     0 6px 16px rgba(19,17,24,.07), 0 2px 6px rgba(19,17,24,.04);
   --shadow-lg:     0 16px 40px rgba(19,17,24,.10), 0 4px 12px rgba(19,17,24,.05);
   --shadow-xl:     0 30px 70px rgba(19,17,24,.14), 0 10px 24px rgba(19,17,24,.06);
-  --ring:          0 0 0 3px rgba(147,51,234,.16);
+  --ring:          0 0 0 3px rgba(126,34,206,.16);
 }
 html { scroll-behavior: smooth; font-size: 16px; }
 body {
@@ -162,7 +162,7 @@ input, textarea, select { font-family: var(--font-body); font-size: inherit; }
 .photo-card img { transition:transform .55s var(--ease); will-change:transform; }
 .photo-card:hover img { transform:scale(1.05); }
 .btn-p { background:var(--amber); color:#fff; border:none; padding:13px 28px; border-radius:12px; font-family:var(--fd); font-weight:700; font-size:.9rem; letter-spacing:.01em; cursor:pointer; box-shadow:var(--shadow-sm); transition:all 160ms var(--ease); display:inline-flex; align-items:center; gap:7px; }
-.btn-p:hover { background:var(--amber2); transform:translateY(-1px); box-shadow:0 10px 24px rgba(147,51,234,.26); }
+.btn-p:hover { background:var(--amber2); transform:translateY(-1px); box-shadow:0 10px 24px rgba(126,34,206,.26); }
 .btn-p:active { transform:translateY(0); box-shadow:var(--shadow-sm); }
 .btn-p:disabled { opacity:.5; cursor:not-allowed; transform:none; box-shadow:none; }
 .btn-s { background:var(--bg-surface); color:var(--text-primary); border:1px solid var(--border-strong); padding:13px 28px; border-radius:12px; font-family:var(--fd); font-weight:700; font-size:.9rem; letter-spacing:.01em; cursor:pointer; transition:all 160ms var(--ease); }
@@ -183,7 +183,7 @@ label { font-family:var(--fm); font-size:.62rem; color:var(--text-muted); text-t
 .prose ul { color:#5f5970; line-height:1.8; margin-bottom:16px; padding-left:20px; font-size:.925rem; }
 .prose li { margin-bottom:6px; }
 .prose a  { color:var(--amber); }
-.prose .highlight { background:rgba(147,51,234,.08); border:1px solid rgba(147,51,234,.2); border-radius:6px; padding:16px 20px; margin:20px 0; }
+.prose .highlight { background:rgba(126,34,206,.08); border:1px solid rgba(126,34,206,.2); border-radius:6px; padding:16px 20px; margin:20px 0; }
 .prose .highlight p { color:#3b3548; margin:0; }
 .prose table { width:100%; border-collapse:collapse; font-size:.875rem; margin-bottom:16px; }
 .prose th { text-align:left; padding:8px 12px; font-family:var(--fm); font-size:.62rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.1em; font-weight:400; border-bottom:1px solid var(--border-strong); }
@@ -334,7 +334,7 @@ function ToastProvider({ children }) {
     success: { bg:'rgba(16,185,129,0.15)',  border:'rgba(16,185,129,0.4)',  icon:'✓', color:'var(--success)' },
     error:   { bg:'rgba(239,68,68,0.15)',   border:'rgba(239,68,68,0.4)',   icon:'✗', color:'var(--danger)' },
     info:    { bg:'rgba(59,130,246,0.15)',   border:'rgba(59,130,246,0.4)',  icon:'ℹ', color:'var(--info)' },
-    warning: { bg:'rgba(147,51,234,0.15)',  border:'rgba(147,51,234,0.4)',  icon:'⚠', color:'var(--accent)' },
+    warning: { bg:'rgba(126,34,206,0.15)',  border:'rgba(126,34,206,0.4)',  icon:'⚠', color:'var(--accent)' },
   }
   return (
     <ToastCtx.Provider value={add}>
@@ -371,18 +371,53 @@ function Spinner({ size = 14 }) {
   return <span style={{ width:size, height:size, border:'2px solid transparent', borderTopColor:'currentColor', borderRadius:'50%', animation:'spin .6s linear infinite', display:'inline-block' }} />
 }
 
-// The brand mark: two leaves on one stem — the poster and the earner, one
-// campus economy. Orchid + ink (mirrors /logo.svg; keep the two in sync).
-function LogoMark({ size = 30 }) {
+// The brand mark: a seedling — two leaves on one stem (the poster and the
+// earner, one campus economy). Mirrors /logo.svg; keep the two in sync.
+// Leaf paths are drawn base-at-origin so `animate` can grow each leaf from its
+// stem (SMIL — scales around the local origin, loops natively, and is simply
+// not rendered when the user prefers reduced motion).
+const LEAF_PATH = `M0,0 C-44,-12 -64,-52 -63,-102 C-62,-168 -28,-220 0,-242 C28,-220 62,-168 63,-102 C64,-52 44,-12 0,0 Z
+  M-2,-14 C-7,-72 -5,-152 2,-224 L7,-215 C2,-152 1,-74 4,-14 Z
+  M-2,-84 L-32,-110 L-29,-115 L-1,-92 Z
+  M2,-140 L28,-166 L25,-171 L1,-148 Z`
+function LogoMark({ size = 30, animate = false }) {
+  const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  const anim = animate && !reduced
+  const DUR = '2.2s'
+  const leafAnim = (delayFrac) => (
+    <animateTransform attributeName="transform" type="scale" additive="sum" dur={DUR} repeatCount="indefinite"
+      values="0.001;0.001;1.09;1;1;0.001"
+      keyTimes={`0;${delayFrac};${delayFrac + 0.16};${delayFrac + 0.24};0.87;1`}
+      calcMode="spline"
+      keySplines="0.4,0,0.2,1; 0.22,0.9,0.36,1; 0.4,0,0.2,1; 0.4,0,0.2,1; 0.4,0,0.6,1" />
+  )
+  const stemAnim = (
+    <animate attributeName="stroke-dashoffset" dur={DUR} repeatCount="indefinite"
+      values="100;0;0;100" keyTimes="0;0.22;0.87;1" calcMode="spline" keySplines="0.4,0,0.2,1; 0.4,0,0.2,1; 0.4,0,0.6,1" />
+  )
+  const stemProps = anim ? { pathLength: 100, strokeDasharray: 100, strokeDashoffset: 100 } : {}
   return (
-    <svg width={size} height={size} viewBox="60 90 400 340" aria-hidden="true" style={{ flexShrink:0, display:'block' }}>
-      <g transform="translate(178 262) rotate(-28) scale(0.82)">
-        <path fill="#c084fc" fillRule="evenodd" d="M0,-122 C-74,-58 -74,58 0,126 C74,58 74,-58 0,-122 Z M-4,102 C-15,26 -8,-46 6,-102 L11,-95 C-1,-44 -6,28 4,102 Z" />
+    <svg width={size} height={size} viewBox="55 85 400 380" aria-hidden="true" style={{ flexShrink:0, display:'block' }}>
+      <path d="M256,452 C252,406 234,366 202,334" fill="none" stroke="var(--black, #131118)" strokeWidth="14" strokeLinecap="round" {...stemProps}>{anim && stemAnim}</path>
+      <path d="M256,452 C260,402 282,358 316,322" fill="none" stroke="var(--black, #131118)" strokeWidth="14" strokeLinecap="round" {...stemProps}>{anim && stemAnim}</path>
+      <g transform="translate(200 336) rotate(-32) scale(0.78)">
+        <g>{anim && leafAnim(0.16)}<path fill="#c084fc" fillRule="evenodd" d={LEAF_PATH} /></g>
       </g>
-      <g transform="translate(318 240) rotate(22)">
-        <path fill="var(--black, #131118)" fillRule="evenodd" d="M0,-130 C-78,-62 -80,54 -8,122 C-30,158 -52,186 -84,212 C-46,190 -20,162 8,120 C82,54 78,-62 0,-130 Z M-4,104 C-16,26 -9,-48 6,-106 L11,-99 C-1,-46 -7,28 4,104 Z" />
+      <g transform="translate(314 324) rotate(28)">
+        <g>{anim && leafAnim(0.26)}<path fill="var(--black, #131118)" fillRule="evenodd" d={LEAF_PATH} /></g>
       </g>
     </svg>
+  )
+}
+
+// Full-screen / section loading state: the seedling grows on loop. Replaces the
+// bare spinner wherever the wait is long enough to brand (session restore, OAuth).
+function LogoLoader({ size = 72, label }) {
+  return (
+    <div style={{ textAlign:'center' }}>
+      <div style={{ display:'inline-block' }}><LogoMark size={size} animate /></div>
+      {label && <p style={{ marginTop:10, color:'var(--text-muted)', fontFamily:'var(--font-mono)', fontSize:'0.72rem', textTransform:'uppercase', letterSpacing:'0.1em' }}>{label}</p>}
+    </div>
   )
 }
 
@@ -406,7 +441,7 @@ function Btn({ children, variant='primary', size='md', loading=false, fullWidth=
     ghost:     { background:hov?'var(--bg-hover)':'transparent', color:hov?'var(--text-primary)':'var(--text-secondary)' },
     danger:    { background:hov?'rgba(239,68,68,0.12)':'transparent', color:'var(--danger)', border:'1px solid var(--danger)' },
     success:   { background:hov?'rgba(16,185,129,0.25)':'rgba(16,185,129,0.15)', color:'var(--success)', border:'1px solid rgba(16,185,129,0.3)' },
-    warning:   { background:hov?'rgba(147,51,234,0.2)':'rgba(147,51,234,0.1)', color:'var(--accent)', border:'1px solid rgba(147,51,234,0.3)' },
+    warning:   { background:hov?'rgba(126,34,206,0.2)':'rgba(126,34,206,0.1)', color:'var(--accent)', border:'1px solid rgba(126,34,206,0.3)' },
   }
   const v = variants[variant] || variants.primary
   return (
@@ -462,11 +497,11 @@ function Badge({ children, variant='default' }) {
     open:        { background:'rgba(16,185,129,0.15)',         color:'var(--success)' },
     in_progress: { background:'rgba(59,130,246,0.15)',         color:'var(--info)' },
     disputed:    { background:'rgba(239,68,68,0.15)',          color:'var(--danger)' },
-    completed:   { background:'rgba(147,51,234,0.15)',         color:'var(--accent)' },
+    completed:   { background:'rgba(126,34,206,0.15)',         color:'var(--accent)' },
     expired:     { background:'var(--bg-elevated)',            color:'var(--text-muted)' },
     admin:       { background:'rgba(239,68,68,0.15)',          color:'var(--danger)' },
     earner:      { background:'rgba(16,185,129,0.15)',         color:'var(--success)' },
-    creator:     { background:'rgba(147,51,234,0.15)',         color:'var(--accent)' },
+    creator:     { background:'rgba(126,34,206,0.15)',         color:'var(--accent)' },
     pending:     { background:'rgba(59,130,246,0.12)',         color:'var(--info)' },
     accepted:    { background:'rgba(16,185,129,0.15)',         color:'var(--success)' },
     rejected:    { background:'var(--bg-elevated)',            color:'var(--text-muted)' },
@@ -1231,11 +1266,11 @@ function Hero({ onOpenAuth }) {
   return (
     <section className="hero-section" style={{ minHeight:'100vh', display:'flex', alignItems:'center', padding:'128px 24px 72px', position:'relative', overflow:'hidden' }}>
       <div style={{ position:'absolute', inset:0, zIndex:0, backgroundImage:'linear-gradient(rgba(19,17,24,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(19,17,24,.05) 1px,transparent 1px)', backgroundSize:'56px 56px' }} />
-      <div style={{ position:'absolute', top:'15%', right:'8%', width:500, height:500, background:'radial-gradient(circle,rgba(147,51,234,.07) 0%,transparent 70%)', zIndex:0 }} />
+      <div style={{ position:'absolute', top:'15%', right:'8%', width:500, height:500, background:'radial-gradient(circle,rgba(126,34,206,.07) 0%,transparent 70%)', zIndex:0 }} />
       <div style={{ maxWidth:1200, margin:'0 auto', width:'100%', position:'relative', zIndex:1 }}>
         <div className="hero-inner" style={{ display:'flex', alignItems:'center', gap:60 }}>
           <div style={{ flex:1 }}>
-            <div style={{ display:'inline-flex', alignItems:'center', gap:8, background:'rgba(147,51,234,.1)', border:'1px solid rgba(147,51,234,.25)', borderRadius:100, padding:'5px 14px', marginBottom:28, animation:'fadeUp .6s ease both' }}>
+            <div style={{ display:'inline-flex', alignItems:'center', gap:8, background:'rgba(126,34,206,.1)', border:'1px solid rgba(126,34,206,.25)', borderRadius:100, padding:'5px 14px', marginBottom:28, animation:'fadeUp .6s ease both' }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--amber)', animation:'pulse 2s infinite', flexShrink:0 }} />
               <span style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', letterSpacing:'.1em', textTransform:'uppercase' }}>Now in beta on Rhodes Campus</span>
             </div>
@@ -1302,7 +1337,7 @@ function HowItWorks() {
           {STEPS_DATA.map((s,i) => (
             <div key={i} style={{ padding:'32px 26px', background:i%2===0?'var(--bg-surface)':'var(--bg-base)', border:'1px solid var(--border)', position:'relative' }}>
               <div style={{ fontFamily:'var(--fd)', fontSize:'3.5rem', fontWeight:800, color:'var(--border-strong)', lineHeight:1, marginBottom:16, userSelect:'none' }}>{s.n}</div>
-              <div style={{ display:'inline-block', background:s.color==='var(--amber)'?'rgba(147,51,234,.1)':s.color==='var(--green)'?'rgba(16,185,129,.1)':'rgba(180,83,9,.1)', border:`1px solid ${s.color==='var(--amber)'?'rgba(147,51,234,.3)':s.color==='var(--green)'?'rgba(16,185,129,.3)':'rgba(180,83,9,.3)'}`, borderRadius:100, padding:'3px 11px', marginBottom:12 }}>
+              <div style={{ display:'inline-block', background:s.color==='var(--amber)'?'rgba(126,34,206,.1)':s.color==='var(--green)'?'rgba(16,185,129,.1)':'rgba(180,83,9,.1)', border:`1px solid ${s.color==='var(--amber)'?'rgba(126,34,206,.3)':s.color==='var(--green)'?'rgba(16,185,129,.3)':'rgba(180,83,9,.3)'}`, borderRadius:100, padding:'3px 11px', marginBottom:12 }}>
                 <span style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:s.color, textTransform:'uppercase', letterSpacing:'.1em' }}>{s.role}</span>
               </div>
               <h3 style={{ fontFamily:'var(--fd)', fontSize:'1.15rem', fontWeight:700, marginBottom:10 }}>{s.title}</h3>
@@ -1399,7 +1434,7 @@ function Pricing({ onOpenAuth }) {
             ))}
             <button className="btn-s" style={{ width:'100%', marginTop:24, justifyContent:'center', display:'flex' }} onClick={() => onOpenAuth('register')}>Post a Task Free</button>
           </div>
-          <div style={{ background:'var(--bg-base)', border:'1px solid var(--amber)', borderRadius:14, padding:'32px 28px', position:'relative', boxShadow:'0 0 40px rgba(147,51,234,.08)' }}>
+          <div style={{ background:'var(--bg-base)', border:'1px solid var(--amber)', borderRadius:14, padding:'32px 28px', position:'relative', boxShadow:'0 0 40px rgba(126,34,206,.08)' }}>
             <div style={{ position:'absolute', top:-11, left:'50%', transform:'translateX(-50%)', background:'var(--amber)', color:'#fff', fontFamily:'var(--fm)', fontSize:'.58rem', fontWeight:500, textTransform:'uppercase', letterSpacing:'.1em', padding:'3px 12px', borderRadius:100 }}>Most Popular</div>
             <div style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:16 }}>For Earners</div>
             <div style={{ display:'flex', alignItems:'baseline', gap:5, marginBottom:5 }}>
@@ -1714,7 +1749,7 @@ function SidebarPage({ title, subtitle, sections, children, onNav }) {
             <div style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.12em', padding:'0 20px', marginBottom:12 }}>On this page</div>
             {sections.map(s => (
               <button key={s.id} onClick={() => { setActive(s.id); document.getElementById(s.id)?.scrollIntoView({ behavior:'smooth', block:'start' }) }}
-                style={{ display:'block', width:'100%', textAlign:'left', background:active===s.id?'rgba(147,51,234,.06)':'none', border:'none', borderLeft:active===s.id?'2px solid var(--amber)':'2px solid transparent', color:active===s.id?'var(--amber)':'var(--text-muted)', padding:'9px 20px', fontSize:'.85rem', cursor:'pointer', transition:'all 150ms' }}>
+                style={{ display:'block', width:'100%', textAlign:'left', background:active===s.id?'rgba(126,34,206,.06)':'none', border:'none', borderLeft:active===s.id?'2px solid var(--amber)':'2px solid transparent', color:active===s.id?'var(--amber)':'var(--text-muted)', padding:'9px 20px', fontSize:'.85rem', cursor:'pointer', transition:'all 150ms' }}>
                 {s.label}
               </button>
             ))}
@@ -2201,10 +2236,7 @@ function OAuthCallback() {
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh', background:'var(--bg-base)', color:'var(--text-primary)' }}>
-      <div style={{ textAlign:'center' }}>
-        <Spinner size={32} />
-        <p style={{ marginTop:16, color:'var(--text-muted)', fontFamily:'var(--font-mono)', fontSize:'0.75rem', textTransform:'uppercase', letterSpacing:'0.1em' }}>Completing Google sign-in…</p>
-      </div>
+      <LogoLoader size={84} label="Completing Google sign-in…" />
     </div>
   )
 }
@@ -3053,7 +3085,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
       )}
 
       {escrow&&isCreator&&(
-        <div style={{ marginBottom:20, padding:'14px 18px', borderRadius:'var(--radius-md)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap', ...(escrow.status==='funded'?{background:'rgba(16,185,129,0.1)',border:'1px solid rgba(16,185,129,0.3)'}:escrow.status==='released'?{background:'rgba(147,51,234,0.1)',border:'1px solid rgba(147,51,234,0.3)'}:escrow.status==='disputed'?{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)'}:{background:'rgba(59,130,246,0.1)',border:'1px solid rgba(59,130,246,0.3)'}) }}>
+        <div style={{ marginBottom:20, padding:'14px 18px', borderRadius:'var(--radius-md)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap', ...(escrow.status==='funded'?{background:'rgba(16,185,129,0.1)',border:'1px solid rgba(16,185,129,0.3)'}:escrow.status==='released'?{background:'rgba(126,34,206,0.1)',border:'1px solid rgba(126,34,206,0.3)'}:escrow.status==='disputed'?{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)'}:{background:'rgba(59,130,246,0.1)',border:'1px solid rgba(59,130,246,0.3)'}) }}>
           <div style={{ display:'flex', gap:10, alignItems:'center' }}>
             <span style={{ fontSize:'1.1rem' }}>{escrow.status==='funded'?'🔒':escrow.status==='released'?'✓':escrow.status==='disputed'?'⚠':'💳'}</span>
             <div>
@@ -4925,7 +4957,7 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
           <div style={{ display:'flex', gap:10, alignItems:'center', marginTop:12, flexWrap:'wrap' }}>
             <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.7rem', lineHeight:1.1 }}>{name}</h1>
             {profile.beta_founder && (
-              <span title="Joined during the ReLivR beta" style={{ display:'inline-flex', alignItems:'center', gap:5, background:'rgba(147,51,234,.1)', border:'1px solid rgba(147,51,234,.3)', color:'var(--amber)', borderRadius:100, padding:'3px 11px', fontFamily:'var(--font-mono)', fontSize:'.6rem', fontWeight:600, textTransform:'uppercase', letterSpacing:'.08em' }}>★ Founding Member</span>
+              <span title="Joined during the ReLivR beta" style={{ display:'inline-flex', alignItems:'center', gap:5, background:'rgba(126,34,206,.1)', border:'1px solid rgba(126,34,206,.3)', color:'var(--amber)', borderRadius:100, padding:'3px 11px', fontFamily:'var(--font-mono)', fontSize:'.6rem', fontWeight:600, textTransform:'uppercase', letterSpacing:'.08em' }}>★ Founding Member</span>
             )}
           </div>
           {profile.headline && <p style={{ color:'var(--text-secondary)', fontSize:'1rem', marginTop:4, marginBottom:0 }}>{profile.headline}</p>}
@@ -7786,10 +7818,7 @@ export default function App() {
   if (userLoading) {
     return (
       <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', background:'var(--bg-base)' }}>
-        <div style={{ textAlign:'center' }}>
-          <div style={{ display:'inline-block', marginBottom:14 }}><LogoMark size={54} /></div>
-          <div style={{ display:'block' }}><Spinner size={20} /></div>
-        </div>
+        <LogoLoader size={84} />
       </div>
     )
   }
