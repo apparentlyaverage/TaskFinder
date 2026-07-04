@@ -90,11 +90,24 @@ router.patch('/',
     body('pinnedTaskIds').optional({ nullable: true }).isArray({ max: 6 }),
     body('featuredReviewId').optional({ nullable: true }),
     body('emailFrequency').optional().isIn(['instant', 'daily', 'off']),
+    // Avatar comes from our signed Cloudinary upload, but the field is client-set,
+    // so validate: https only (blocks javascript:/data: stored-XSS in the <img src>),
+    // real host, bounded length. Empty clears it.
+    body('avatarUrl').optional({ nullable: true }).trim()
+      .custom((value) => {
+        if (value === '' || value === null || value === undefined) return true
+        if (value.length > 600) throw new Error('Image URL is too long.')
+        if (!/^https:\/\//i.test(value)) throw new Error('Avatar must be an https image URL.')
+        let parsed
+        try { parsed = new URL(value) } catch { throw new Error('That doesn’t look like a valid image URL.') }
+        if (!parsed.hostname || !parsed.hostname.includes('.')) throw new Error('Invalid image URL.')
+        return true
+      }),
   ],
   check,
   async (req, res) => {
     const { displayName, bio, portfolioUrl, campusZone, phoneNumber,
-            headline, servicesOffered, pinnedTaskIds, featuredReviewId, emailFrequency } = req.body
+            headline, servicesOffered, pinnedTaskIds, featuredReviewId, emailFrequency, avatarUrl } = req.body
 
     // Normalise the portfolio URL: ensure a scheme so it's a working link when rendered
     let normalizedPortfolio = portfolioUrl
@@ -133,6 +146,7 @@ router.patch('/',
       if (servicesOffered !== undefined) { sets.push(`services_offered = $${i++}`); vals.push(servicesOffered) }
       if (pinnedTaskIds   !== undefined) { sets.push(`pinned_task_ids = $${i++}`); vals.push(pinnedTaskIds) }
       if (featuredReviewId!== undefined) { sets.push(`featured_review_id = $${i++}`); vals.push(featuredReviewId) }
+      if (avatarUrl       !== undefined) { sets.push(`avatar_url = $${i++}`);        vals.push(avatarUrl || null) }
 
       if (sets.length > 0) {
         sets.push(`updated_at = NOW()`)

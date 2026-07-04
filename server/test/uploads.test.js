@@ -88,4 +88,13 @@ describe('POST /uploads/signature — configured', () => {
     expect(res.status).toBe(200)
     expect(res.body.folder).toBe('relivr/businesses/_admin')
   })
+
+  it('gives ANY authenticated user an avatar signature locked to their own folder', async () => {
+    const memberToken = authToken({ userId: 'm-99', role: 'member' })
+    mockDb(pool) // no business lookup needed for avatars
+    const res = await request(app).post('/uploads/signature').set('Authorization', `Bearer ${memberToken}`)
+      .send({ scope: 'avatar' })
+    expect(res.status).toBe(200)
+    expect(res.body.folder).toBe('relivr/avatars/m-99')
+  })
 })

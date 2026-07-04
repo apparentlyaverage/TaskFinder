@@ -36,12 +36,19 @@ router.post('/signature', requireAuth, async (req, res) => {
     return res.status(503).json({ message: 'Image uploads are not configured yet.' })
   }
   try {
-    let folderId
-    if (req.userRole === 'admin') {
+    const requestedScope = req.body?.scope
+    let scope, folderId
+    if (requestedScope === 'avatar') {
+      // Personal profile photo — available to EVERY authenticated user (no
+      // business needed). Locked to the caller's own folder, derived server-side.
+      scope = 'avatars'
+      folderId = req.userId
+    } else if (req.userRole === 'admin') {
       // Admin may upload on a specific business's behalf, or to a scratch folder
       // when creating a brand-new listing that has no id yet.
       const requested = (req.body?.businessId || '').toString().trim()
       folderId = requested && SAFE_ID.test(requested) ? requested : '_admin'
+      scope = requestedScope === 'deals' ? 'deals' : 'businesses'
     } else {
       // Owners are locked to their own business — folder is derived server-side,
       // never taken from the request.
@@ -52,14 +59,13 @@ router.post('/signature', requireAuth, async (req, res) => {
         return res.status(403).json({ message: 'No business is linked to your account.' })
       }
       folderId = owned.rows[0].business_id
+      scope = requestedScope === 'deals' ? 'deals' : 'businesses'
     }
 
     const { cloudName, apiKey, apiSecret, uploadPreset } = cloudinaryConfig()
     const timestamp = Math.floor(Date.now() / 1000)
-    // Scope keeps each feature's media in its own tree. 'deals' for Campus Deals
-    // images, otherwise the business page media. Owner/admin folder isolation is
-    // unchanged — only the top-level prefix differs.
-    const scope = req.body?.scope === 'deals' ? 'deals' : 'businesses'
+    // Scope keeps each feature's media in its own tree (avatars / deals / business
+    // page media). Owner/admin folder isolation is unchanged — only the prefix differs.
     const folder = `relivr/${scope}/${folderId}`
 
     // These are exactly the params the browser must send back to Cloudinary

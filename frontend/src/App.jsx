@@ -1268,6 +1268,98 @@ function RevealObserver() {
   return null
 }
 
+// ── PWA install ──────────────────────────────────────────────────────────────
+// The browser fires `beforeinstallprompt` ONCE, early — usually before any
+// component mounts. Capture it at module load and re-broadcast so InstallAppButton
+// can offer a one-tap install whenever it renders. (Chromium/Android only; iOS
+// Safari + desktop Safari/Firefox don't fire it — those get the help modal.)
+let _installPrompt = null
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault()
+    _installPrompt = e
+    window.dispatchEvent(new Event('relivr:installable'))
+  })
+  window.addEventListener('appinstalled', () => { _installPrompt = null })
+}
+function isStandalone() {
+  return typeof window !== 'undefined' &&
+    (window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true)
+}
+
+// Per-platform "Add to Home Screen" steps, for browsers with no install prompt.
+function InstallHelpModal({ onClose }) {
+  useEffect(() => {
+    const onKey = e => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+  const Step = ({ n, children }) => (
+    <li style={{ display:'flex', gap:10, marginBottom:8, alignItems:'flex-start' }}>
+      <span style={{ flexShrink:0, width:20, height:20, borderRadius:'50%', background:'var(--accent-glow)', color:'var(--accent)', fontFamily:'var(--fm)', fontSize:'.65rem', fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center' }}>{n}</span>
+      <span style={{ fontSize:'.85rem', color:'var(--text-secondary)', lineHeight:1.5 }}>{children}</span>
+    </li>
+  )
+  return (
+    <div className="moverlay" onClick={onClose}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label="Install ReLivR" onClick={e => e.stopPropagation()}>
+        <div style={{ padding:'18px 22px 14px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div style={{ fontFamily:'var(--fd)', fontSize:'1.15rem', fontWeight:800 }}>Install ReLivR</div>
+          <button onClick={onClose} aria-label="Close" style={{ background:'none', border:'none', color:'var(--text-muted)', cursor:'pointer', fontSize:'1.1rem' }}>✕</button>
+        </div>
+        <div style={{ padding:22 }}>
+          <p style={{ fontSize:'.85rem', color:'var(--text-secondary)', lineHeight:1.5, margin:'0 0 16px' }}>
+            ReLivR installs like an app — no app store needed. Pick your device:
+          </p>
+          <div style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--accent)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:8 }}>iPhone / iPad — Safari</div>
+          <ol style={{ listStyle:'none', margin:'0 0 16px', padding:0 }}>
+            <Step n="1">Tap the <strong>Share</strong> button (the square with an ↑ arrow).</Step>
+            <Step n="2">Scroll down and tap <strong>Add to Home Screen</strong>.</Step>
+            <Step n="3">Tap <strong>Add</strong> — ReLivR appears on your home screen.</Step>
+          </ol>
+          <div style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--accent)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:8 }}>Android / Desktop — Chrome or Edge</div>
+          <ol style={{ listStyle:'none', margin:0, padding:0 }}>
+            <Step n="1">Open the browser menu (⋮), or look for the <strong>install</strong> icon in the address bar.</Step>
+            <Step n="2">Choose <strong>Install ReLivR</strong> / <strong>Add to Home screen</strong>.</Step>
+          </ol>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// A single "Download the app" button that does the right thing per browser:
+// native install where supported, else a per-platform how-to. Hides itself once
+// the app is already installed (running standalone) so the landing stays honest.
+function InstallAppButton({ variant = 'primary', style }) {
+  const [prompt, setPrompt] = useState(_installPrompt)
+  const [help, setHelp] = useState(false)
+  const [gone, setGone] = useState(isStandalone())
+  useEffect(() => {
+    const sync = () => setPrompt(_installPrompt)
+    const installed = () => setGone(true)
+    window.addEventListener('relivr:installable', sync)
+    window.addEventListener('appinstalled', installed)
+    return () => { window.removeEventListener('relivr:installable', sync); window.removeEventListener('appinstalled', installed) }
+  }, [])
+  if (gone) return null
+  async function click() {
+    if (prompt) {
+      prompt.prompt()
+      try { await prompt.userChoice } catch { /* dismissed */ }
+      _installPrompt = null; setPrompt(null)
+    } else {
+      setHelp(true)
+    }
+  }
+  return (
+    <>
+      <button className={variant === 'secondary' ? 'btn-s' : 'btn-p'} style={style} onClick={click}>⬇ Download the app</button>
+      {help && <InstallHelpModal onClose={() => setHelp(false)} />}
+    </>
+  )
+}
+
 function Hero({ onOpenAuth }) {
   return (
     <section className="hero-section" style={{ minHeight:'100vh', display:'flex', alignItems:'center', padding:'128px 24px 72px', position:'relative', overflow:'hidden' }}>
@@ -1289,6 +1381,7 @@ function Hero({ onOpenAuth }) {
             <div style={{ display:'flex', gap:12, flexWrap:'wrap', animation:'fadeUp .6s .3s ease both', opacity:0, animationFillMode:'forwards' }}>
               <button className="btn-p" style={{ fontSize:'.95rem', padding:'14px 30px' }} onClick={() => onOpenAuth('register')}>Post a Task Free →</button>
               <button className="btn-s" style={{ fontSize:'.95rem', padding:'14px 30px' }} onClick={() => onOpenAuth('register')}>Start Earning</button>
+              <InstallAppButton variant="secondary" style={{ fontSize:'.95rem', padding:'14px 30px' }} />
             </div>
             <p style={{ marginTop:20, fontSize:'.78rem', color:'var(--text-muted)', fontFamily:'var(--fm)', animation:'fadeUp .6s .4s ease both', opacity:0, animationFillMode:'forwards' }}>
               No credit card required · Free to post · Free while in beta
@@ -4270,7 +4363,7 @@ function BusinessReviews({ businessId }) {
   const [rating, setRating] = useState(5)
   const [comment, setComment] = useState('')
   const [saving, setSaving] = useState(false)
-  const load = () => fetch(`${API_BASE}/businesses/${businessId}/reviews`).then(r => r.ok ? r.json() : { reviews: [] }).then(setData).catch(() => setData({ reviews: [] }))
+  const load = () => { const tok = localStorage.getItem('rl_token'); return fetch(`${API_BASE}/businesses/${businessId}/reviews`, tok ? { headers: { Authorization: `Bearer ${tok}` } } : undefined).then(r => r.ok ? r.json() : { reviews: [] }).then(setData).catch(() => setData({ reviews: [] })) }
   useEffect(() => { load() }, [businessId]) // eslint-disable-line
   async function submit() {
     if (!token()) { toast('Sign in to leave a review', 'error'); return }
@@ -4809,7 +4902,10 @@ function SearchResults({ query, setPage, setSelectedTask, openProfile }) {
     if (!query) { setData({ users: [], businesses: [], tasks: [] }); setLoading(false); return }
     let cancelled = false
     setLoading(true); setError(null)
-    fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`)
+    // Send the token: /search is gated pre-launch, so an anonymous request 503s
+    // even for app-accessible users. At launch it works with or without one.
+    const tok = localStorage.getItem('rl_token')
+    fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`, tok ? { headers: { Authorization: `Bearer ${tok}` } } : undefined)
       .then(r => { if (!r.ok) throw new Error('Search failed'); return r.json() })
       .then(d => { if (!cancelled) { setData(d); setLoading(false) } })
       .catch(e => { if (!cancelled) { setError(e.message); setLoading(false) } })
@@ -4909,7 +5005,9 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
   useEffect(() => {
     let cancelled = false
     setLoading(true); setError(null)
-    fetch(`${API_BASE}/profile/public/${userId}`)
+    // Gated pre-launch — send the token so app-accessible users can view profiles.
+    const tok = localStorage.getItem('rl_token')
+    fetch(`${API_BASE}/profile/public/${userId}`, tok ? { headers: { Authorization: `Bearer ${tok}` } } : undefined)
       .then(r => { if (!r.ok) throw new Error('Could not load profile'); return r.json() })
       .then(d => { if (!cancelled) { setData(d); setLoading(false); setTab((d.completed?.length ? 'completed' : 'reviews')) } })
       .catch(e => { if (!cancelled) { setError(e.message); setLoading(false) } })
@@ -5106,7 +5204,51 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
 }
 
 function Profile({ openProfile }) {
-  const { user, logout } = useAuth()
+  const { user, logout, updateUser } = useAuth()
+  const [avatarBusy, setAvatarBusy] = useState(false)
+  const avatarInputRef = useRef(null)
+  const profileToken = () => localStorage.getItem('rl_token')
+
+  // Personal profile photo: browser → Cloudinary (signed, scope 'avatar') → save
+  // the URL via PATCH /profile → reflect on the user everywhere via updateUser.
+  async function handleAvatarFile(fileList) {
+    const file = Array.from(fileList || [])[0]
+    if (!file || avatarBusy) return
+    if (!UPLOAD_OK_TYPES.includes(file.type)) { toast('Use a JPG, PNG, WebP or GIF image', 'error'); return }
+    if (file.size > UPLOAD_MAX_BYTES) { toast('Image must be under 10 MB', 'error'); return }
+    setAvatarBusy(true)
+    try {
+      const sig = await fetchUploadSignature(null, 'avatar')
+      const url = await postToCloudinary(file, sig)
+      const res = await fetch(API_BASE + '/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${profileToken()}` },
+        body: JSON.stringify({ avatarUrl: url }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'Could not save your photo')
+      updateUser({ avatarUrl: url })
+      toast('Profile photo updated', 'success')
+    } catch (e) {
+      toast(e.message || 'Upload failed', 'error')
+    } finally {
+      setAvatarBusy(false)
+      if (avatarInputRef.current) avatarInputRef.current.value = ''
+    }
+  }
+  async function removeAvatar() {
+    if (avatarBusy) return
+    setAvatarBusy(true)
+    try {
+      const res = await fetch(API_BASE + '/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${profileToken()}` },
+        body: JSON.stringify({ avatarUrl: '' }),
+      })
+      if (!res.ok) throw new Error()
+      updateUser({ avatarUrl: null })
+      toast('Profile photo removed', 'success')
+    } catch { toast('Could not remove photo', 'error') } finally { setAvatarBusy(false) }
+  }
   const { state } = useStore()
   const toast = useToast()
   const [tab, setTab] = useState('profile')
@@ -5355,12 +5497,24 @@ function Profile({ openProfile }) {
       <DCard hover={false} style={{ padding:0, marginBottom:24, overflow:'hidden' }}>
         <div style={{ height:72, background:'linear-gradient(120deg, var(--accent), var(--amber2))' }} />
         <div style={{ display:'flex', alignItems:'flex-end', gap:16, flexWrap:'wrap', padding:'14px 22px 20px' }}>
-          {user.avatarUrl
-            ? <img src={user.avatarUrl} alt="" style={{ width:72, height:72, borderRadius:'50%', objectFit:'cover', border:'3px solid var(--bg-surface)', boxShadow:'var(--shadow-sm)', flexShrink:0, marginTop:-50 }} />
-            : <div style={{ width:72, height:72, borderRadius:'50%', background:'var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.6rem', color:'var(--accent)', border:'3px solid var(--bg-surface)', boxShadow:'var(--shadow-sm)', flexShrink:0, marginTop:-50 }}>{(user.displayName || user.email || '?').charAt(0).toUpperCase()}</div>}
+          {/* Avatar = tap to upload a personal photo (browser → Cloudinary → PATCH /profile) */}
+          <div style={{ position:'relative', flexShrink:0, marginTop:-50 }}>
+            <button type="button" onClick={() => { if (!avatarBusy) avatarInputRef.current?.click() }} title="Change profile photo" aria-label="Change profile photo"
+              style={{ padding:0, border:'none', background:'none', cursor:avatarBusy?'progress':'pointer', borderRadius:'50%', display:'block' }}>
+              {user.avatarUrl
+                ? <img src={user.avatarUrl} alt="" style={{ width:72, height:72, borderRadius:'50%', objectFit:'cover', border:'3px solid var(--bg-surface)', boxShadow:'var(--shadow-sm)', display:'block' }} />
+                : <div style={{ width:72, height:72, borderRadius:'50%', background:'var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.6rem', color:'var(--accent)', border:'3px solid var(--bg-surface)', boxShadow:'var(--shadow-sm)' }}>{(user.displayName || user.email || '?').charAt(0).toUpperCase()}</div>}
+              <span aria-hidden="true" style={{ position:'absolute', right:-2, bottom:-2, width:26, height:26, borderRadius:'50%', background:'var(--accent)', color:'#fff', border:'2px solid var(--bg-surface)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.8rem', boxShadow:'var(--shadow-sm)' }}>{avatarBusy ? <Spinner size={11} /> : '⛭'}</span>
+            </button>
+            <input ref={avatarInputRef} type="file" accept="image/*" onChange={(e) => handleAvatarFile(e.target.files)} style={{ display:'none' }} />
+          </div>
           <div style={{ minWidth:140, paddingBottom:4 }}>
             <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.3rem', lineHeight:1.2, letterSpacing:'-0.01em' }}>{user.displayName || user.email?.split('@')[0]}</div>
             <Mono>{user.email}</Mono>
+            <div style={{ marginTop:4, display:'flex', gap:12 }}>
+              <button type="button" onClick={() => avatarInputRef.current?.click()} disabled={avatarBusy} style={{ background:'none', border:'none', padding:0, color:'var(--accent)', fontSize:'0.72rem', fontFamily:'var(--font-mono)', cursor:'pointer' }}>{user.avatarUrl ? 'Change photo' : 'Add photo'}</button>
+              {user.avatarUrl && <button type="button" onClick={removeAvatar} disabled={avatarBusy} style={{ background:'none', border:'none', padding:0, color:'var(--text-muted)', fontSize:'0.72rem', fontFamily:'var(--font-mono)', cursor:'pointer' }}>Remove</button>}
+            </div>
           </div>
           <div style={{ marginLeft:'auto', display:'flex', gap:0, paddingBottom:2 }}>
             <div style={{ textAlign:'center', padding:'0 22px' }}>
@@ -7730,6 +7884,10 @@ export default function App() {
     userLoading,
     handleOAuthCallback,
     handleLogin,
+    // Merge-and-persist a partial update to the signed-in user (e.g. a new avatar)
+    // so every render site — top bar, profile, menus — reflects it immediately and
+    // it survives a reload via the cached rl_user.
+    updateUser: (patch) => setUser(u => { const next = { ...u, ...patch }; try { localStorage.setItem('rl_user', JSON.stringify(next)) } catch { /* ignore */ } return next }),
     // Go straight to the backend so the OAuth redirect works in production.
     // (In dev API_BASE is '' and Vite proxies /auth → localhost:3001.)
     loginWithGoogle: () => { window.location.href = API_BASE + '/auth/google' },
