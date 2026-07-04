@@ -118,7 +118,7 @@ app.use(cors({
 // CORS headers. cors() already answers OPTIONS preflight before this runs, so
 // only real GET/POST/… reach the gate; the OPTIONS check below is a harmless
 // belt-and-braces guard.
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
   if (req.method === 'OPTIONS') return next()
   if (process.env.NODE_ENV === 'test') return next()  // gate off in test env
   if (Date.now() >= LAUNCH_AT_MS) return next()
@@ -128,9 +128,22 @@ app.use((req, res, next) => {
   if (auth?.startsWith('Bearer ')) {
     try {
       const payload = jwt.verify(auth.slice(7), process.env.JWT_SECRET)
+      // Fast path: the token itself proves bypass.
       if (PRE_LAUNCH_ROLES.includes(payload.role)) return next()
       if (payload.email?.toLowerCase().endsWith(TEST_EMAIL_DOMAIN)) return next()
-    } catch { /* fall through — invalid token → blocked */ }
+      // Slow path: the JWT `role`/`email` claims are baked in at issue time and
+      // go STALE. A user promoted to admin (or upgraded to business) after their
+      // 7-day token was minted still carries the old role, so the fast path 503s
+      // them — even though /auth/me (which the client uses to unlock the app)
+      // reports the new role from the DB. Fall back to current DB truth so the
+      // gate and the client agree. Only runs for authenticated, non-bypass tokens
+      // during the pre-launch window; disappears entirely at launch.
+      if (payload.userId) {
+        const { rows } = await pool.query('SELECT role, email FROM users WHERE user_id = $1', [payload.userId])
+        const u = rows[0]
+        if (u && (PRE_LAUNCH_ROLES.includes(u.role) || u.email?.toLowerCase().endsWith(TEST_EMAIL_DOMAIN))) return next()
+      }
+    } catch { /* invalid token or DB error → fail closed (blocked) */ }
   }
   res.status(503).json({ message: 'ReLivR launches on 7 July 2026. The app will open automatically.' })
 })
