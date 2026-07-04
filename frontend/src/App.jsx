@@ -373,38 +373,44 @@ function Spinner({ size = 14 }) {
 
 // The brand mark: a seedling — two leaves on one stem (the poster and the
 // earner, one campus economy). Mirrors /logo.svg; keep the two in sync.
-// Leaf paths are drawn base-at-origin so `animate` can grow each leaf from its
-// stem (SMIL — scales around the local origin, loops natively, and is simply
-// not rendered when the user prefers reduced motion).
-const LEAF_PATH = `M0,0 C-44,-12 -64,-52 -63,-102 C-62,-168 -28,-220 0,-242 C28,-220 62,-168 63,-102 C64,-52 44,-12 0,0 Z
-  M-2,-14 C-7,-72 -5,-152 2,-224 L7,-215 C2,-152 1,-74 4,-14 Z
-  M-2,-84 L-32,-110 L-29,-115 L-1,-92 Z
-  M2,-140 L28,-166 L25,-171 L1,-148 Z`
+// Mirrors the owner's reference mark: two plump leaves, a single curved vein
+// slit each, the ink leaf's base sweeping into a tail that hooks under the
+// orchid leaf. Leaf paths are base-at-origin so `animate` can spring each leaf
+// from its base (SMIL — scales around the local origin, loops natively, and is
+// simply not rendered when the user prefers reduced motion).
+const LEAF_PATH = `M0,0 C-50,-34 -72,-84 -71,-124 C-70,-186 -38,-226 0,-246 C38,-226 70,-186 71,-124 C72,-84 50,-34 0,0 Z
+  M-2,-26 C-14,-78 -12,-158 2,-214 L8,-206 C-3,-156 -4,-84 5,-26 Z`
+const TAIL_PATH = 'M264,316 C258,354 238,380 182,396 C224,368 246,344 252,312 Z'
 function LogoMark({ size = 30, animate = false }) {
   const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
   const anim = animate && !reduced
-  const DUR = '2.2s'
   const leafAnim = (delayFrac) => (
-    <animateTransform attributeName="transform" type="scale" additive="sum" dur={DUR} repeatCount="indefinite"
-      values="0.001;0.001;1.09;1;1;0.001"
+    <animateTransform attributeName="transform" type="scale" additive="sum" dur="2.2s" repeatCount="indefinite"
+      values="0.001;0.001;1.08;1;1;0.001"
       keyTimes={`0;${delayFrac};${delayFrac + 0.16};${delayFrac + 0.24};0.87;1`}
       calcMode="spline"
       keySplines="0.4,0,0.2,1; 0.22,0.9,0.36,1; 0.4,0,0.2,1; 0.4,0,0.2,1; 0.4,0,0.6,1" />
   )
-  const stemAnim = (
-    <animate attributeName="stroke-dashoffset" dur={DUR} repeatCount="indefinite"
-      values="100;0;0;100" keyTimes="0;0.22;0.87;1" calcMode="spline" keySplines="0.4,0,0.2,1; 0.4,0,0.2,1; 0.4,0,0.6,1" />
-  )
-  const stemProps = anim ? { pathLength: 100, strokeDasharray: 100, strokeDashoffset: 100 } : {}
   return (
-    <svg width={size} height={size} viewBox="55 85 400 380" aria-hidden="true" style={{ flexShrink:0, display:'block' }}>
-      <path d="M256,452 C252,406 234,366 202,334" fill="none" stroke="var(--black, #131118)" strokeWidth="14" strokeLinecap="round" {...stemProps}>{anim && stemAnim}</path>
-      <path d="M256,452 C260,402 282,358 316,322" fill="none" stroke="var(--black, #131118)" strokeWidth="14" strokeLinecap="round" {...stemProps}>{anim && stemAnim}</path>
-      <g transform="translate(200 336) rotate(-32) scale(0.78)">
-        <g>{anim && leafAnim(0.16)}<path fill="#c084fc" fillRule="evenodd" d={LEAF_PATH} /></g>
+    <svg width={size} height={size} viewBox="104 90 308 318" aria-hidden="true" style={{ flexShrink:0, display:'block' }}>
+      {/* ink leaf + its tail spring together around the joint (262,322) */}
+      <g transform="translate(262 322)">
+        <g>
+          {anim && leafAnim(0.06)}
+          <g transform="rotate(29)">
+            <path fill="var(--black, #131118)" fillRule="evenodd" d={LEAF_PATH} />
+          </g>
+          <g transform="translate(-262 -322)"><path fill="var(--black, #131118)" d={TAIL_PATH} /></g>
+        </g>
       </g>
-      <g transform="translate(314 324) rotate(28)">
-        <g>{anim && leafAnim(0.26)}<path fill="var(--black, #131118)" fillRule="evenodd" d={LEAF_PATH} /></g>
+      {/* orchid leaf springs from its own base, a beat later */}
+      <g transform="translate(222 292)">
+        <g>
+          {anim && leafAnim(0.22)}
+          <g transform="rotate(-29) scale(0.78)">
+            <path fill="#c084fc" fillRule="evenodd" d={LEAF_PATH} />
+          </g>
+        </g>
       </g>
     </svg>
   )

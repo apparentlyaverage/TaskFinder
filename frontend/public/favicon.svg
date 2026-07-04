@@ -1,21 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- ReLivR seedling mark (see logo.svg). Scaled up to fill the tab icon. -->
-  <g transform="translate(256 270) scale(1.24) translate(-250 -272)">
-    <path d="M256,452 C252,406 234,366 202,334" fill="none" stroke="#131118" stroke-width="14" stroke-linecap="round"/>
-    <path d="M256,452 C260,402 282,358 316,322" fill="none" stroke="#131118" stroke-width="14" stroke-linecap="round"/>
-    <g transform="translate(200 336) rotate(-32) scale(0.78)">
+  <!-- ReLivR two-leaf mark (see logo.svg). Scaled up to fill the tab icon. -->
+  <g transform="translate(256 256) scale(1.5) translate(-258 -248)">
+    <g transform="translate(222 292) rotate(-29) scale(0.78)">
       <path fill="#c084fc" fill-rule="evenodd" d="
-        M0,0 C-44,-12 -64,-52 -63,-102 C-62,-168 -28,-220 0,-242 C28,-220 62,-168 63,-102 C64,-52 44,-12 0,0 Z
-        M-2,-14 C-7,-72 -5,-152 2,-224 L7,-215 C2,-152 1,-74 4,-14 Z
-        M-2,-84 L-32,-110 L-29,-115 L-1,-92 Z
-        M2,-140 L28,-166 L25,-171 L1,-148 Z" />
+        M0,0 C-50,-34 -72,-84 -71,-124 C-70,-186 -38,-226 0,-246 C38,-226 70,-186 71,-124 C72,-84 50,-34 0,0 Z
+        M-2,-26 C-14,-78 -12,-158 2,-214 L8,-206 C-3,-156 -4,-84 5,-26 Z" />
     </g>
-    <g transform="translate(314 324) rotate(28)">
+    <g transform="translate(262 322) rotate(29)">
       <path fill="#131118" fill-rule="evenodd" d="
-        M0,0 C-44,-12 -64,-52 -63,-102 C-62,-168 -28,-220 0,-242 C28,-220 62,-168 63,-102 C64,-52 44,-12 0,0 Z
-        M-2,-14 C-7,-72 -5,-152 2,-224 L7,-215 C2,-152 1,-74 4,-14 Z
-        M-2,-84 L-32,-110 L-29,-115 L-1,-92 Z
-        M2,-140 L28,-166 L25,-171 L1,-148 Z" />
+        M0,0 C-50,-34 -72,-84 -71,-124 C-70,-186 -38,-226 0,-246 C38,-226 70,-186 71,-124 C72,-84 50,-34 0,0 Z
+        M-2,-26 C-14,-78 -12,-158 2,-214 L8,-206 C-3,-156 -4,-84 5,-26 Z" />
     </g>
+    <path fill="#131118" d="M264,316 C258,354 238,380 182,396 C224,368 246,344 252,312 Z" />
   </g>
 </svg>
