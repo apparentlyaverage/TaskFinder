@@ -196,15 +196,26 @@ router.post('/locations',
   }
 )
 
-// PATCH /admin/locations/:id — rename or (de)activate.
+// PATCH /admin/locations/:id — rename, (de)activate, or set/refine its
+// centroid (A5: some zones only have placeholder coordinates — see
+// db/init/52_geolocation.sql — this is how an admin corrects them without a
+// redeploy, same self-serve pattern as adding a location).
 router.patch('/locations/:id',
-  [param('id').isUUID(), body('name').optional().trim().isLength({ min: 1, max: 120 }), body('isActive').optional().isBoolean()],
+  [
+    param('id').isUUID(),
+    body('name').optional().trim().isLength({ min: 1, max: 120 }),
+    body('isActive').optional().isBoolean(),
+    body('latitude').optional({ nullable: true }).isFloat({ min: -90, max: 90 }),
+    body('longitude').optional({ nullable: true }).isFloat({ min: -180, max: 180 }),
+  ],
   check,
   async (req, res) => {
-    const { name, isActive } = req.body
+    const { name, isActive, latitude, longitude } = req.body
     const sets = []; const vals = [req.params.id]; let i = 2
-    if (name !== undefined)     { sets.push(`name = $${i++}`); vals.push(name) }
-    if (isActive !== undefined) { sets.push(`is_active = $${i++}`); vals.push(isActive) }
+    if (name !== undefined)      { sets.push(`name = $${i++}`); vals.push(name) }
+    if (isActive !== undefined)  { sets.push(`is_active = $${i++}`); vals.push(isActive) }
+    if (latitude !== undefined)  { sets.push(`latitude = $${i++}`); vals.push(latitude) }
+    if (longitude !== undefined) { sets.push(`longitude = $${i++}`); vals.push(longitude) }
     if (sets.length === 0) return res.status(400).json({ message: 'Nothing to update.' })
     try {
       const { rows } = await pool.query(

@@ -14,6 +14,7 @@ import log from '../log.js'
 import { requireAuth } from '../middleware.js'
 import { createNotification } from '../notify.js'
 import { rejectIfProfane } from '../profanity.js'
+import { validateLocationName, resolveLocationId } from '../locationValidate.js'
 
 const router = Router()
 
@@ -118,15 +119,17 @@ router.get('/',
         where += ` AND category = $${params.length}`
       }
       const { rows } = await pool.query(
-        `SELECT business_id, name, category, description, address, map_hint,
+        `SELECT businesses.business_id, businesses.name, category, description, address, map_hint,
                 phone, whatsapp, email, hours, image_urls, logo_url, cover_image_url,
-                link_url, public_code, created_at,
+                link_url, public_code, businesses.created_at,
                 (boosted_until IS NOT NULL AND boosted_until > NOW()) AS boosted,
                 (SELECT ROUND(AVG(rating)::numeric,1) FROM business_reviews br WHERE br.business_id = businesses.business_id) AS avg_rating,
-                (SELECT COUNT(*)::int FROM business_reviews br WHERE br.business_id = businesses.business_id) AS rating_count
+                (SELECT COUNT(*)::int FROM business_reviews br WHERE br.business_id = businesses.business_id) AS rating_count,
+                l.name AS campus_zone, l.latitude, l.longitude
          FROM businesses
+         LEFT JOIN locations l ON l.location_id = businesses.location_id
          WHERE ${where}
-         ORDER BY (boosted_until IS NOT NULL AND boosted_until > NOW()) DESC, created_at DESC`, params)
+         ORDER BY (boosted_until IS NOT NULL AND boosted_until > NOW()) DESC, businesses.created_at DESC`, params)
       return res.status(200).json({ businesses: rows })
     } catch (err) {
       log.error('GET /businesses', { reqId: req.id, msg: err.message })
@@ -175,12 +178,15 @@ router.get('/admin/all', requireAuth, requireAdmin, async (req, res) => {
 router.get('/mine', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT *,
+      `SELECT businesses.*,
               (boosted_until IS NOT NULL AND boosted_until > NOW()) AS boosted,
               (SELECT ROUND(AVG(rating)::numeric,1) FROM business_reviews br WHERE br.business_id = businesses.business_id) AS avg_rating,
               (SELECT COUNT(*)::int FROM business_reviews br WHERE br.business_id = businesses.business_id) AS rating_count,
-              (SELECT COUNT(*)::int FROM follows WHERE target_type = 'business' AND target_id = businesses.business_id) AS follower_count
-         FROM businesses WHERE owner_id = $1 ORDER BY created_at ASC LIMIT 1`,
+              (SELECT COUNT(*)::int FROM follows WHERE target_type = 'business' AND target_id = businesses.business_id) AS follower_count,
+              l.name AS campus_zone
+         FROM businesses
+         LEFT JOIN locations l ON l.location_id = businesses.location_id
+        WHERE owner_id = $1 ORDER BY businesses.created_at ASC LIMIT 1`,
       [req.userId])
     if (rows.length === 0) {
       return res.status(404).json({ message: 'No business is linked to your account yet.' })
@@ -207,6 +213,9 @@ router.patch('/mine',
     body('email').optional({ nullable: true }).trim().isLength({ max: 160 }),
     body('hours').optional({ nullable: true }).trim().isLength({ max: 200 }),
     body('tagline').optional({ nullable: true }).trim().isLength({ max: 200 }),
+    // A5: which zone the business is in, so Local can sort by proximity.
+    // Empty string clears it; fail-open on a DB hiccup (see validateLocationName).
+    body('campusZone').optional({ nullable: true }).trim().custom(validateLocationName),
   ],
   check,
   async (req, res) => {
@@ -234,13 +243,22 @@ router.patch('/mine',
       if (req.body.imageUrls !== undefined) { sets.push(`image_urls = $${i++}`); vals.push(cleanImageUrls(req.body.imageUrls)) }
       const socials = cleanSocials(req.body.socials)
       if (socials !== undefined) { sets.push(`socials = $${i++}`); vals.push(JSON.stringify(socials)) }
+      if (req.body.campusZone !== undefined) {
+        sets.push(`location_id = $${i++}`)
+        vals.push(req.body.campusZone ? await resolveLocationId(req.body.campusZone) : null)
+      }
 
       if (sets.length === 0) return res.status(400).json({ message: 'Nothing to update.' })
       sets.push(`updated_at = NOW()`)
       vals.push(businessId)
 
+      await pool.query(`UPDATE businesses SET ${sets.join(', ')} WHERE business_id = $${i}`, vals)
+      // Re-select with the zone name joined in, so the response (and the
+      // owner's live preview) reflects campus_zone the same way every other read does.
       const { rows } = await pool.query(
-        `UPDATE businesses SET ${sets.join(', ')} WHERE business_id = $${i} RETURNING *`, vals)
+        `SELECT businesses.*, l.name AS campus_zone
+           FROM businesses LEFT JOIN locations l ON l.location_id = businesses.location_id
+          WHERE businesses.business_id = $1`, [businessId])
       return res.status(200).json({ business: rows[0] })
     } catch (err) {
       if (/URL|link|image|array|colour|social/i.test(err.message)) return res.status(422).json({ message: err.message })
@@ -499,13 +517,16 @@ router.get('/:id',
   async (req, res) => {
     try {
       const { rows } = await pool.query(
-        `SELECT business_id, name, category, description, address, map_hint,
+        `SELECT businesses.business_id, businesses.name, category, description, address, map_hint,
                 phone, whatsapp, email, hours, image_urls, logo_url, cover_image_url,
-                link_url, status, public_code, created_at,
+                link_url, status, public_code, businesses.created_at,
                 (boosted_until IS NOT NULL AND boosted_until > NOW()) AS boosted,
                 (SELECT ROUND(AVG(rating)::numeric,1) FROM business_reviews br WHERE br.business_id = businesses.business_id) AS avg_rating,
-                (SELECT COUNT(*)::int FROM business_reviews br WHERE br.business_id = businesses.business_id) AS rating_count
-         FROM businesses WHERE business_id = $1`, [req.params.id])
+                (SELECT COUNT(*)::int FROM business_reviews br WHERE br.business_id = businesses.business_id) AS rating_count,
+                l.name AS campus_zone, l.latitude, l.longitude
+         FROM businesses
+         LEFT JOIN locations l ON l.location_id = businesses.location_id
+         WHERE businesses.business_id = $1`, [req.params.id])
       if (rows.length === 0) return res.status(404).json({ message: 'Business not found.' })
       // Only expose active ones publicly (admins use /admin/all for the rest)
       if (rows[0].status !== 'active') return res.status(404).json({ message: 'Business not found.' })
@@ -535,6 +556,7 @@ router.post('/',
     body('feePaid').optional({ nullable: true }).isFloat({ min: 0 }),
     body('signedByRep').optional({ nullable: true }).trim().isLength({ max: 120 }),
     body('notes').optional({ nullable: true }).trim().isLength({ max: 2000 }),
+    body('campusZone').optional({ nullable: true }).trim().custom(validateLocationName),
   ],
   check,
   async (req, res) => {
@@ -542,20 +564,21 @@ router.post('/',
       const linkUrl = cleanUrl(req.body.linkUrl)
       const logoUrl = cleanUrl(req.body.logoUrl)
       const imageUrls = cleanImageUrls(req.body.imageUrls) || []
+      const locationId = req.body.campusZone ? await resolveLocationId(req.body.campusZone) : null
       const b = req.body
       const { rows } = await pool.query(
         `INSERT INTO businesses
            (name, category, description, address, map_hint, phone, whatsapp, email,
             hours, image_urls, logo_url, link_url, status, fee_paid, paid_at,
-            signed_by_rep, notes, public_code)
+            signed_by_rep, notes, public_code, location_id)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::numeric,
                  CASE WHEN $14::numeric IS NOT NULL THEN NOW() ELSE NULL END,$15,$16,
-                 upper(substr(replace(gen_random_uuid()::text,'-',''),1,8)))
+                 upper(substr(replace(gen_random_uuid()::text,'-',''),1,8)),$17)
          RETURNING *`,
         [b.name, b.category, b.description || null, b.address || null, b.mapHint || null,
          b.phone || null, b.whatsapp || null, b.email || null, b.hours || null,
          imageUrls, logoUrl, linkUrl, b.status || 'pending', b.feePaid ?? null,
-         b.signedByRep || null, b.notes || null])
+         b.signedByRep || null, b.notes || null, locationId])
       return res.status(201).json({ business: rows[0] })
     } catch (err) {
       if (/URL|link|image|array/i.test(err.message)) return res.status(422).json({ message: err.message })
@@ -584,6 +607,7 @@ router.patch('/:id',
     body('feePaid').optional({ nullable: true }).isFloat({ min: 0 }),
     body('signedByRep').optional({ nullable: true }).trim().isLength({ max: 120 }),
     body('notes').optional({ nullable: true }).trim().isLength({ max: 2000 }),
+    body('campusZone').optional({ nullable: true }).trim().custom(validateLocationName),
   ],
   check,
   async (req, res) => {
@@ -604,6 +628,10 @@ router.patch('/:id',
       if (req.body.linkUrl  !== undefined) { sets.push(`link_url = $${i++}`); vals.push(cleanUrl(req.body.linkUrl)) }
       if (req.body.logoUrl  !== undefined) { sets.push(`logo_url = $${i++}`); vals.push(cleanUrl(req.body.logoUrl)) }
       if (req.body.imageUrls!== undefined) { sets.push(`image_urls = $${i++}`); vals.push(cleanImageUrls(req.body.imageUrls)) }
+      if (req.body.campusZone !== undefined) {
+        sets.push(`location_id = $${i++}`)
+        vals.push(req.body.campusZone ? await resolveLocationId(req.body.campusZone) : null)
+      }
       // when flipping to active and no paid_at yet, stamp it
       if (req.body.status === 'active') sets.push(`paid_at = COALESCE(paid_at, NOW())`)
 

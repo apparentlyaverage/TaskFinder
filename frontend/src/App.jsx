@@ -2017,7 +2017,7 @@ function PrivacyPage({ onNav }) {
     <SidebarPage title="Privacy Policy" subtitle="Legal" sections={sections} onNav={onNav}>
       <p style={{ color:'var(--text-muted)', fontFamily:'var(--fm)', fontSize:'.62rem', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:24 }}>Last updated: 28 June 2026</p>
       <div id="intro"><h2>1. Introduction</h2><p>ReLivR is committed to protecting your personal information and processes it in accordance with the Protection of Personal Information Act 4 of 2013 (POPIA) and other applicable South African law. This policy explains what we collect, how we use it, who we share it with, and your rights.</p></div>
-      <div id="collect"><h2>2. What We Collect</h2><ul><li>Identity and profile information — your name, display name, profile photo, headline, skills, and any bio or services you add</li><li>Contact information — email address, phone number, and physical or campus address</li><li>Account information — login credentials and preferences</li><li>Payment and transaction information — once payments are enabled</li><li>Location — your campus or area, to help facilitate tasks</li><li>Communications — messages with other users and with support</li><li>Technical and device information — IP address, device/browser type, a hashed identifier derived from your browser (used to detect new sign-ins), cookies, local storage and usage data</li><li>Content you create — tasks, bids, reviews and ratings, and (for businesses) listings and deal posts</li><li>Social and activity information — the users and businesses you follow and the deals you redeem</li></ul><p>Some information (name, email, password) is required to use the Platform; other information is optional.</p></div>
+      <div id="collect"><h2>2. What We Collect</h2><ul><li>Identity and profile information — your name, display name, profile photo, headline, skills, and any bio or services you add</li><li>Contact information — email address, phone number, and physical or campus address</li><li>Account information — login credentials and preferences</li><li>Payment and transaction information — once payments are enabled</li><li>Location — your campus or area (which you choose from a list) helps facilitate tasks. Separately, if you tap "Sort by distance" on Browse Tasks or Local, your browser asks your device for its current position and uses it — on your device only — to sort results by proximity. That coordinate is never sent to or stored on our servers; it exists only in your browser for that browsing session.</li><li>Communications — messages with other users and with support</li><li>Technical and device information — IP address, device/browser type, a hashed identifier derived from your browser (used to detect new sign-ins), cookies, local storage and usage data</li><li>Content you create — tasks, bids, reviews and ratings, and (for businesses) listings and deal posts</li><li>Social and activity information — the users and businesses you follow and the deals you redeem</li></ul><p>Some information (name, email, password) is required to use the Platform; other information is optional.</p></div>
       <div id="lawful"><h2>3. Lawful Basis for Processing</h2><p>We process personal information where you have consented, where it is necessary to perform our contract with you, to comply with a legal obligation, to protect a legitimate interest, or as otherwise permitted by law — consistent with POPIA's eight conditions for lawful processing.</p></div>
       <div id="use"><h2>4. How We Use It</h2><p>We use your information to create and manage accounts, match users with taskers, process payments, facilitate communication, verify identity and prevent fraud, provide support, improve and secure the Platform, comply with legal obligations, and send service-related notifications. <strong style={{color:'#3b3548'}}>We do not sell your personal information.</strong></p></div>
       <div id="share"><h2>5. Who We Share With</h2><p>We share personal information only as needed to operate the Platform:</p><ul><li>Payment processors (e.g. Paystack), once payments are enabled</li><li>Cloud hosting and database providers (e.g. Railway, Vercel, Neon)</li><li>Image-hosting providers for photos you upload (e.g. Cloudinary)</li><li>Authentication and email providers (e.g. Google / Gmail, and email-delivery services)</li><li>Analytics providers that help us improve the Platform</li><li>Other users and businesses when you interact — for example, your display name is shared with the other party when you post a task, bid, message or leave a review; and when you redeem a business's deal, your name is shared with that business. Your public profile and reviews are visible to other users.</li><li>Law enforcement or regulators where required by law</li></ul></div>
@@ -2675,6 +2675,8 @@ function TaskBrowse({ setPage, setSelectedTask }) {
   const [loading, setLoading] = useState(true)
   const [offline, setOffline] = useState(false)
   const token = () => localStorage.getItem('rl_token')
+  const zoneCoords = useZoneCoords()
+  const [myLoc, setMyLoc] = useState(null) // {lat,lng} for this browse session only, or null
 
   // Load open tasks from the database (shared across all accounts)
   async function loadTasks() {
@@ -2708,9 +2710,18 @@ function TaskBrowse({ setPage, setSelectedTask }) {
     return state.bids.filter(b=>b.task_id===taskId && b.status!=='withdrawn').length
   }
 
+  // Distance from `myLoc` to a task's zone centroid — undefined when either
+  // side of the comparison is unknown (no consent yet, or the task has no zone).
+  const taskDistance = (t) => {
+    if (!myLoc || !t.campus_zone || !zoneCoords[t.campus_zone]) return undefined
+    const z = zoneCoords[t.campus_zone]
+    return distanceKm(myLoc.lat, myLoc.lng, z.lat, z.lng)
+  }
+
   const filtered = tasks
     .filter(t => (status==='all'||t.status===status) && (!cat || categoryFor(t).name===cat) && (!skill||(t.skill_tags||[]).some(s=>s.toLowerCase().includes(skill.toLowerCase()))||t.title.toLowerCase().includes(skill.toLowerCase())))
     .sort((a,b) => {
+      if (sort==='distance') { const da = taskDistance(a), db = taskDistance(b); if (da==null&&db==null) return 0; if (da==null) return 1; if (db==null) return -1; return da-db }
       if (sort==='newest')    return new Date(b.created_at)-new Date(a.created_at)
       if (sort==='budget-hi') return parseFloat(b.budget)-parseFloat(a.budget)
       if (sort==='budget-lo') return parseFloat(a.budget)-parseFloat(b.budget)
@@ -2757,17 +2768,22 @@ function TaskBrowse({ setPage, setSelectedTask }) {
         </SelectField>
         <SelectField value={sort} onChange={e => setSort(e.target.value)} style={{ minWidth:160 }}>
           <option value="newest">Newest First</option>
+          {myLoc && <option value="distance">Nearest First</option>}
           <option value="budget-hi">Budget: High → Low</option>
           <option value="budget-lo">Budget: Low → High</option>
           <option value="deadline">Deadline: Soonest</option>
         </SelectField>
-          {filtersActive && <Btn variant="ghost" size="sm" onClick={() => { setSkill(''); setCat(null); setStatus('all'); setSort('newest') }}>✕ Clear</Btn>}
+          <NearMeToggle active={!!myLoc}
+            onLocated={loc => { setMyLoc(loc); setSort('distance') }}
+            onCleared={() => { setMyLoc(null); if (sort==='distance') setSort('newest') }} />
+          {filtersActive && <Btn variant="ghost" size="sm" onClick={() => { setSkill(''); setCat(null); setStatus('all'); setSort('newest'); setMyLoc(null) }}>✕ Clear</Btn>}
         </div>
       </div>
       {loading && <div style={{ padding:40, textAlign:'center' }}><Spinner /></div>}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(310px,1fr))', gap:14 }}>
         {!loading && filtered.map(task => {
           const c = categoryFor(task)   // category drives the card's colour + label (no cover image)
+          const dist = taskDistance(task)
           return (
           <DCard key={task.task_id} onClick={() => { setSelectedTask(task.task_id); setPage('task-detail') }} style={{ padding:0, overflow:'hidden', borderLeft:`4px solid ${c.g[1]}` }}>
             <div style={{ padding:'14px 16px 16px' }}>
@@ -2778,7 +2794,7 @@ function TaskBrowse({ setPage, setSelectedTask }) {
                 <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.05rem' }}>R{task.budget}</span>
               </div>
               <h2 style={{ fontFamily:'var(--font-display)', fontSize:'1.05rem', fontWeight:700, marginBottom:6, lineHeight:1.3 }}>{task.title}</h2>
-              <Mono style={{ display:'block', marginBottom:10 }}>📍 {task.campus_zone || 'Rhodes Campus'} · {timeAgo(task.created_at)}{task.expected_duration ? ` · ⏱ ${task.expected_duration}` : ''}</Mono>
+              <Mono style={{ display:'block', marginBottom:10 }}>📍 {task.campus_zone || 'Rhodes Campus'}{dist!=null?` · ${dist<1?Math.round(dist*1000)+'m':dist.toFixed(1)+'km'} away`:''} · {timeAgo(task.created_at)}{task.expected_duration ? ` · ⏱ ${task.expected_duration}` : ''}</Mono>
               <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:12 }}>{task.skill_tags.slice(0,3).map(t => <Tag key={t}>{t}</Tag>)}</div>
               <Divider style={{ marginBottom:10 }} />
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
@@ -3414,9 +3430,11 @@ function TaskNew({ setPage, setSelectedTask }) {
   const [duration, setDuration]   = useState('')
   const [bidsClose, setBidsClose] = useState('')
   const [tags, setTags]     = useState('')
+  const [zone, setZone]     = useState('') // A5: lets Browse Tasks sort this by proximity
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
   const [createdId, setCreatedId] = useState(null)
+  const zones = useLocations()
   const STEPS = ['Details','Budget & Date','Skills','Review']
 
   function validateStep() {
@@ -3445,6 +3463,7 @@ function TaskNew({ setPage, setSelectedTask }) {
           skill_tags: skillTags,
           expected_duration: duration || null,
           bids_close_at: bidsClose ? new Date(bidsClose).toISOString() : null,
+          campus_zone: zone || null,
         }),
       })
       if (!res.ok) {
@@ -3494,6 +3513,10 @@ function TaskNew({ setPage, setSelectedTask }) {
         {step===0&&<div style={{ display:'flex', flexDirection:'column', gap:18 }}>
           <Input label="Task Title" placeholder="e.g. Build a REST API for my startup" value={title} onChange={e=>{setTitle(e.target.value);setErrors(v=>({...v,title:null}))}} error={errors.title} />
           <Textarea label="Description" placeholder="Describe what you need done in detail." value={desc} onChange={e=>{setDesc(e.target.value);setErrors(v=>({...v,desc:null}))}} style={{ minHeight:160 }} error={errors.desc} />
+          <SelectField label="Location (optional — lets earners sort by distance)" value={zone} onChange={e=>setZone(e.target.value)}>
+            <option value="">Not specified</option>
+            {zones.map(z => <option key={z} value={z}>{z}</option>)}
+          </SelectField>
         </div>}
         {step===1&&<div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:18 }}>
           <Input label="Budget (R)" type="number" min="1" placeholder="e.g. 500" value={budget} onChange={e=>{setBudget(e.target.value);setErrors(v=>({...v,budget:null}))}} error={errors.budget} />
@@ -3507,7 +3530,7 @@ function TaskNew({ setPage, setSelectedTask }) {
         {step===2&&<Input label="Skill Tags (comma separated)" placeholder="e.g. react, node.js, postgres" value={tags} onChange={e=>{setTags(e.target.value);setErrors(v=>({...v,tags:null}))}} hint="Used to automatically match and notify earners" error={errors.tags} />}
         {step===3&&<div style={{ display:'flex', flexDirection:'column', gap:16 }}>
           <Mono style={{ display:'block', marginBottom:4 }}>Review your task</Mono>
-          {[['Title',title],['Budget',`R${budget}`],['Deadline',deadline?new Date(deadline).toLocaleDateString():'—'],['Skills',tags||'—']].map(([k,v]) => (
+          {[['Title',title],['Budget',`R${budget}`],['Deadline',deadline?new Date(deadline).toLocaleDateString():'—'],['Location',zone||'Not specified'],['Skills',tags||'—']].map(([k,v]) => (
             <div key={k} style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid var(--border)' }}>
               <Mono>{k}</Mono><span style={{ fontSize:'0.875rem', color:'var(--text-primary)', maxWidth:320, textAlign:'right' }}>{v}</span>
             </div>
@@ -4148,6 +4171,83 @@ function useLocations() {
   return zones
 }
 
+// ─── A5: PROXIMITY (browser-side only) ─────────────────────────────────────────
+// Design: the user's device coordinates NEVER leave the browser. We fetch the
+// PUBLIC zone centroids from /locations (non-PII — same data campus pickers
+// already expose), then compare them against the device's coarse position
+// entirely client-side. Nothing about "where is this specific user" is ever
+// sent to or stored on our server — the strongest reading of the brief's
+// "ask consent, store coarse not precise, allow opt-out" requirement is to
+// store nothing at all.
+
+// { "West Campus": {lat,lng}, ... } — built once per Browse session from the
+// same /locations payload useLocations() already fetches.
+function useZoneCoords() {
+  const [coords, setCoords] = useState({})
+  useEffect(() => {
+    let alive = true
+    fetch(API_BASE + '/locations')
+      .then(r => (r.ok ? r.json() : Promise.reject()))
+      .then(data => {
+        const map = {}
+        for (const c of data.campuses || []) {
+          for (const z of c.zones || []) {
+            if (z.latitude != null && z.longitude != null) map[z.name] = { lat: +z.latitude, lng: +z.longitude }
+          }
+        }
+        if (alive) setCoords(map)
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+  return coords
+}
+
+// Haversine great-circle distance in km.
+function distanceKm(lat1, lng1, lat2, lng2) {
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+// Explicit-consent geolocation: only ever called from a direct button click
+// (never on mount/automatically). Rounds to ~100m so we work with the same
+// "coarse" precision philosophy even before the coordinate is thrown away —
+// it lives only in React state for this browsing session, never persisted.
+function requestCoarseLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) { reject(new Error('Location isn’t available in this browser.')); return }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: Math.round(pos.coords.latitude * 1000) / 1000, lng: Math.round(pos.coords.longitude * 1000) / 1000 }),
+      () => reject(new Error('Location access denied — showing all results instead.')),
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+    )
+  })
+}
+
+// Small reusable "📍 Near me" toggle: requests location on first click, flips
+// off on a second click. Shared by Browse Tasks and Local so the affordance
+// (and its honest microcopy) looks identical everywhere it appears.
+function NearMeToggle({ active, onLocated, onCleared }) {
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  async function click() {
+    if (active) { onCleared(); return }
+    setBusy(true)
+    try { onLocated(await requestCoarseLocation()) }
+    catch (e) { toast(e.message, 'error') }
+    finally { setBusy(false) }
+  }
+  return (
+    <button onClick={click} disabled={busy} title="Uses your device location for this browse session only — never sent to our servers or stored."
+      style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:100, fontSize:'.82rem', fontWeight:600, whiteSpace:'nowrap', cursor:busy?'progress':'pointer', border:`1px solid ${active?'var(--accent)':'var(--border)'}`, background:active?'var(--accent)':'var(--bg-surface)', color:active?'#fff':'var(--text-secondary)' }}>
+      📍 {busy ? 'Locating…' : active ? 'Near me' : 'Sort by distance'}
+    </button>
+  )
+}
+
 // Small image gallery used on business cards/detail
 // ─── SOCIAL GRAPH ──────────────────────────────────────────────────────────────
 // Follow/unfollow a user or business. Shows follower count + the viewer's state.
@@ -4286,7 +4386,7 @@ function bizPhotos(b) {
 
 // A business tile in the Local directory grid (Instagram-explore style): a large
 // cover image with a "multiple photos" badge, then a mini avatar + name + category.
-function BizGridTile({ b, onOpen }) {
+function BizGridTile({ b, onOpen, distanceKm: dist }) {
   const photos = bizPhotos(b)
   const cover = photos[0] || null
   const initial = (b.name || '?').trim().charAt(0).toUpperCase()
@@ -4298,6 +4398,7 @@ function BizGridTile({ b, onOpen }) {
           : <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--text-muted)', fontSize:'2.4rem', fontFamily:'var(--font-display)' }}>{initial}</div>}
         {photos.length > 1 && <div style={{ position:'absolute', top:8, right:8, background:'rgba(0,0,0,.58)', color:'#fff', borderRadius:8, padding:'2px 8px', fontSize:'.7rem', fontWeight:600, fontFamily:'var(--font-mono)' }}>▦ {photos.length}</div>}
         {b.boosted && <div style={{ position:'absolute', top:8, left:8, background:'var(--accent)', color:'#fff', borderRadius:8, padding:'2px 8px', fontSize:'.62rem', fontWeight:700, letterSpacing:'.04em', textTransform:'uppercase' }}>Promoted</div>}
+        {dist!=null && <div style={{ position:'absolute', bottom:8, left:8, background:'rgba(0,0,0,.58)', color:'#fff', borderRadius:8, padding:'2px 8px', fontSize:'.65rem', fontWeight:600, fontFamily:'var(--font-mono)' }}>📍 {dist<1?Math.round(dist*1000)+'m':dist.toFixed(1)+'km'}</div>}
       </div>
       <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px' }}>
         {b.logo_url
@@ -4412,6 +4513,8 @@ function LocalBrowse({ setPage }) {
   const [cat, setCat]               = useState('all')
   const [selected, setSelected]     = useState(null)
   const [lightbox, setLightbox]     = useState(null)   // photo index in the open profile, or null
+  const [myLoc, setMyLoc]           = useState(null)   // A5: {lat,lng} for this browse session only, or null
+  const zoneCoords = useZoneCoords()
 
   useEffect(() => {
     let cancelled = false
@@ -4524,14 +4627,17 @@ function LocalBrowse({ setPage }) {
 
       <FirstUseNote id="local">Tap any business to open its profile — scroll their photos Instagram-style and grab student-only deals.</FirstUseNote>
 
-      {/* Category filter */}
-      <div className="feed-scroll" style={{ display:'flex', gap:8, marginBottom:20, overflowX:'auto', paddingBottom:4 }}>
-        {['all', ...BIZ_CATEGORIES].map(c => (
-          <button key={c} onClick={() => setCat(c)}
-            style={{ padding:'7px 14px', borderRadius:100, fontSize:'.82rem', fontWeight:600, whiteSpace:'nowrap', cursor:'pointer', border:`1px solid ${cat===c?'var(--accent)':'var(--border)'}`, background:cat===c?'var(--accent)':'var(--bg-surface)', color:cat===c?'#fff':'var(--text-secondary)' }}>
-            {c === 'all' ? 'All' : c}
-          </button>
-        ))}
+      {/* Category filter + proximity toggle */}
+      <div style={{ display:'flex', gap:10, marginBottom:20, flexWrap:'wrap', alignItems:'center', justifyContent:'space-between' }}>
+        <div className="feed-scroll" style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:4 }}>
+          {['all', ...BIZ_CATEGORIES].map(c => (
+            <button key={c} onClick={() => setCat(c)}
+              style={{ padding:'7px 14px', borderRadius:100, fontSize:'.82rem', fontWeight:600, whiteSpace:'nowrap', cursor:'pointer', border:`1px solid ${cat===c?'var(--accent)':'var(--border)'}`, background:cat===c?'var(--accent)':'var(--bg-surface)', color:cat===c?'#fff':'var(--text-secondary)' }}>
+              {c === 'all' ? 'All' : c}
+            </button>
+          ))}
+        </div>
+        <NearMeToggle active={!!myLoc} onLocated={setMyLoc} onCleared={() => setMyLoc(null)} />
       </div>
 
       {loading ? <div style={{ padding:50, textAlign:'center' }}><Spinner /></div>
@@ -4539,9 +4645,22 @@ function LocalBrowse({ setPage }) {
         <EmptyState icon="◇" message={cat==='all' ? 'No local businesses listed yet — check back soon!' : `No businesses in ${cat} yet`} />
       ) : (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:'clamp(8px,1.5vw,16px)' }}>
-          {businesses.map(b => (
-            <BizGridTile key={b.business_id} b={b} onOpen={() => { setSelected(b); setLightbox(null); trackBizEvent(b.business_id, 'view') }} />
-          ))}
+          {businesses
+            .map(b => {
+              const z = b.campus_zone && zoneCoords[b.campus_zone]
+              const dist = (myLoc && z) ? distanceKm(myLoc.lat, myLoc.lng, z.lat, z.lng) : undefined
+              return { ...b, _dist: dist }
+            })
+            .sort((a, b) => {
+              if (!myLoc) return 0 // preserve the server order (boosted-first) when not sorting by distance
+              if (a._dist == null && b._dist == null) return 0
+              if (a._dist == null) return 1
+              if (b._dist == null) return -1
+              return a._dist - b._dist
+            })
+            .map(b => (
+              <BizGridTile key={b.business_id} b={b} distanceKm={b._dist} onOpen={() => { setSelected(b); setLightbox(null); trackBizEvent(b.business_id, 'view') }} />
+            ))}
         </div>
       )}
     </div>
@@ -4745,6 +4864,7 @@ function BusinessForm({ business, onDone, onCancel }) {
   const [f, setF] = useState({
     name: business?.name || '', category: business?.category || BIZ_CATEGORIES[0],
     description: business?.description || '', address: business?.address || '',
+    campusZone: business?.campus_zone || '',
     hours: business?.hours || '', phone: business?.phone || '', whatsapp: business?.whatsapp || '',
     email: business?.email || '', linkUrl: business?.link_url || '', logoUrl: business?.logo_url || '',
     status: business?.status || 'pending', feePaid: business?.fee_paid || '',
@@ -4755,6 +4875,7 @@ function BusinessForm({ business, onDone, onCancel }) {
   const [saving, setSaving] = useState(false)
   const token = () => localStorage.getItem('rl_token')
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
+  const zones = useLocations()
 
   function addImage() {
     const v = imgInput.trim()
@@ -4808,6 +4929,10 @@ function BusinessForm({ business, onDone, onCancel }) {
             </SelectField>
             <Textarea label="Description" value={f.description} onChange={set('description')} hint="1–2 sentences students will see." />
             <Input label="Address" value={f.address} onChange={set('address')} placeholder="e.g. 12 High Street, Makhanda" />
+            <SelectField label="Zone / area (for Local's distance sort)" value={f.campusZone} onChange={set('campusZone')}>
+              <option value="">Not specified</option>
+              {zones.map(z => <option key={z} value={z}>{z}</option>)}
+            </SelectField>
             <Input label="Hours" value={f.hours} onChange={set('hours')} placeholder="Mon–Fri 8–17, Sat 9–13" />
             <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
               <div style={{ flex:1, minWidth:140 }}><Input label="Phone" value={f.phone} onChange={set('phone')} /></div>
@@ -6498,6 +6623,7 @@ function BusinessPageEditor({ biz, onSaved }) {
   const [f, setF] = useState({
     name: biz.name || '', tagline: biz.tagline || '', category: biz.category || '',
     description: biz.description || '', hours: biz.hours || '', address: biz.address || '',
+    campusZone: biz.campus_zone || '',
     phone: biz.phone || '', whatsapp: biz.whatsapp || '', email: biz.email || '',
     themeColor: biz.theme_color || '#6C5CE7',
     coverImageUrl: biz.cover_image_url || '', logoUrl: biz.logo_url || '', linkUrl: biz.link_url || '',
@@ -6507,6 +6633,7 @@ function BusinessPageEditor({ biz, onSaved }) {
   const set = k => e => setF(p => ({ ...p, [k]: e.target.value }))
   const [saving, setSaving] = useState(false)
   const [imgInput, setImgInput] = useState('')
+  const zones = useLocations() // A5: which zone this business is in, for Local's proximity sort
 
   // Gallery is a plain array (identical to the admin form's proven pattern).
   // Every mutation goes through a functional updater reading `p`, so concurrent
@@ -6525,7 +6652,7 @@ function BusinessPageEditor({ biz, onSaved }) {
     try {
       const payload = {
         name: f.name, tagline: f.tagline, category: f.category, description: f.description,
-        hours: f.hours, address: f.address, phone: f.phone, whatsapp: f.whatsapp, email: f.email,
+        hours: f.hours, address: f.address, campusZone: f.campusZone || '', phone: f.phone, whatsapp: f.whatsapp, email: f.email,
         themeColor: f.themeColor, coverImageUrl: f.coverImageUrl || null, logoUrl: f.logoUrl || null,
         linkUrl: f.linkUrl || null, imageUrls: f.gallery,
         socials: { instagram: f.instagram, facebook: f.facebook, tiktok: f.tiktok, website: f.website },
@@ -6565,6 +6692,10 @@ function BusinessPageEditor({ biz, onSaved }) {
         {sectionLabel('— Hours & location')}
         <Input label="Opening hours" value={f.hours} onChange={set('hours')} />
         <Input label="Address" value={f.address} onChange={set('address')} />
+        <SelectField label="Zone / area (lets students sort Local by distance)" value={f.campusZone} onChange={set('campusZone')}>
+          <option value="">Not specified</option>
+          {zones.map(z => <option key={z} value={z}>{z}</option>)}
+        </SelectField>
 
         {sectionLabel('— Contact')}
         <Input label="Phone" value={f.phone} onChange={set('phone')} />
@@ -7199,6 +7330,38 @@ function useFlags() {
 }
 
 // Admin: add campuses / zones without writing SQL (§7.8).
+// A5: a zone's lat/lng inline editor — used to refine the placeholder
+// coordinates db/init/52_geolocation.sql seeded (a deterministic ring around
+// the campus, not surveyed data) into real ones, without a redeploy.
+function ZoneCoordRow({ zone, onSaved }) {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [lat, setLat] = useState(zone.latitude ?? '')
+  const [lng, setLng] = useState(zone.longitude ?? '')
+  const [saving, setSaving] = useState(false)
+  async function save() {
+    setSaving(true)
+    try {
+      const res = await fetch(`${API_BASE}/admin/locations/${zone.location_id}`, {
+        method:'PATCH', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
+        body: JSON.stringify({ latitude: lat===''?null:parseFloat(lat), longitude: lng===''?null:parseFloat(lng) }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.message || d.errors?.[0]?.msg || 'Could not save coordinates')
+      toast(`${zone.name} coordinates saved`, 'success')
+      onSaved?.(d.location)
+    } catch (err) { toast(err.message, 'error') } finally { setSaving(false) }
+  }
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 0' }}>
+      <Mono style={{ width:130, flexShrink:0 }}>{zone.name}</Mono>
+      <input type="number" step="0.0001" placeholder="lat" value={lat} onChange={e=>setLat(e.target.value)} style={{ width:100, padding:'5px 8px', borderRadius:8, border:'1px solid var(--border)', fontSize:'.78rem' }} />
+      <input type="number" step="0.0001" placeholder="lng" value={lng} onChange={e=>setLng(e.target.value)} style={{ width:100, padding:'5px 8px', borderRadius:8, border:'1px solid var(--border)', fontSize:'.78rem' }} />
+      <Btn size="sm" variant="secondary" loading={saving} onClick={save}>Save</Btn>
+    </div>
+  )
+}
+
 function AdminLocations() {
   const toast = useToast()
   const token = () => localStorage.getItem('rl_token')
@@ -7206,6 +7369,7 @@ function AdminLocations() {
   const [loading, setLoading]   = useState(true)
   const [form, setForm] = useState({ name:'', kind:'campus', parentId:'' })
   const [saving, setSaving] = useState(false)
+  const [editingCoords, setEditingCoords] = useState(null) // campus location_id, or null
 
   async function load() {
     try { const res = await fetch(API_BASE + '/locations'); if (res.ok) { const d = await res.json(); setCampuses(d.campuses || []) } }
@@ -7257,9 +7421,23 @@ function AdminLocations() {
         <DCard key={c.location_id} hover={false} style={{ marginBottom:12 }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' }}>
             <div style={{ fontFamily:'var(--font-display)', fontWeight:700 }}>{c.name}</div>
-            <Mono>{c.zones?.length || 0} zones</Mono>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <Mono>{c.zones?.length || 0} zones</Mono>
+              {c.zones?.length > 0 && (
+                <button onClick={() => setEditingCoords(id => id===c.location_id ? null : c.location_id)}
+                  style={{ background:'none', border:'none', color:'var(--accent)', fontSize:'.78rem', fontWeight:600, cursor:'pointer' }}>
+                  {editingCoords===c.location_id ? 'Done' : '📍 Edit coordinates'}
+                </button>
+              )}
+            </div>
           </div>
-          {c.zones?.length > 0 && <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:10 }}>{c.zones.map(z => <Tag key={z.location_id}>{z.name}</Tag>)}</div>}
+          {editingCoords!==c.location_id && c.zones?.length > 0 && <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:10 }}>{c.zones.map(z => <Tag key={z.location_id}>{z.name}</Tag>)}</div>}
+          {editingCoords===c.location_id && (
+            <div style={{ marginTop:10, paddingTop:10, borderTop:'1px solid var(--border)' }}>
+              <p style={{ fontSize:'.72rem', color:'var(--text-muted)', margin:'0 0 8px' }}>Seeded coordinates are an approximate placeholder ring (A5) — refine them here as real ones become available.</p>
+              {c.zones.map(z => <ZoneCoordRow key={z.location_id} zone={z} onSaved={load} />)}
+            </div>
+          )}
         </DCard>
       ))}
     </div>

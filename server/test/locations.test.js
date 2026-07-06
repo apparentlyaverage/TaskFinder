@@ -28,6 +28,29 @@ describe('GET /locations', () => {
     expect(res.body.campuses[0].zones).toHaveLength(2)
   })
 
+  // A5: proximity sort is computed client-side, so the zone centroid has to
+  // ride along in this public, non-PII response.
+  it('includes latitude/longitude on nested zones (A5)', async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        { location_id: 'c1', name: 'Rhodes University', kind: 'campus', parent_id: null, sort_order: 0, latitude: '-33.3037', longitude: '26.5233' },
+        { location_id: 'z1', name: 'West Campus', kind: 'zone', parent_id: 'c1', sort_order: 0, latitude: '-33.3037', longitude: '26.5263' },
+      ],
+    })
+    const res = await request(app).get('/locations')
+    expect(res.status).toBe(200)
+    expect(res.body.campuses[0].zones[0]).toMatchObject({ name: 'West Campus', latitude: '-33.3037', longitude: '26.5263' })
+  })
+
+  it('includes latitude/longitude in the flat ?kind= list (A5)', async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [{ location_id: 'z1', name: 'West Campus', kind: 'zone', parent_id: 'c1', latitude: '-33.3037', longitude: '26.5263' }],
+    })
+    const res = await request(app).get('/locations?kind=zone')
+    expect(res.status).toBe(200)
+    expect(res.body.locations[0].latitude).toBe('-33.3037')
+  })
+
   it('returns a flat filtered list for ?kind=campus', async () => {
     pool.query.mockResolvedValueOnce({
       rows: [{ location_id: 'c1', name: 'Rhodes University', kind: 'campus', parent_id: null }],

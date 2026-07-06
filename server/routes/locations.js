@@ -15,7 +15,7 @@ router.get('/', async (req, res) => {
   try {
     if (kind) {
       const { rows } = await pool.query(
-        `SELECT location_id, name, kind, parent_id
+        `SELECT location_id, name, kind, parent_id, latitude, longitude
            FROM locations
           WHERE is_active = TRUE AND kind = $1
           ORDER BY sort_order, name`,
@@ -24,17 +24,19 @@ router.get('/', async (req, res) => {
     }
 
     const { rows } = await pool.query(
-      `SELECT location_id, name, kind, parent_id, sort_order
+      `SELECT location_id, name, kind, parent_id, sort_order, latitude, longitude
          FROM locations
         WHERE is_active = TRUE
         ORDER BY sort_order, name`)
 
     // Nest zones under their campus; surface regions/campuses at the top level.
+    // latitude/longitude ride along (A5) so the client can compute proximity —
+    // these are public zone centroids, not personal data.
     const byId = new Map(rows.map(r => [r.location_id, { ...r, zones: [] }]))
     const campuses = []
     for (const node of byId.values()) {
       if (node.kind === 'zone' && node.parent_id && byId.has(node.parent_id)) {
-        byId.get(node.parent_id).zones.push({ location_id: node.location_id, name: node.name })
+        byId.get(node.parent_id).zones.push({ location_id: node.location_id, name: node.name, latitude: node.latitude, longitude: node.longitude })
       } else if (node.kind !== 'zone') {
         campuses.push(node)
       }

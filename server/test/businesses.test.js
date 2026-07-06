@@ -19,15 +19,40 @@ const myBiz = { business_id: BIZ, name: 'Joe Coffee', category: 'food', status: 
 
 beforeEach(() => vi.clearAllMocks())
 
+// A5: proximity sort needs the zone name + centroid on every business read.
+describe('GET /businesses (public list, A5 fields)', () => {
+  it('exposes campus_zone/latitude/longitude from the locations join', async () => {
+    mockDb(pool, sql => {
+      if (/FROM businesses\s+LEFT JOIN locations/.test(sql)) {
+        return { rows: [{ ...myBiz, campus_zone: 'West Campus', latitude: '-33.3037', longitude: '26.5263' }] }
+      }
+    })
+    const res = await request(app).get('/businesses')
+    expect(res.status).toBe(200)
+    expect(res.body.businesses[0]).toMatchObject({ campus_zone: 'West Campus', latitude: '-33.3037', longitude: '26.5263' })
+  })
+})
+
+describe('GET /businesses/:id (A5 fields)', () => {
+  it('exposes campus_zone on the detail read', async () => {
+    mockDb(pool, sql => {
+      if (/FROM businesses\s+LEFT JOIN locations/.test(sql)) return { rows: [{ ...myBiz, campus_zone: 'Founders' }] }
+    })
+    const res = await request(app).get(`/businesses/${BIZ}`)
+    expect(res.status).toBe(200)
+    expect(res.body.business.campus_zone).toBe('Founders')
+  })
+})
+
 describe('GET /businesses/mine', () => {
   it('returns the caller\'s business (200)', async () => {
-    mockDb(pool, sql => { if (/FROM businesses WHERE owner_id/.test(sql)) return { rows: [myBiz] } })
+    mockDb(pool, sql => { if (/FROM businesses[\s\S]*WHERE owner_id/.test(sql)) return { rows: [myBiz] } })
     const res = await request(app).get('/businesses/mine').set('Authorization', `Bearer ${ownerToken}`)
     expect(res.status).toBe(200)
     expect(res.body.business.business_id).toBe(BIZ)
   })
   it('404s when no business is linked', async () => {
-    mockDb(pool, sql => { if (/FROM businesses WHERE owner_id/.test(sql)) return { rows: [] } })
+    mockDb(pool, sql => { if (/FROM businesses[\s\S]*WHERE owner_id/.test(sql)) return { rows: [] } })
     const res = await request(app).get('/businesses/mine').set('Authorization', `Bearer ${ownerToken}`)
     expect(res.status).toBe(404)
   })
@@ -36,17 +61,19 @@ describe('GET /businesses/mine', () => {
     expect(res.status).toBe(401)
   })
   it('is matched before GET /:id (mine is not treated as a UUID)', async () => {
-    mockDb(pool, sql => { if (/FROM businesses WHERE owner_id/.test(sql)) return { rows: [] } })
+    mockDb(pool, sql => { if (/FROM businesses[\s\S]*WHERE owner_id/.test(sql)) return { rows: [] } })
     const res = await request(app).get('/businesses/mine').set('Authorization', `Bearer ${ownerToken}`)
     expect(res.status).toBe(404) // the /mine handler ran (not a 422 UUID failure from /:id)
   })
 })
 
 describe('PATCH /businesses/mine', () => {
-  function setup({ owned = [{ business_id: BIZ }] } = {}) {
+  function setup({ owned = [{ business_id: BIZ }], zone } = {}) {
     mockDb(pool, sql => {
       if (/SELECT business_id FROM businesses WHERE owner_id/.test(sql)) return { rows: owned }
-      if (/^UPDATE businesses SET/.test(sql.trim())) return { rows: [{ ...myBiz, tagline: 'Best brew in town' }] }
+      if (/^UPDATE businesses SET/.test(sql.trim())) return {}
+      // Post-update re-select (joins the zone name in, same shape every other read uses).
+      if (/SELECT businesses\.\*.*FROM businesses/s.test(sql)) return { rows: [{ ...myBiz, tagline: 'Best brew in town', campus_zone: zone ?? null }] }
       return undefined
     })
   }
@@ -60,7 +87,8 @@ describe('PATCH /businesses/mine', () => {
     let updateSql = ''
     mockDb(pool, sql => {
       if (/SELECT business_id FROM businesses WHERE owner_id/.test(sql)) return { rows: [{ business_id: BIZ }] }
-      if (/^UPDATE businesses SET/.test(sql.trim())) { updateSql = sql; return { rows: [myBiz] } }
+      if (/^UPDATE businesses SET/.test(sql.trim())) { updateSql = sql; return {} }
+      if (/SELECT businesses\.\*.*FROM businesses/s.test(sql)) return { rows: [myBiz] }
       return undefined
     })
     const res = await request(app).patch('/businesses/mine').set('Authorization', `Bearer ${ownerToken}`)
@@ -83,6 +111,37 @@ describe('PATCH /businesses/mine', () => {
     const res = await request(app).patch('/businesses/mine').set('Authorization', `Bearer ${ownerToken}`)
       .send({ tagline: 'hi' })
     expect(res.status).toBe(404)
+  })
+
+  // A5: campusZone resolves to location_id via the shared locationValidate helpers.
+  it('sets the zone and returns its resolved name as campus_zone (200)', async () => {
+    let updateSql = '', updateVals = []
+    mockDb(pool, (sql, vals) => {
+      if (/SELECT business_id FROM businesses WHERE owner_id/.test(sql)) return { rows: [{ business_id: BIZ }] }
+      if (/FROM locations WHERE lower\(name\)/.test(sql)) return { rows: [{ location_id: 'loc-west' }] }
+      if (/^UPDATE businesses SET/.test(sql.trim())) { updateSql = sql; updateVals = vals; return {} }
+      if (/SELECT businesses\.\*.*FROM businesses/s.test(sql)) return { rows: [{ ...myBiz, campus_zone: 'West Campus' }] }
+      return undefined
+    })
+    const res = await request(app).patch('/businesses/mine').set('Authorization', `Bearer ${ownerToken}`)
+      .send({ campusZone: 'West Campus' })
+    expect(res.status).toBe(200)
+    expect(res.body.business.campus_zone).toBe('West Campus')
+    expect(updateSql).toMatch(/location_id = \$/)
+    expect(updateVals).toContain('loc-west')
+  })
+  it('clears the zone with an empty string (200 -> location_id null)', async () => {
+    let updateVals = []
+    mockDb(pool, (sql, vals) => {
+      if (/SELECT business_id FROM businesses WHERE owner_id/.test(sql)) return { rows: [{ business_id: BIZ }] }
+      if (/^UPDATE businesses SET/.test(sql.trim())) { updateVals = vals; return {} }
+      if (/SELECT businesses\.\*.*FROM businesses/s.test(sql)) return { rows: [{ ...myBiz, campus_zone: null }] }
+      return undefined
+    })
+    const res = await request(app).patch('/businesses/mine').set('Authorization', `Bearer ${ownerToken}`)
+      .send({ campusZone: '' })
+    expect(res.status).toBe(200)
+    expect(updateVals).toContain(null)
   })
 })
 

@@ -83,6 +83,27 @@ describe('admin locations', () => {
     const res = await request(app).post('/admin/locations').set('Authorization', `Bearer ${memberToken}`).send({ name: 'x', kind: 'campus' })
     expect(res.status).toBe(403)
   })
+
+  // A5: zones only ever got a placeholder centroid (db/init/52_geolocation.sql);
+  // this is how an admin refines it to the real coordinate, no redeploy needed.
+  it('sets latitude/longitude on a zone (200)', async () => {
+    let updateSql = '', updateVals = []
+    mockDb(pool, (sql, vals) => {
+      if (/^UPDATE locations SET/.test(sql.trim())) { updateSql = sql; updateVals = vals; return { rows: [{ location_id: 'z1', latitude: -33.301, longitude: 26.524 }] } }
+    })
+    const res = await request(app).patch('/admin/locations/cccccccc-cccc-4ccc-8ccc-cccccccccccc').set('Authorization', `Bearer ${adminToken}`)
+      .send({ latitude: -33.301, longitude: 26.524 })
+    expect(res.status).toBe(200)
+    expect(updateSql).toMatch(/latitude = \$/)
+    expect(updateSql).toMatch(/longitude = \$/)
+    expect(updateVals).toContain(-33.301)
+  })
+  it('rejects an out-of-range latitude (422)', async () => {
+    mockDb(pool)
+    const res = await request(app).patch('/admin/locations/cccccccc-cccc-4ccc-8ccc-cccccccccccc').set('Authorization', `Bearer ${adminToken}`)
+      .send({ latitude: 200 })
+    expect(res.status).toBe(422)
+  })
 })
 
 describe('feature flags', () => {

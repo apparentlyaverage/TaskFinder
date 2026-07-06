@@ -12,6 +12,7 @@ import { createNotification } from '../notify.js'
 import { requireAuth } from '../middleware.js'
 import { rejectIfProfane } from '../profanity.js'
 import { expireDueTasks } from '../jobs.js'
+import { validateLocationName } from '../locationValidate.js'
 
 const router = Router()
 
@@ -30,7 +31,9 @@ router.post('/',
     body('budget').isFloat({ gt: 0 }),
     body('deadline').isISO8601(),
     body('skill_tags').optional().isArray(),
-    body('campus_zone').optional().trim(),
+    // A5: a real zone lets Browse Tasks sort by proximity. Fail-open on a DB
+    // hiccup (see validateLocationName) — location must never block posting.
+    body('campus_zone').optional({ nullable: true }).trim().custom(validateLocationName),
     body('expected_duration').optional({ nullable: true }).trim().isLength({ max: 40 }),
     body('bids_close_at').optional({ nullable: true }).isISO8601(),
   ],

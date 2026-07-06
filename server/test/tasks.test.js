@@ -50,6 +50,36 @@ describe('POST /tasks', () => {
     const res = await request(app).post('/tasks').send({ title: 'x' })
     expect(res.status).toBe(401)
   })
+
+  // A5: campus_zone is what lets Browse Tasks sort by proximity, so it's
+  // validated against the same data-driven locations table as everywhere else.
+  it('accepts a campus_zone that exists in the locations table (201)', async () => {
+    mockDb(pool, sql => {
+      if (/FROM locations WHERE lower\(name\)/.test(sql)) return { rows: [{ location_id: 'loc-1' }] }
+      if (/INSERT INTO tasks/.test(sql)) return { rows: [{ task_id: TASK_ID, title: 'Fix bike', campus_zone: 'West Campus' }] }
+    })
+    const res = await request(app).post('/tasks').set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Fix bike', description: 'brakes', budget: 250, deadline: future, campus_zone: 'West Campus' })
+    expect(res.status).toBe(201)
+    expect(res.body.task.campus_zone).toBe('West Campus')
+  })
+
+  it('rejects a campus_zone not in the locations table (422)', async () => {
+    mockDb(pool, sql => { if (/FROM locations WHERE lower\(name\)/.test(sql)) return { rows: [] } })
+    const res = await request(app).post('/tasks').set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Fix bike', description: 'brakes', budget: 250, deadline: future, campus_zone: 'Hogwarts' })
+    expect(res.status).toBe(422)
+  })
+
+  it('fails open: a location-lookup DB error does not block posting (201)', async () => {
+    mockDb(pool, sql => {
+      if (/FROM locations WHERE lower\(name\)/.test(sql)) throw new Error('db down')
+      if (/INSERT INTO tasks/.test(sql)) return { rows: [{ task_id: TASK_ID, title: 'Fix bike' }] }
+    })
+    const res = await request(app).post('/tasks').set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Fix bike', description: 'brakes', budget: 250, deadline: future, campus_zone: 'West Campus' })
+    expect(res.status).toBe(201)
+  })
 })
 
 describe('POST /tasks/:taskId/bids', () => {
