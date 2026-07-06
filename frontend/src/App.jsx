@@ -1269,12 +1269,19 @@ function RevealObserver() {
 }
 
 // ── PWA install ──────────────────────────────────────────────────────────────
+// Feature gate: the "Download the app" CTA stays hidden until the PWA install
+// experience is signed off for production. Set VITE_ENABLE_INSTALL=true (Vercel +
+// local .env) to re-enable — no code change needed. While off we also skip the
+// beforeinstallprompt capture below, so we don't suppress the browser's own
+// native install affordance in the meantime.
+const INSTALL_ENABLED = import.meta.env.VITE_ENABLE_INSTALL === 'true'
+
 // The browser fires `beforeinstallprompt` ONCE, early — usually before any
 // component mounts. Capture it at module load and re-broadcast so InstallAppButton
 // can offer a one-tap install whenever it renders. (Chromium/Android only; iOS
 // Safari + desktop Safari/Firefox don't fire it — those get the help modal.)
 let _installPrompt = null
-if (typeof window !== 'undefined') {
+if (INSTALL_ENABLED && typeof window !== 'undefined') {
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault()
     _installPrompt = e
@@ -1342,7 +1349,7 @@ function InstallAppButton({ variant = 'primary', style }) {
     window.addEventListener('appinstalled', installed)
     return () => { window.removeEventListener('relivr:installable', sync); window.removeEventListener('appinstalled', installed) }
   }, [])
-  if (gone) return null
+  if (!INSTALL_ENABLED || gone) return null
   async function click() {
     if (prompt) {
       prompt.prompt()
