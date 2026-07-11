@@ -56,7 +56,7 @@ function trackBizEvent(businessId, type) {
 // ─── FONTS & GLOBAL STYLES ───────────────────────────────────────────────────
 const _fl = document.createElement('link')
 _fl.rel = 'stylesheet'
-_fl.href = 'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,400&family=DM+Mono:wght@400;500&display=swap'
+_fl.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap'
 document.head.appendChild(_fl)
 
 const _style = document.createElement('style')
@@ -95,12 +95,15 @@ _style.textContent = `
   --danger:        #b91c1c;
   --info:          #1d4ed8;
   --warning:       #b45309;
-  --font-display:  'Bricolage Grotesque', sans-serif;
-  --font-body:     'DM Sans', sans-serif;
-  --font-mono:     'DM Mono', monospace;
-  --fd: 'Bricolage Grotesque', sans-serif;
-  --fb: 'DM Sans', sans-serif;
-  --fm: 'DM Mono', monospace;
+  /* Clean, industry-standard sans (Inter) for everything, with a native system
+     fallback stack; a native monospace stack for the small uppercase eyebrow
+     labels. No decorative/display face — reads as a real product, not a demo. */
+  --font-display:  'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-body:     'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono:     ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Roboto Mono', monospace;
+  --fd: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --fb: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --fm: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Roboto Mono', monospace;
   --surface:       #ffffff;
   --surface2:      #f6f3fa;
   --muted:         #96909f;
@@ -169,6 +172,14 @@ input, textarea, select { font-family: var(--font-body); font-size: inherit; }
 .btn-s:hover { border-color:var(--text-primary); background:var(--bg-surface); box-shadow:var(--shadow-md); transform:translateY(-1px); }
 .btn-g { background:transparent; color:var(--text-muted); border:none; padding:10px 18px; font-family:var(--font-body); font-size:.875rem; cursor:pointer; transition:color 150ms; }
 .btn-g:hover { color:var(--text-primary); }
+
+/* Top-bar icon buttons (messages, alerts) — hover/active feedback + transitions. */
+.icon-btn { transition: background 150ms var(--ease), color 150ms var(--ease), transform 120ms var(--ease); }
+.icon-btn:hover { background:var(--bg-elevated) !important; color:var(--accent) !important; }
+.icon-btn:active { transform:scale(.92); }
+.icon-btn:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+@keyframes notifPulse { 0%,100%{ transform:scale(1) } 50%{ transform:scale(1.18) } }
+.notif-badge { animation: notifPulse 1.8s ease-in-out infinite; }
 
 /* Forms */
 input, textarea, select { background:var(--bg-elevated); border:1px solid var(--border-strong); border-radius:10px; color:var(--text-primary); padding:11px 14px; font-size:.9rem; width:100%; outline:none; transition:border-color 150ms,box-shadow 150ms; }
@@ -497,6 +508,12 @@ function SelectField({ label, value, onChange, children, style={} }) {
   )
 }
 
+// Capitalize the first letter of each word (underscores → spaces first), for
+// filter options and status text — e.g. "in_progress" → "In Progress".
+function titleCase(s) {
+  return String(s ?? '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
 function Badge({ children, variant='default' }) {
   const map = {
     default:     { background:'var(--bg-elevated)',            color:'var(--text-secondary)' },
@@ -514,7 +531,8 @@ function Badge({ children, variant='default' }) {
     withdrawn:   { background:'var(--bg-elevated)',            color:'var(--text-muted)' },
   }
   const v = map[variant] || map.default
-  return <span style={{ display:'inline-flex', alignItems:'center', padding:'2px 8px', borderRadius:'var(--radius-sm)', fontFamily:'var(--font-mono)', fontSize:'0.63rem', fontWeight:500, letterSpacing:'0.06em', textTransform:'uppercase', ...v }}>{children}</span>
+  // Title-case (first letter capitalised) rather than shouty ALL-CAPS.
+  return <span style={{ display:'inline-flex', alignItems:'center', padding:'2px 8px', borderRadius:'var(--radius-sm)', fontFamily:'var(--font-mono)', fontSize:'0.63rem', fontWeight:600, letterSpacing:'0.04em', textTransform:'capitalize', ...v }}>{children}</span>
 }
 
 function DCard({ children, style={}, onClick, hover=true, className='' }) {
@@ -1020,7 +1038,7 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
                 <div><label>Password <span style={{ color:'var(--text-muted)' }}>(min 8 chars)</span></label><input type="password" aria-label="Password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
                 <label style={{ display:'flex', gap:8, alignItems:'flex-start', cursor:'pointer' }}>
                   <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} style={{ width:'auto', marginTop:3, flexShrink:0, accentColor:'var(--accent)' }} />
-                  <span style={{ fontSize:'.76rem', color:'var(--text-secondary)', lineHeight:1.5 }}>I agree to the <span style={{ color:'var(--accent)', fontWeight:600 }}>Terms of Service</span> and <span style={{ color:'var(--accent)', fontWeight:600 }}>Privacy Policy</span>, and consent to ReLivR processing my data under POPIA.</span>
+                  <span style={{ fontSize:'.76rem', color:'var(--text-secondary)', lineHeight:1.5 }}>I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color:'var(--accent)', fontWeight:600, textDecoration:'underline' }}>Terms of Service</a> and <a href="/privacy" target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color:'var(--accent)', fontWeight:600, textDecoration:'underline' }}>Privacy Policy</a>, and consent to ReLivR processing my data under POPIA.</span>
                 </label>
               </>
             )}
@@ -2400,7 +2418,8 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch 
   const navLinks = isAdmin
     ? [ { id:'dashboard', label:'Dashboard' }, { id:'admin-disputes', label:'Disputes' }, { id:'admin-users', label:'Users' }, { id:'admin-tasks', label:'Tasks' }, { id:'admin-businesses', label:'Businesses' }, { id:'admin-deals', label:'Deals' }, { id:'admin-locations', label:'Locations' }, { id:'admin-flags', label:'Flags' }, { id:'admin-audit', label:'Audit' } ]
     : [
-        { id:'tasks-browse', label:'Browse' },
+        // "Browse" removed — it duplicated the Home route (the logo + mobile Home
+        // tab both go to tasks-browse). Keeps the desktop nav free of redundancy.
         { id:'local-browse', label:'Local' },
         { id:'deals',        label:'Deals' },
         { id:'following',    label:'Following' },
@@ -2445,12 +2464,12 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch 
 
         <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6 }}>
           <button className="btn-p topbar-post" style={{ padding:'9px 18px', fontSize:'.85rem' }} onClick={() => setPage('tasks-new')}>＋ Post a Task</button>
-          <button onClick={() => setPage('messages')} aria-label="Messages" title="Messages"
+          <button className="icon-btn" onClick={() => setPage('messages')} aria-label="Messages" title="Messages"
             style={{ width:38, height:38, borderRadius:'50%', border:'none', background:page==='messages'?'var(--accent-glow)':'transparent', color:page==='messages'?'var(--accent)':'var(--text-secondary)', fontSize:'1.05rem', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><ChatIcon size={19} /></button>
-          <button onClick={() => setPage('notifications')} title="Alerts"
+          <button className="icon-btn" onClick={() => setPage('notifications')} title={unreadCount > 0 ? `${unreadCount} unread notification${unreadCount!==1?'s':''}` : 'Alerts'}
             aria-label={unreadCount > 0 ? `Alerts, ${unreadCount} unread` : 'Alerts'}
-            style={{ position:'relative', width:38, height:38, borderRadius:'50%', border:'none', background:page==='notifications'?'var(--accent-glow)':'transparent', color:page==='notifications'?'var(--accent)':'var(--text-secondary)', fontSize:'1.05rem', cursor:'pointer' }}>
-            <span aria-hidden="true">◉</span>{unreadCount>0 && <span style={{ position:'absolute', top:4, right:4, background:'var(--danger)', color:'#fff', fontFamily:'var(--font-mono)', fontSize:'.55rem', fontWeight:700, minWidth:15, height:15, lineHeight:'15px', borderRadius:8, textAlign:'center', padding:'0 3px' }}>{unreadCount}</span>}
+            style={{ position:'relative', width:38, height:38, borderRadius:'50%', border:'none', background:page==='notifications'?'var(--accent-glow)':'transparent', color:page==='notifications'?'var(--accent)':'var(--text-secondary)', fontSize:'1.05rem', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <span aria-hidden="true">◉</span>{unreadCount>0 && <span className="notif-badge" style={{ position:'absolute', top:2, right:2, background:'var(--danger)', color:'#fff', fontFamily:'var(--font-mono)', fontSize:'.55rem', fontWeight:700, minWidth:16, height:16, lineHeight:'16px', borderRadius:8, textAlign:'center', padding:'0 3px', boxShadow:'0 0 0 2px var(--bg-surface)' }}>{unreadCount > 99 ? '99+' : unreadCount}</span>}
           </button>
 
           {/* Avatar menu */}
@@ -2757,7 +2776,7 @@ function TaskBrowse({ setPage, setSelectedTask }) {
           return (
             <button key={c.name} onClick={() => setCat(active ? null : c.name)}
               style={{ display:'flex', alignItems:'center', gap:7, padding:'8px 14px', borderRadius:100, whiteSpace:'nowrap', cursor:'pointer', transition:'all 150ms ease', border:`1.5px solid ${active?'var(--accent)':'var(--border)'}`, background:active?'var(--accent-glow)':'var(--bg-surface)', color:active?'var(--accent)':'var(--text-secondary)', fontWeight:600, fontSize:'.85rem', fontFamily:'var(--font-body)' }}>
-              <span style={{ fontSize:'1rem' }}>{c.icon}</span>{c.name}
+              <span style={{ fontSize:'1rem' }}>{c.icon}</span>{titleCase(c.name)}
             </button>
           )
         })}
