@@ -13,9 +13,16 @@ vi.mock('../db.js', () => ({ pool: { query: vi.fn(), connect: vi.fn() } }))
 // file, so this does not affect other suites. Restored in afterAll regardless.
 const ORIGINAL = process.env.NODE_ENV
 process.env.NODE_ENV = 'production'
+
+// The gate OPENS at the real launch date (2026-07-07) — `Date.now() >= LAUNCH_AT_MS
+// → next()` — so on any machine after launch these pre-launch assertions would
+// "fail" against a correctly-open gate. Pin the clock to a pre-launch instant,
+// faking ONLY Date (faking timers would hang supertest's sockets).
+vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-07-01T00:00:00') })
+
 const { pool } = await import('../db.js')
 const app = (await import('../app.js')).default
-afterAll(() => { process.env.NODE_ENV = ORIGINAL })
+afterAll(() => { process.env.NODE_ENV = ORIGINAL; vi.useRealTimers() })
 beforeEach(() => vi.clearAllMocks())
 
 const ALLOWED = 'http://localhost:3000' // FRONTEND_URL in setup.js

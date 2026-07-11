@@ -6,6 +6,7 @@
 //     is a status flip by the creator (was previously owned by payments service)
 import { Router } from 'express'
 import { body, param, validationResult } from 'express-validator'
+import jwt from 'jsonwebtoken'
 import { pool } from '../db.js'
 import log from '../log.js'
 import { createNotification } from '../notify.js'
@@ -22,14 +23,20 @@ function check(req, res, next) {
   next()
 }
 
-// POST /tasks — create a task
+// POST /tasks — create a task (live, or a private DRAFT saved incomplete).
+// Drafts only require a title; description/budget/deadline stay NULL until
+// publish (PATCH /:taskId/publish validates completeness). The DB enforces the
+// same rule via the tasks_draft_completeness CHECK, so a bug here can't leak a
+// half-filled task into the live feed.
 router.post('/',
   requireAuth,
   [
     body('title').trim().notEmpty().isLength({ max: 255 }),
-    body('description').trim().notEmpty(),
-    body('budget').isFloat({ gt: 0 }),
-    body('deadline').isISO8601(),
+    body('status').optional().isIn(['open', 'draft']),
+    // Required for live posts, optional for drafts — cross-checked below.
+    body('description').optional({ nullable: true }).trim(),
+    body('budget').optional({ nullable: true }).isFloat({ gt: 0 }),
+    body('deadline').optional({ nullable: true }).isISO8601(),
     body('skill_tags').optional().isArray(),
     // A5: a real zone lets Browse Tasks sort by proximity. Fail-open on a DB
     // hiccup (see validateLocationName) — location must never block posting.
@@ -39,16 +46,26 @@ router.post('/',
   ],
   check,
   async (req, res) => {
-    const { title, description, budget, deadline, skill_tags = [], campus_zone = null, expected_duration = null, bids_close_at = null } = req.body
-    if (new Date(deadline) <= new Date()) {
+    const { title, skill_tags = [], campus_zone = null, expected_duration = null, bids_close_at = null } = req.body
+    const isDraft = req.body.status === 'draft'
+    const description = req.body.description?.trim() || null
+    const budget = req.body.budget ?? null
+    const deadline = req.body.deadline ?? null
+    if (!isDraft) {
+      // Live posts keep the original strict contract.
+      if (!description) return res.status(422).json({ message: 'Description is required.' })
+      if (budget == null) return res.status(422).json({ message: 'Budget is required.' })
+      if (!deadline)      return res.status(422).json({ message: 'Deadline is required.' })
+    }
+    if (deadline && new Date(deadline) <= new Date()) {
       return res.status(400).json({ message: 'Deadline must be in the future.' })
     }
-    if (rejectIfProfane(res, title, description)) return
+    if (rejectIfProfane(res, title, description || '')) return
     try {
       const { rows } = await pool.query(
-        `INSERT INTO tasks (creator_id, title, description, budget, deadline, skill_tags, campus_zone, expected_duration, bids_close_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-        [req.userId, title, description, budget, deadline, skill_tags, campus_zone, expected_duration, bids_close_at]
+        `INSERT INTO tasks (creator_id, title, description, budget, deadline, skill_tags, campus_zone, expected_duration, bids_close_at, status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+        [req.userId, title, description, budget, deadline, skill_tags, campus_zone, expected_duration, bids_close_at, isDraft ? 'draft' : 'open']
       )
       return res.status(201).json({ task: rows[0] })
     } catch (err) {
@@ -58,9 +75,14 @@ router.post('/',
   }
 )
 
-// GET /tasks — browse open tasks (public, no auth needed)
+// GET /tasks — browse open tasks (public, no auth needed).
+// Drafts are PRIVATE: they can never be listed here, whatever the status param
+// says — owners fetch theirs via GET /tasks/mine.
 router.get('/', async (req, res) => {
   const { skill, status = 'open', limit = 20, offset = 0 } = req.query
+  if (status === 'draft') {
+    return res.status(403).json({ message: 'Drafts are private. Use /tasks/mine.' })
+  }
   try {
     let query, params
     if (skill) {
@@ -164,6 +186,19 @@ router.get('/:taskId', [param('taskId').isUUID()], check, async (req, res) => {
        FROM tasks t LEFT JOIN user_profiles up ON t.creator_id = up.user_id
        WHERE t.task_id = $1`, [taskId])
     if (taskResult.rows.length === 0) return res.status(404).json({ message: 'Task not found.' })
+    // Drafts are private: only their creator may see them. The route is public
+    // (no requireAuth), so parse the optional bearer inline; anyone else gets a
+    // 404 — indistinguishable from "does not exist", leaking nothing.
+    if (taskResult.rows[0].status === 'draft') {
+      let viewerId = null
+      const auth = req.headers.authorization
+      if (auth?.startsWith('Bearer ')) {
+        try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).userId } catch { /* anonymous */ }
+      }
+      if (viewerId !== taskResult.rows[0].creator_id) {
+        return res.status(404).json({ message: 'Task not found.' })
+      }
+    }
     const bidsResult = await pool.query(
       `SELECT b.*, up.display_name, up.avg_rating
        FROM bids b JOIN user_profiles up ON b.bidder_id = up.user_id
@@ -509,9 +544,10 @@ router.patch('/:taskId',
     sets.push('updated_at = NOW()')
     vals.push(taskId, req.userId)
     try {
+      // Editable while live-and-unassigned ('open') or still a private draft.
       const { rows } = await pool.query(
         `UPDATE tasks SET ${sets.join(', ')}
-         WHERE task_id = $${i++} AND creator_id = $${i} AND status = 'open'
+         WHERE task_id = $${i++} AND creator_id = $${i} AND status IN ('open', 'draft')
          RETURNING *`, vals)
       if (rows.length === 0) {
         return res.status(404).json({ message: 'Task not found, not yours, or no longer editable.' })
@@ -519,6 +555,70 @@ router.patch('/:taskId',
       return res.status(200).json({ task: rows[0] })
     } catch (err) {
       log.error('PATCH /tasks/:taskId', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// PATCH /tasks/:taskId/publish — flip a completed draft live. Validates
+// completeness (the same contract POST enforces for live posts) and bumps
+// created_at so the task enters the feed as fresh, not buried at its
+// draft-creation date.
+router.patch('/:taskId/publish',
+  requireAuth,
+  [param('taskId').isUUID()],
+  check,
+  async (req, res) => {
+    const { taskId } = req.params
+    try {
+      const { rows } = await pool.query(
+        'SELECT * FROM tasks WHERE task_id = $1 AND creator_id = $2', [taskId, req.userId])
+      if (rows.length === 0) return res.status(404).json({ message: 'Draft not found or not yours.' })
+      const t = rows[0]
+      if (t.status !== 'draft') return res.status(409).json({ message: 'Only drafts can be published.' })
+
+      const missing = []
+      if (!t.title || t.title.trim().length < 5) missing.push('a title (5+ characters)')
+      if (!t.description || t.description.trim().length === 0) missing.push('a description')
+      if (t.budget == null || parseFloat(t.budget) <= 0) missing.push('a budget')
+      if (!t.deadline) missing.push('a deadline')
+      else if (new Date(t.deadline) <= new Date()) missing.push('a future deadline')
+      if (missing.length) {
+        return res.status(422).json({ message: `Complete the draft before publishing — it still needs ${missing.join(', ')}.`, missing })
+      }
+      if (rejectIfProfane(res, t.title, t.description)) return
+
+      const upd = await pool.query(
+        `UPDATE tasks SET status = 'open', created_at = NOW(), updated_at = NOW()
+         WHERE task_id = $1 AND creator_id = $2 AND status = 'draft'
+         RETURNING *`, [taskId, req.userId])
+      if (upd.rows.length === 0) return res.status(409).json({ message: 'Draft was already published.' })
+      return res.status(200).json({ task: upd.rows[0] })
+    } catch (err) {
+      log.error('PATCH /tasks/:taskId/publish', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// DELETE /tasks/:taskId — discard a DRAFT (hard delete; drafts have no bids,
+// agreements or history to preserve). Live tasks use /cancel instead.
+router.delete('/:taskId',
+  requireAuth,
+  [param('taskId').isUUID()],
+  check,
+  async (req, res) => {
+    const { taskId } = req.params
+    try {
+      const { rows } = await pool.query(
+        `DELETE FROM tasks WHERE task_id = $1 AND creator_id = $2 AND status = 'draft' RETURNING task_id`,
+        [taskId, req.userId])
+      if (rows.length === 0) {
+        return res.status(404).json({ message: 'Draft not found, not yours, or not a draft (cancel live tasks instead).' })
+      }
+      return res.status(200).json({ message: 'Draft discarded.' })
+    } catch (err) {
+      log.error('DELETE /tasks/:taskId', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     }
   }

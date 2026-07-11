@@ -517,6 +517,7 @@ function titleCase(s) {
 function Badge({ children, variant='default' }) {
   const map = {
     default:     { background:'var(--bg-elevated)',            color:'var(--text-secondary)' },
+    draft:       { background:'rgba(180,83,9,0.12)',           color:'var(--warning)' },
     open:        { background:'rgba(16,185,129,0.15)',         color:'var(--success)' },
     in_progress: { background:'rgba(59,130,246,0.15)',         color:'var(--info)' },
     disputed:    { background:'rgba(239,68,68,0.15)',          color:'var(--danger)' },
@@ -3459,9 +3460,71 @@ function TaskNew({ setPage, setSelectedTask }) {
   const [zone, setZone]     = useState('') // A5: lets Browse Tasks sort this by proximity
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
+  const [savingDraft, setSavingDraft] = useState(false)
   const [createdId, setCreatedId] = useState(null)
+  const [wasDraft, setWasDraft] = useState(false)     // success screen wording
+  const [draftId, setDraftId] = useState(null)        // editing an existing draft
   const zones = useLocations()
   const STEPS = ['Details','Budget & Date','Skills','Review']
+
+  // Draft-edit handoff: MyTasks puts the draft id in sessionStorage before
+  // navigating here; we load it once, prefill the form, and clear the key.
+  useEffect(() => {
+    let id = null
+    try { id = sessionStorage.getItem('rl_edit_draft'); sessionStorage.removeItem('rl_edit_draft') } catch { /* ignore */ }
+    if (!id) return
+    fetch(`${API_BASE}/tasks/${id}`, { headers: { Authorization: `Bearer ${token()}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        const t = d?.task
+        if (!t || t.status !== 'draft') return
+        setDraftId(t.task_id)
+        setTitle(t.title || '')
+        setDesc(t.description || '')
+        setBudget(t.budget != null ? String(t.budget) : '')
+        setDead(t.deadline ? new Date(t.deadline).toISOString().slice(0, 10) : '')
+        setDuration(t.expected_duration || '')
+        setBidsClose(t.bids_close_at ? new Date(t.bids_close_at).toISOString().slice(0, 10) : '')
+        setTags((t.skill_tags || []).join(', '))
+        setZone(t.campus_zone || '')
+      })
+      .catch(() => { /* draft unavailable — start fresh */ })
+  }, []) // eslint-disable-line
+
+  // Save whatever is filled in as a private draft — only the title is required.
+  async function saveDraft() {
+    if (!title.trim() || title.trim().length < 5) {
+      setErrors({ title: 'Give your draft a title (5+ characters) so you can find it later' })
+      setStep(0)
+      return
+    }
+    setSavingDraft(true)
+    const skillTags = tags.split(',').map(s=>s.trim()).filter(Boolean)
+    const bodyPayload = {
+      title: title.trim(),
+      description: desc.trim() || null,
+      budget: budget && !isNaN(budget) && parseFloat(budget) > 0 ? parseFloat(budget) : null,
+      deadline: deadline && new Date(deadline) > new Date() ? new Date(deadline).toISOString() : null,
+      skill_tags: skillTags,
+      expected_duration: duration || null,
+      bids_close_at: bidsClose ? new Date(bidsClose).toISOString() : null,
+      campus_zone: zone || null,
+    }
+    try {
+      const res = draftId
+        ? await fetch(`${API_BASE}/tasks/${draftId}`, { method:'PATCH', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` }, body: JSON.stringify(bodyPayload) })
+        : await fetch(API_BASE + '/tasks', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` }, body: JSON.stringify({ ...bodyPayload, status: 'draft' }) })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || 'Could not save draft')
+      toast('Draft saved — finish it any time from My Tasks → Drafts', 'success')
+      setSelectedTask(null)
+      setPage('tasks-mine')
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setSavingDraft(false)
+    }
+  }
 
   function validateStep() {
     const e = {}
@@ -3477,28 +3540,41 @@ function TaskNew({ setPage, setSelectedTask }) {
   async function submit() {
     setLoading(true)
     const skillTags = tags.split(',').map(s=>s.trim()).filter(Boolean)
+    const livePayload = {
+      title: title.trim(),
+      description: desc.trim(),
+      budget: parseFloat(budget),
+      deadline: new Date(deadline).toISOString(),
+      skill_tags: skillTags,
+      expected_duration: duration || null,
+      bids_close_at: bidsClose ? new Date(bidsClose).toISOString() : null,
+      campus_zone: zone || null,
+    }
     try {
-      const res = await fetch(API_BASE + '/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
-        body: JSON.stringify({
-          title: title.trim(),
-          description: desc.trim(),
-          budget: parseFloat(budget),
-          deadline: new Date(deadline).toISOString(),
-          skill_tags: skillTags,
-          expected_duration: duration || null,
-          bids_close_at: bidsClose ? new Date(bidsClose).toISOString() : null,
-          campus_zone: zone || null,
-        }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.message || 'Could not post task')
+      let res, data
+      if (draftId) {
+        // Editing an existing draft: save the final fields, then publish it —
+        // never POST a duplicate.
+        res = await fetch(`${API_BASE}/tasks/${draftId}`, { method:'PATCH', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token()}` }, body: JSON.stringify(livePayload) })
+        if (!res.ok) { data = await res.json().catch(() => ({})); throw new Error(data.message || 'Could not save draft') }
+        res = await fetch(`${API_BASE}/tasks/${draftId}/publish`, { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
+        if (!res.ok) { data = await res.json().catch(() => ({})); throw new Error(data.message || 'Could not publish draft') }
+        data = await res.json()
+        setWasDraft(true)
+      } else {
+        res = await fetch(API_BASE + '/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token()}` },
+          body: JSON.stringify(livePayload),
+        })
+        if (!res.ok) {
+          data = await res.json().catch(() => ({}))
+          throw new Error(data.message || 'Could not post task')
+        }
+        data = await res.json()
       }
-      const data = await res.json()
       const id = data.task.task_id
-      toast(`Task "${title}" posted successfully!`, 'success')
+      toast(`Task "${title}" ${draftId ? 'published' : 'posted successfully'}!`, 'success')
       setCreatedId(id)
     } catch (err) {
       if (err.message === 'Failed to fetch') {
@@ -3520,7 +3596,7 @@ function TaskNew({ setPage, setSelectedTask }) {
     <div className="page-enter" style={{ maxWidth:580 }}>
       <DCard hover={false} style={{ textAlign:'center', padding:'48px 32px', border:'1px solid var(--success)' }}>
         <div style={{ fontSize:'3rem', marginBottom:12 }}>✓</div>
-        <h2 style={{ fontFamily:'var(--font-display)', fontSize:'1.6rem', fontWeight:700, marginBottom:8 }}>Task Posted!</h2>
+        <h2 style={{ fontFamily:'var(--font-display)', fontSize:'1.6rem', fontWeight:700, marginBottom:8 }}>{wasDraft ? 'Draft Published!' : 'Task Posted!'}</h2>
         <p style={{ color:'var(--text-muted)', marginBottom:24, lineHeight:1.6 }}>Your task is live. Earners with matching skills have been notified.</p>
         <div style={{ display:'flex', gap:10, justifyContent:'center', flexWrap:'wrap' }}>
           <Btn onClick={() => { setSelectedTask(createdId); setPage('task-detail') }}>View Task</Btn>
@@ -3567,12 +3643,17 @@ function TaskNew({ setPage, setSelectedTask }) {
           </div>
         </div>}
       </DCard>
-      <div style={{ display:'flex', justifyContent:'space-between', marginTop:16 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', marginTop:16, gap:10, flexWrap:'wrap' }}>
         <div style={{ display:'flex', gap:10 }}>
           {step>0&&<Btn variant="secondary" onClick={back}>← Back</Btn>}
           <Btn variant="ghost" onClick={() => setPage('dashboard')}>Cancel</Btn>
         </div>
-        {step<STEPS.length-1?<Btn onClick={next}>Next →</Btn>:<Btn loading={loading} onClick={submit}>Post Task</Btn>}
+        <div style={{ display:'flex', gap:10 }}>
+          <Btn variant="secondary" loading={savingDraft} onClick={saveDraft} title="Save what you have and finish later">
+            {draftId ? 'Save Draft' : 'Save as Draft'}
+          </Btn>
+          {step<STEPS.length-1?<Btn onClick={next}>Next →</Btn>:<Btn loading={loading} onClick={submit}>{draftId ? 'Publish Draft' : 'Post Task'}</Btn>}
+        </div>
       </div>
     </div>
   )
@@ -3675,9 +3756,42 @@ function TemplatesPanel({ setPage, setSelectedTask }) {
 function MyTasks({ setPage, setSelectedTask }) {
   const { state } = useStore()
   const { user } = useAuth()
+  const toast = useToast()
   const [filter, setFilter] = useState('all')
   const [myTasks, setMyTasks] = useState([])
+  const [busyId, setBusyId] = useState(null)
   const token = () => localStorage.getItem('rl_token')
+
+  // Drafts: publish (validated server-side), edit (hand the id to the post form
+  // via sessionStorage — TaskNew picks it up on mount), or discard.
+  function editDraft(task) {
+    try { sessionStorage.setItem('rl_edit_draft', task.task_id) } catch { /* ignore */ }
+    setPage('tasks-new')
+  }
+  async function publishDraft(task) {
+    setBusyId(task.task_id)
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${task.task_id}/publish`, { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast(d.message || 'Could not publish draft', 'error')
+        if (res.status === 422) editDraft(task) // take them straight to finishing it
+        return
+      }
+      toast('Draft published — your task is live!', 'success')
+      load()
+    } catch { toast('Could not reach the server', 'error') } finally { setBusyId(null) }
+  }
+  async function discardDraft(task) {
+    if (!window.confirm(`Discard the draft "${task.title}"? This can't be undone.`)) return
+    setBusyId(task.task_id)
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${task.task_id}`, { method:'DELETE', headers:{ Authorization:`Bearer ${token()}` } })
+      if (!res.ok) throw new Error()
+      toast('Draft discarded', 'success')
+      load()
+    } catch { toast('Could not discard draft', 'error') } finally { setBusyId(null) }
+  }
 
   async function load() {
     try {
@@ -3702,38 +3816,49 @@ function MyTasks({ setPage, setSelectedTask }) {
       </div>
       <TemplatesPanel setPage={setPage} setSelectedTask={setSelectedTask} />
       <div className="feed-scroll" style={{ display:'flex', gap:2, marginBottom:20, background:'var(--bg-elevated)', borderRadius:12, padding:3, overflowX:'auto', maxWidth:'fit-content' }}>
-        {['all','open','in_progress','completed','disputed','expired'].map(s => (
+        {['all','draft','open','in_progress','completed','disputed','expired'].map(s => (
           <button key={s} onClick={() => setFilter(s)}
-            style={{ padding:'7px 14px', borderRadius:9, fontSize:'0.8rem', fontFamily:'var(--font-body)', fontWeight:600, cursor:'pointer', transition:'all 150ms ease', border:'none', whiteSpace:'nowrap', background:filter===s?'var(--bg-surface)':'transparent', color:filter===s?'var(--accent)':'var(--text-muted)', boxShadow:filter===s?'0 1px 3px rgba(19,17,24,.14)':'none' }}>
-            {s.replace('_',' ')} ({s==='all'?myTasks.length:myTasks.filter(t=>t.status===s).length})
+            style={{ padding:'7px 14px', borderRadius:9, fontSize:'0.8rem', fontFamily:'var(--font-body)', fontWeight:600, cursor:'pointer', transition:'all 150ms ease', border:'none', whiteSpace:'nowrap', textTransform:'capitalize', background:filter===s?'var(--bg-surface)':'transparent', color:filter===s?'var(--accent)':'var(--text-muted)', boxShadow:filter===s?'0 1px 3px rgba(19,17,24,.14)':'none' }}>
+            {s==='draft' ? 'Drafts' : s.replace('_',' ')} ({s==='all'?myTasks.length:myTasks.filter(t=>t.status===s).length})
           </button>
         ))}
       </div>
       <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
         {filtered.map(task => {
+          const isDraft = task.status === 'draft'
           const pendingBids = typeof task.bid_count === 'number'
             ? task.bid_count
             : state.bids.filter(b=>b.task_id===task.task_id&&b.status==='pending').length
           return (
-            <DCard key={task.task_id} onClick={() => { setSelectedTask(task.task_id); setPage('task-detail') }} style={{ display:'flex', alignItems:'center', gap:20, padding:'16px 20px' }}>
-              <div style={{ flex:1 }}>
+            <DCard key={task.task_id} onClick={() => { if (isDraft) { editDraft(task) } else { setSelectedTask(task.task_id); setPage('task-detail') } }} style={{ display:'flex', alignItems:'center', gap:20, padding:'16px 20px', flexWrap:'wrap', ...(isDraft?{ borderStyle:'dashed' }:{}) }}>
+              <div style={{ flex:1, minWidth:180 }}>
                 <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:6 }}>
                   <Badge variant={task.status}>{task.status.replace('_',' ')}</Badge>
                   <span style={{ fontFamily:'var(--font-display)', fontWeight:600 }}>{task.title}</span>
                 </div>
                 <div style={{ display:'flex', gap:6 }}>{task.skill_tags.slice(0,3).map(t=><Tag key={t}>{t}</Tag>)}</div>
               </div>
-              <div style={{ display:'flex', gap:24, alignItems:'center', flexShrink:0 }}>
-                {pendingBids>0&&<div style={{ textAlign:'center' }}><div style={{ fontFamily:'var(--font-mono)', fontSize:'1.2rem', fontWeight:500, color:'var(--accent)' }}>{pendingBids}</div><Mono>new bids</Mono></div>}
-                <div style={{ textAlign:'right' }}>
-                  <div style={{ fontFamily:'var(--font-mono)', color:'var(--accent)', fontWeight:500 }}>R{task.budget}</div>
-                  <Mono>Due {new Date(task.deadline).toLocaleDateString()}</Mono>
+              {isDraft ? (
+                // Drafts: no bids/dates to show (fields may be empty) — actions instead.
+                <div style={{ display:'flex', gap:8, alignItems:'center', flexShrink:0 }} onClick={e => e.stopPropagation()}>
+                  <Mono style={{ marginRight:6 }}>{task.budget != null ? `R${task.budget}` : 'No budget yet'}</Mono>
+                  <Btn variant="secondary" size="sm" onClick={() => editDraft(task)}>Edit</Btn>
+                  <Btn size="sm" loading={busyId===task.task_id} onClick={() => publishDraft(task)}>Publish</Btn>
+                  <Btn variant="ghost" size="sm" disabled={busyId===task.task_id} onClick={() => discardDraft(task)}>✕</Btn>
                 </div>
-              </div>
+              ) : (
+                <div style={{ display:'flex', gap:24, alignItems:'center', flexShrink:0 }}>
+                  {pendingBids>0&&<div style={{ textAlign:'center' }}><div style={{ fontFamily:'var(--font-mono)', fontSize:'1.2rem', fontWeight:500, color:'var(--accent)' }}>{pendingBids}</div><Mono>new bids</Mono></div>}
+                  <div style={{ textAlign:'right' }}>
+                    <div style={{ fontFamily:'var(--font-mono)', color:'var(--accent)', fontWeight:500 }}>R{task.budget}</div>
+                    <Mono>Due {task.deadline ? new Date(task.deadline).toLocaleDateString() : '—'}</Mono>
+                  </div>
+                </div>
+              )}
             </DCard>
           )
         })}
-        {filtered.length===0&&<EmptyState icon="▤" message={`No ${filter==='all'?'':filter.replace('_',' ')} tasks`} action={<Btn size="sm" onClick={() => setPage('tasks-new')}>Post a Task</Btn>} />}
+        {filtered.length===0&&<EmptyState icon="▤" message={filter==='draft' ? 'No drafts — use "Save as Draft" while posting' : `No ${filter==='all'?'':filter.replace('_',' ')} tasks`} action={<Btn size="sm" onClick={() => setPage('tasks-new')}>Post a Task</Btn>} />}
       </div>
     </div>
   )

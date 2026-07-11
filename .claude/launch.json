@@ -8,6 +8,12 @@
       "cwd": "frontend",
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "skins-preview",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5317", "--directory", "C:\\Users\\tmkwa\\AppData\\Local\\Temp\\claude\\C--Users-tmkwa-OneDrive-Documents-taskfinder-platform\\fd4f5144-31d8-4a02-802e-7bb7e95f8e27\\scratchpad"],
+      "port": 5317
     }
   ]
 }
