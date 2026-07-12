@@ -7,7 +7,8 @@ import jwt from 'jsonwebtoken'
 import crypto from 'node:crypto'
 import { body, validationResult } from 'express-validator'
 import { pool } from '../db.js'
-import { emailVerify, emailPasswordReset, emailPasswordChanged, emailWelcome, emailNewLogin } from '../emails.js'
+import { emailVerify, emailPasswordReset, emailPasswordChanged, emailWelcome, emailNewLogin, emailStudentVerify } from '../emails.js'
+import { matchStudentDomain } from '../studentDomains.js'
 import { requireAuth } from '../middleware.js'
 import { validateLocationName, resolveLocationId } from '../locationValidate.js'
 import { saIdValidator, encryptId, hashId, idConfigured } from '../idnumber.js'
@@ -398,6 +399,7 @@ router.get('/me', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT u.user_id, u.email, u.role, u.google_id, u.google_avatar_url,
               u.popia_consent, u.token_version, u.beta_founder,
+              u.student_email, u.student_email_verified_at,
               up.display_name, up.avg_rating, up.avatar_url, up.skills, up.bio,
               up.intent, up.onboarded_at, up.campus_zone
        FROM users u LEFT JOIN user_profiles up ON u.user_id = up.user_id
@@ -407,6 +409,7 @@ router.get('/me', async (req, res) => {
       return res.status(401).json({ message: 'Session expired. Please sign in again.' })
     }
     const { token_version, ...safeUser } = rows[0]
+    safeUser.student_verified = safeUser.student_email_verified_at != null
     return res.status(200).json({ user: safeUser })
   } catch {
     return res.status(401).json({ message: 'Invalid or expired token.' })
@@ -667,5 +670,82 @@ router.post('/verify-email',
     }
   }
 )
+
+// ── Student email mapping (Batch 6) ──────────────────────────────────────────
+// Anyone joins with any email; a student separately maps + verifies a university
+// email to unlock student-only perks. The address must be on the university
+// allowlist (student_domains, all 26 SA universities, subdomain-aware).
+const STUDENT_TTL_MS = 24 * 60 * 60 * 1000
+
+// POST /auth/student-email  { studentEmail } — attach a university email + send a verify link.
+router.post('/student-email',
+  requireAuth,
+  [ body('studentEmail').trim().isEmail().isLength({ max: 200 }) ],
+  check,
+  async (req, res) => {
+    try {
+      const studentEmail = req.body.studentEmail.trim().toLowerCase()
+      const match = await matchStudentDomain(studentEmail)
+      if (!match) {
+        return res.status(422).json({ message: "That doesn't look like a South African university email. Use your official campus address." })
+      }
+      // Guard: don't let two accounts verify the same student email.
+      const taken = await pool.query(
+        'SELECT 1 FROM users WHERE lower(student_email) = $1 AND student_email_verified_at IS NOT NULL AND user_id <> $2',
+        [studentEmail, req.userId])
+      if (taken.rows.length > 0) {
+        return res.status(409).json({ message: 'That student email is already verified on another account.' })
+      }
+      // Store as pending (unverified) and email a fresh verification link.
+      await pool.query(
+        'UPDATE users SET student_email = $1, student_email_verified_at = NULL WHERE user_id = $2',
+        [studentEmail, req.userId])
+      issueAuthToken(req.userId, 'student_email_verify', STUDENT_TTL_MS)
+        .then(raw => emailStudentVerify(studentEmail, `${FRONTEND_URL}/verify-student?token=${raw}`, match.label))
+        .catch(e => log.error('auth.student_email_send_failed', { reqId: req.id, msg: e.message }))
+      return res.status(200).json({ message: `We've emailed a verification link to your ${match.label} address.`, university: match.label, pending: true })
+    } catch (err) {
+      log.error('auth.student_email_failed', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// POST /auth/student-email/verify  { token } — consume the link, mark verified.
+router.post('/student-email/verify',
+  [ body('token').notEmpty() ],
+  check,
+  async (req, res) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT token_id, user_id FROM auth_tokens
+          WHERE token_hash = $1 AND purpose = 'student_email_verify'
+            AND used_at IS NULL AND expires_at > NOW()`,
+        [hashToken(req.body.token)])
+      if (rows.length === 0) return res.status(400).json({ message: 'This verification link is invalid or has expired.' })
+      // Re-check the stored address is still a university domain before granting.
+      const u = await pool.query('SELECT student_email FROM users WHERE user_id = $1', [rows[0].user_id])
+      const match = await matchStudentDomain(u.rows[0]?.student_email)
+      if (!match) return res.status(400).json({ message: 'No pending student email to verify.' })
+      await pool.query('UPDATE users SET student_email_verified_at = NOW() WHERE user_id = $1', [rows[0].user_id])
+      await pool.query('UPDATE auth_tokens SET used_at = NOW() WHERE token_id = $1', [rows[0].token_id])
+      return res.status(200).json({ message: 'Student email verified — student perks unlocked.', university: match.label })
+    } catch (err) {
+      log.error('auth.student_email_verify_failed', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// DELETE /auth/student-email — unlink the student email.
+router.delete('/student-email', requireAuth, async (req, res) => {
+  try {
+    await pool.query('UPDATE users SET student_email = NULL, student_email_verified_at = NULL WHERE user_id = $1', [req.userId])
+    return res.status(204).end()
+  } catch (err) {
+    log.error('auth.student_email_delete_failed', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
 
 export default router

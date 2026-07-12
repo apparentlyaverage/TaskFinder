@@ -17,6 +17,7 @@ import log from '../log.js'
 import { requireAuth, requireAdmin } from '../middleware.js'
 import { createNotification } from '../notify.js'
 import { writeAudit } from '../audit.js'
+import { isAllowedStudentDomain } from '../studentDomains.js'
 import crypto from 'node:crypto'
 
 const router = Router()
@@ -34,16 +35,19 @@ async function ownedBusiness(userId) {
   return rows[0] || null
 }
 
-// A "verified student" = a verified email whose domain is in the campus allowlist
-// (student_domains). Gates claiming of student_only deals (A2).
+// A "verified student" (Batch 6) is either:
+//   • their mapped student_email is verified and on a university domain, OR
+//   • (legacy) their login email is itself verified and on a university domain.
+// Domain matching is subdomain-aware (see studentDomains.js). Gates student_only
+// deal claims (A2).
 async function isVerifiedStudent(userId) {
-  const { rows } = await pool.query('SELECT email, is_email_verified FROM users WHERE user_id = $1', [userId])
+  const { rows } = await pool.query(
+    'SELECT email, is_email_verified, student_email, student_email_verified_at FROM users WHERE user_id = $1', [userId])
   const u = rows[0]
-  if (!u || !u.is_email_verified) return false
-  const domain = (u.email || '').split('@')[1]?.toLowerCase()
-  if (!domain) return false
-  const d = await pool.query('SELECT 1 FROM student_domains WHERE domain = $1', [domain])
-  return d.rows.length > 0
+  if (!u) return false
+  if (u.student_email && u.student_email_verified_at && await isAllowedStudentDomain(u.student_email)) return true
+  if (u.is_email_verified && await isAllowedStudentDomain(u.email)) return true
+  return false
 }
 
 // Allow empty/null; reject dangerous schemes; require an http(s) host. Mirrors

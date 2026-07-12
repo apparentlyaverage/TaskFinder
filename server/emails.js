@@ -34,6 +34,14 @@ export const emailVerify = (to, link) => support(to,
     button(link, 'Verify email') +
     p(`<span style="font-size:12px;color:#9a93a6">Or paste this link: ${link}</span>`), SUPPORT_FOOTER))
 
+export const emailStudentVerify = (to, link, label) => support(to,
+  'Verify your student email — ReLivR',
+  `Confirm this is your ${label || 'university'} email to unlock student perks on ReLivR:\n${link}`,
+  layout('Confirm your student email',
+    p(`Tap below to confirm this is your ${label ? `<strong>${label}</strong>` : 'university'} email. Once verified, you’ll unlock student-only deals on ReLivR.`) +
+    button(link, 'Verify student email') +
+    p('<span style="font-size:12px;color:#9a93a6">Didn’t ask for this? Ignore this email — nothing changes.</span>'), SUPPORT_FOOTER))
+
 export const emailPasswordReset = (to, link) => support(to,
   'Reset your ReLivR password',
   `Reset your ReLivR password (valid 1 hour):\n${link}`,
