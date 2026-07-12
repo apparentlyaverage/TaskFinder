@@ -492,6 +492,156 @@ router.post('/mine/boost', requireAuth, async (req, res) => {
   }
 })
 
+// ══ PRODUCT CATALOG (Batch 5) ══════════════════════════════════════════════
+// A business owner lists products/services; the public sees the available ones on
+// the profile. Writes are owner-scoped. NB: the /mine/products routes are declared
+// BEFORE /:id/products so "mine" is never captured as a business id.
+const MAX_PRODUCTS = 100
+
+// Resolve the caller's own business id (or null). Mirrors the /mine pattern.
+async function ownBusinessId(userId) {
+  const { rows } = await pool.query(
+    'SELECT business_id FROM businesses WHERE owner_id = $1 ORDER BY created_at ASC LIMIT 1', [userId])
+  return rows[0]?.business_id || null
+}
+function serializeProduct(r) {
+  return {
+    product_id: r.product_id, business_id: r.business_id, name: r.name,
+    description: r.description, price_cents: r.price_cents, image_url: r.image_url,
+    is_available: r.is_available, sort_order: r.sort_order, created_at: r.created_at,
+  }
+}
+
+// ── OWNER: my full catalog (includes unavailable items) ──
+// GET /businesses/mine/products
+router.get('/mine/products', requireAuth, async (req, res) => {
+  try {
+    const businessId = await ownBusinessId(req.userId)
+    if (!businessId) return res.status(404).json({ message: 'No business is linked to your account yet.' })
+    const { rows } = await pool.query(
+      `SELECT * FROM business_products WHERE business_id = $1 ORDER BY sort_order ASC, created_at ASC`, [businessId])
+    return res.status(200).json({ products: rows.map(serializeProduct) })
+  } catch (err) {
+    log.error('GET /businesses/mine/products', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
+
+// ── OWNER: add a catalog item ──
+// POST /businesses/mine/products  { name, priceCents?, description?, imageUrl?, isAvailable?, sortOrder? }
+router.post('/mine/products',
+  requireAuth,
+  [
+    body('name').trim().isLength({ min: 1, max: 120 }),
+    body('priceCents').optional({ nullable: true }).isInt({ min: 0, max: 100_000_000 }),
+    body('description').optional({ nullable: true }).trim().isLength({ max: 600 }),
+    body('imageUrl').optional({ nullable: true }).trim().isLength({ max: 2000 }),
+    body('isAvailable').optional().isBoolean(),
+    body('sortOrder').optional().isInt({ min: 0, max: 100000 }),
+  ],
+  check,
+  async (req, res) => {
+    if (rejectIfProfane(res, `${req.body.name} ${req.body.description || ''}`)) return
+    try {
+      const businessId = await ownBusinessId(req.userId)
+      if (!businessId) return res.status(404).json({ message: 'No business is linked to your account yet.' })
+      const cnt = await pool.query('SELECT COUNT(*)::int AS n FROM business_products WHERE business_id = $1', [businessId])
+      if (cnt.rows[0].n >= MAX_PRODUCTS) return res.status(422).json({ message: `Catalog limit reached (${MAX_PRODUCTS} items).` })
+      const { rows } = await pool.query(
+        `INSERT INTO business_products (business_id, name, description, price_cents, image_url, is_available, sort_order)
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+        [businessId,
+         req.body.name.trim(),
+         (req.body.description || '').trim() || null,
+         req.body.priceCents ?? null,
+         req.body.imageUrl ? cleanUrl(req.body.imageUrl) : null,
+         req.body.isAvailable === undefined ? true : !!req.body.isAvailable,
+         req.body.sortOrder ?? 0])
+      return res.status(201).json({ product: serializeProduct(rows[0]) })
+    } catch (err) {
+      log.error('POST /businesses/mine/products', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// ── OWNER: edit a catalog item (must belong to my business) ──
+// PATCH /businesses/mine/products/:productId
+router.patch('/mine/products/:productId',
+  requireAuth,
+  [
+    param('productId').isUUID(),
+    body('name').optional().trim().isLength({ min: 1, max: 120 }),
+    body('priceCents').optional({ nullable: true }).isInt({ min: 0, max: 100_000_000 }),
+    body('description').optional({ nullable: true }).trim().isLength({ max: 600 }),
+    body('imageUrl').optional({ nullable: true }).trim().isLength({ max: 2000 }),
+    body('isAvailable').optional().isBoolean(),
+    body('sortOrder').optional().isInt({ min: 0, max: 100000 }),
+  ],
+  check,
+  async (req, res) => {
+    if (rejectIfProfane(res, `${req.body.name || ''} ${req.body.description || ''}`)) return
+    try {
+      const businessId = await ownBusinessId(req.userId)
+      if (!businessId) return res.status(404).json({ message: 'No business is linked to your account yet.' })
+      const sets = [], vals = []
+      let i = 1
+      if (req.body.name !== undefined)        { sets.push(`name = $${i++}`);         vals.push(req.body.name.trim()) }
+      if (req.body.description !== undefined)  { sets.push(`description = $${i++}`);  vals.push((req.body.description || '').trim() || null) }
+      if (req.body.priceCents !== undefined)   { sets.push(`price_cents = $${i++}`);  vals.push(req.body.priceCents ?? null) }
+      if (req.body.imageUrl !== undefined)     { sets.push(`image_url = $${i++}`);    vals.push(req.body.imageUrl ? cleanUrl(req.body.imageUrl) : null) }
+      if (req.body.isAvailable !== undefined)  { sets.push(`is_available = $${i++}`); vals.push(!!req.body.isAvailable) }
+      if (req.body.sortOrder !== undefined)    { sets.push(`sort_order = $${i++}`);   vals.push(req.body.sortOrder) }
+      if (sets.length === 0) return res.status(400).json({ message: 'Nothing to update.' })
+      sets.push('updated_at = NOW()')
+      vals.push(req.params.productId, businessId)
+      const { rows } = await pool.query(
+        `UPDATE business_products SET ${sets.join(', ')}
+          WHERE product_id = $${i++} AND business_id = $${i} RETURNING *`, vals)
+      if (rows.length === 0) return res.status(404).json({ message: 'Product not found.' })
+      return res.status(200).json({ product: serializeProduct(rows[0]) })
+    } catch (err) {
+      log.error('PATCH /businesses/mine/products/:productId', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// ── OWNER: delete a catalog item (must belong to my business) ──
+// DELETE /businesses/mine/products/:productId
+router.delete('/mine/products/:productId',
+  requireAuth, [ param('productId').isUUID() ], check,
+  async (req, res) => {
+    try {
+      const businessId = await ownBusinessId(req.userId)
+      if (!businessId) return res.status(404).json({ message: 'No business is linked to your account yet.' })
+      const { rowCount } = await pool.query(
+        'DELETE FROM business_products WHERE product_id = $1 AND business_id = $2', [req.params.productId, businessId])
+      if (rowCount === 0) return res.status(404).json({ message: 'Product not found.' })
+      return res.status(204).end()
+    } catch (err) {
+      log.error('DELETE /businesses/mine/products/:productId', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
+    }
+  }
+)
+
+// ── PUBLIC: a business's available catalog ──
+// GET /businesses/:id/products
+router.get('/:id/products', [ param('id').isUUID() ], check, async (req, res) => {
+  try {
+    const biz = await pool.query('SELECT status FROM businesses WHERE business_id = $1', [req.params.id])
+    if (biz.rows.length === 0 || biz.rows[0].status !== 'active') return res.status(404).json({ message: 'Business not found.' })
+    const { rows } = await pool.query(
+      `SELECT * FROM business_products WHERE business_id = $1 AND is_available = TRUE
+        ORDER BY sort_order ASC, created_at ASC`, [req.params.id])
+    return res.status(200).json({ products: rows.map(serializeProduct) })
+  } catch (err) {
+    log.error('GET /businesses/:id/products', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
+
 // ── ADMIN: toggle a business's feature switches (E5) ──
 // PATCH /businesses/:id/features  { disabledFeatures: string[] }
 router.patch('/:id/features', requireAuth, requireAdmin,

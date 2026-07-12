@@ -4698,6 +4698,40 @@ function BizLightbox({ images, index, onClose, onNav }) {
 }
 
 // E1: a business's rating + reviews, with a leave-a-review form (anyone can review).
+// Public catalog on a business profile (Batch 5) — available items only.
+// Renders nothing if the business has no catalog, so it never leaves an empty header.
+function BusinessCatalogPublic({ businessId }) {
+  const [products, setProducts] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    fetch(`${API_BASE}/businesses/${businessId}/products`)
+      .then(r => r.ok ? r.json() : { products: [] })
+      .then(d => { if (!cancelled) setProducts(d.products || []) })
+      .catch(() => { if (!cancelled) setProducts([]) })
+    return () => { cancelled = true }
+  }, [businessId])
+  if (!products || products.length === 0) return null
+  return (
+    <div style={{ marginTop: 24 }}>
+      <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.1rem', marginBottom: 12 }}>Catalog</h3>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+        {products.map(p => (
+          <div key={p.product_id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: 10, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
+            {p.image_url
+              ? <img src={p.image_url} alt="" loading="lazy" style={{ width: 46, height: 46, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} />
+              : <div style={{ width: 46, height: 46, borderRadius: 9, background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', flexShrink: 0 }}>▦</div>}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: '.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+              {p.description && <div style={{ fontSize: '.75rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.description}</div>}
+            </div>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '.85rem', whiteSpace: 'nowrap' }}>{p.price_cents != null ? `R${(p.price_cents / 100).toFixed(2)}` : <span style={{ fontSize: '.68rem', color: 'var(--text-muted)', fontWeight: 600 }}>on request</span>}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function BusinessReviews({ businessId }) {
   const toast = useToast()
   const token = () => localStorage.getItem('rl_token')
@@ -4846,6 +4880,8 @@ function LocalBrowse({ setPage }) {
                 </div>
               ))}
             </div>}
+
+        <BusinessCatalogPublic businessId={b.business_id} />
 
         <BusinessReviews businessId={b.business_id} />
 
@@ -6235,6 +6271,7 @@ function BusinessDashboard({ onLogout, onViewLanding }) {
         </div>
         <div style={{ maxWidth:1100, margin:'0 auto', display:'flex', gap:4, padding:'0 20px' }}>
           <button onClick={() => setTab('page')}      style={bizTab(tab==='page')}>My Page</button>
+          <button onClick={() => setTab('catalog')}   style={bizTab(tab==='catalog')}>Catalog</button>
           <button onClick={() => setTab('deals')}     style={bizTab(tab==='deals')}>Deals</button>
           <button onClick={() => setTab('bookings')}  style={bizTab(tab==='bookings')}>Bookings</button>
           <button onClick={() => setTab('clients')}   style={bizTab(tab==='clients')}>Clients</button>
@@ -6264,6 +6301,7 @@ function BusinessDashboard({ onLogout, onViewLanding }) {
           </DCard>
         )
          : tab === 'page' ? <BusinessPageEditor biz={biz} onSaved={setBiz} />
+         : tab === 'catalog' ? <BusinessCatalog biz={biz} />
          : tab === 'deals' ? <BusinessDeals biz={biz} />
          : tab === 'bookings' ? <AvailabilityManager hostType="business" />
          : tab === 'clients' ? <BusinessClients />
@@ -6464,6 +6502,119 @@ function DealForm({ biz, deal, onDone, onCancel }) {
           <div style={{ maxWidth: 280 }}><DealCard d={preview} /></div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// Business dashboard "Catalog" tab (Batch 5) — the owner lists products/services.
+// Price is entered in Rand, stored in cents; blank = "price on request".
+function BusinessCatalog({ biz }) {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [products, setProducts] = useState(null)
+  const [editing, setEditing]   = useState(null) // null | 'new' | product object
+  const blank = { name: '', priceRand: '', description: '', imageUrl: '', isAvailable: true }
+  const [form, setForm] = useState(blank)
+  const [saving, setSaving] = useState(false)
+
+  const load = () => fetch(API_BASE + '/businesses/mine/products', { headers: { Authorization: `Bearer ${token()}` } })
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('load')))
+    .then(d => setProducts(d.products || []))
+    .catch(() => setProducts([]))
+  useEffect(() => { load() }, [])
+
+  function startNew() { setForm(blank); setEditing('new') }
+  function startEdit(p) {
+    setForm({ name: p.name, priceRand: p.price_cents != null ? (p.price_cents / 100).toString() : '', description: p.description || '', imageUrl: p.image_url || '', isAvailable: p.is_available })
+    setEditing(p)
+  }
+
+  async function save() {
+    if (!form.name.trim()) { toast('Give the item a name', 'error'); return }
+    let priceCents = null
+    if (form.priceRand.trim() !== '') {
+      const r = Number(form.priceRand)
+      if (!Number.isFinite(r) || r < 0) { toast('Enter a valid price, or leave it blank for “on request”', 'error'); return }
+      priceCents = Math.round(r * 100)
+    }
+    const body = { name: form.name.trim(), priceCents, description: form.description.trim() || null, imageUrl: form.imageUrl.trim() || null, isAvailable: form.isAvailable }
+    setSaving(true)
+    try {
+      const isNew = editing === 'new'
+      const url = isNew ? API_BASE + '/businesses/mine/products' : `${API_BASE}/businesses/mine/products/${editing.product_id}`
+      const res = await fetch(url, { method: isNew ? 'POST' : 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify(body) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.errors?.[0]?.msg || d.message || 'Could not save')
+      toast(isNew ? 'Item added' : 'Item updated', 'success')
+      setEditing(null); load()
+    } catch (e) { toast(e.message === 'Failed to fetch' ? 'Backend offline — not saved' : e.message, 'error') }
+    finally { setSaving(false) }
+  }
+
+  async function remove(p) {
+    if (!window.confirm(`Remove “${p.name}” from your catalog?`)) return
+    const res = await fetch(`${API_BASE}/businesses/mine/products/${p.product_id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token()}` } })
+    if (res.ok) { toast('Item removed', 'success'); load() } else toast('Delete failed', 'error')
+  }
+
+  async function toggleAvail(p) {
+    const res = await fetch(`${API_BASE}/businesses/mine/products/${p.product_id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ isAvailable: !p.is_available }) })
+    if (res.ok) load(); else toast('Update failed', 'error')
+  }
+
+  if (editing) return (
+    <div className="page-enter" style={{ maxWidth: 560 }}>
+      <button onClick={() => setEditing(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '.78rem', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '.08em', cursor: 'pointer', marginBottom: 16 }}>← Back to catalog</button>
+      <DCard hover={false}>
+        <Mono size="0.68rem" color="var(--text-secondary)" style={{ display: 'block', marginBottom: 16 }}>{editing === 'new' ? 'New catalog item' : 'Edit item'}</Mono>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <Input label="Name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Flat white, Haircut, Assignment printing" />
+          <Input label="Price (R)" value={form.priceRand} onChange={e => setForm(f => ({ ...f, priceRand: e.target.value }))} placeholder="35.00" hint="Leave blank for “price on request”." inputMode="decimal" />
+          <Textarea label="Description" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} style={{ minHeight: 70 }} hint="Optional — size, options, what's included." />
+          <Input label="Image URL" value={form.imageUrl} onChange={e => setForm(f => ({ ...f, imageUrl: e.target.value }))} placeholder="https://…" hint="Optional photo of the product." />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+            <input type="checkbox" checked={form.isAvailable} onChange={e => setForm(f => ({ ...f, isAvailable: e.target.checked }))} style={{ width: 18, height: 18, accentColor: 'var(--accent)', cursor: 'pointer' }} />
+            <span style={{ fontWeight: 600, fontSize: '.9rem' }}>Available (shown on your public page)</span>
+          </label>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Btn loading={saving} onClick={save}>{editing === 'new' ? 'Add item' : 'Save changes'}</Btn>
+            <Btn variant="secondary" onClick={() => setEditing(null)}>Cancel</Btn>
+          </div>
+        </div>
+      </DCard>
+    </div>
+  )
+
+  return (
+    <div className="page-enter">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
+        <div>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.4rem', margin: 0 }}>Catalog</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '.88rem', marginTop: 4 }}>List what you sell — products or services. Available items show on your public ReLivR page.</p>
+        </div>
+        <Btn onClick={startNew}>＋ New item</Btn>
+      </div>
+      {products === null ? <div style={{ padding: 50, textAlign: 'center' }}><Spinner /></div>
+        : products.length === 0 ? <EmptyState icon="▦" message="Nothing in your catalog yet — add your first item" action={<Btn size="sm" onClick={startNew}>＋ New item</Btn>} />
+          : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {products.map(p => (
+              <DCard key={p.product_id} hover={false} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: 12, opacity: p.is_available ? 1 : 0.6 }}>
+                {p.image_url
+                  ? <img src={p.image_url} alt="" style={{ width: 48, height: 48, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
+                  : <div style={{ width: 48, height: 48, borderRadius: 10, background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--text-muted)' }}>▦</div>}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: '.95rem' }}>{p.name}{!p.is_available && <span style={{ marginLeft: 8, fontSize: '.66rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>hidden</span>}</div>
+                  {p.description && <div style={{ fontSize: '.8rem', color: 'var(--text-secondary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.description}</div>}
+                </div>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '.95rem', whiteSpace: 'nowrap' }}>{p.price_cents != null ? `R${(p.price_cents / 100).toFixed(2)}` : <span style={{ fontSize: '.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>on request</span>}</div>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button onClick={() => toggleAvail(p)} title={p.is_available ? 'Hide from public page' : 'Show on public page'} style={bizGhostBtn}>{p.is_available ? 'Hide' : 'Show'}</button>
+                  <button onClick={() => startEdit(p)} style={bizGhostBtn}>Edit</button>
+                  <button onClick={() => remove(p)} style={{ ...bizGhostBtn, color: 'var(--danger)' }}>✕</button>
+                </div>
+              </DCard>
+            ))}
+          </div>}
     </div>
   )
 }
