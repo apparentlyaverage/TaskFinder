@@ -11,6 +11,27 @@ import jwt from 'jsonwebtoken'
 import { pool } from './db.js'
 import log from './log.js'
 
+// Presence heartbeat: bump users.last_seen_at so the Available-Now rail can show
+// who's online. Best-effort and fire-and-forget — it must never add latency to,
+// or fail, the auth path. Throttled in-process to at most one write per user per
+// minute (the SQL WHERE also guards it, so concurrent instances stay cheap).
+const HEARTBEAT_MS = 60_000
+const lastBeat = new Map()
+function touchPresence(userId) {
+  const now = Date.now()
+  const prev = lastBeat.get(userId)
+  if (prev && now - prev < HEARTBEAT_MS) return
+  lastBeat.set(userId, now)
+  // Cap the map so a long-lived process can't leak memory on many distinct users.
+  if (lastBeat.size > 10_000) lastBeat.clear()
+  pool.query(
+    `UPDATE users SET last_seen_at = NOW()
+      WHERE user_id = $1
+        AND (last_seen_at IS NULL OR last_seen_at < NOW() - INTERVAL '1 minute')`,
+    [userId],
+  ).catch(() => {}) // column may not exist pre-migration, or DB blip — never surface it
+}
+
 export async function requireAuth(req, res, next) {
   const header = req.headers.authorization || ''
   const token  = header.startsWith('Bearer ') ? header.slice(7) : null
@@ -38,6 +59,7 @@ export async function requireAuth(req, res, next) {
 
   req.userId   = payload.userId
   req.userRole = payload.role
+  touchPresence(payload.userId)
   next()
 }
 

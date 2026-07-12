@@ -2724,7 +2724,62 @@ function useCategories() {
   return cats
 }
 
-function TaskBrowse({ setPage, setSelectedTask }) {
+// Batch 4: horizontal rail of providers who are available right now — either
+// online (heartbeat in the last 5 min) or inside their declared working hours.
+// Auth-only, coarse (a green dot / "open now" pill, never an exact timestamp).
+// Renders nothing when the list is empty, so it never leaves a dead gap.
+function AvailableNowRail({ openProfile }) {
+  const [providers, setProviders] = useState([])
+  const token = () => localStorage.getItem('rl_token')
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch(API_BASE + '/availability/now', { headers: { Authorization: `Bearer ${token()}` } })
+        if (!res.ok) return
+        const { providers } = await res.json()
+        if (!cancelled) setProviders(Array.isArray(providers) ? providers : [])
+      } catch { /* backend offline — just hide the rail */ }
+    }
+    load()
+    const id = setInterval(load, 90_000) // keep the dots fresh without hammering
+    return () => { cancelled = true; clearInterval(id) }
+  }, [])
+
+  if (providers.length === 0) return null
+  return (
+    <div style={{ marginBottom:18 }}>
+      <div className="slabel" style={{ color:'var(--text-secondary)', marginBottom:8, display:'flex', alignItems:'center', gap:8 }}>
+        <span style={{ width:7, height:7, borderRadius:'50%', background:'var(--success)', boxShadow:'0 0 0 3px color-mix(in srgb, var(--success) 22%, transparent)' }} />
+        Available now
+      </div>
+      <div className="feed-scroll" style={{ display:'flex', gap:10, overflowX:'auto', paddingBottom:4 }}>
+        {providers.map(p => (
+          <button key={p.userId} onClick={() => openProfile(p.userId)}
+            title={p.headline || (p.online ? 'Online now' : 'Within working hours')}
+            style={{ flex:'0 0 auto', display:'flex', alignItems:'center', gap:10, padding:'8px 14px 8px 8px', borderRadius:100, cursor:'pointer', border:'1px solid var(--border)', background:'var(--bg-surface)', transition:'border-color 150ms ease, transform 150ms ease' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'none' }}>
+            <span style={{ position:'relative', flexShrink:0 }}>
+              {p.avatarUrl
+                ? <img src={p.avatarUrl} alt="" style={{ width:34, height:34, borderRadius:'50%', objectFit:'cover' }} />
+                : <span style={{ width:34, height:34, borderRadius:'50%', background:'var(--accent)', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:'.85rem' }}>{(p.displayName || '?').charAt(0).toUpperCase()}</span>}
+              {p.online && <span aria-label="Online" title="Online" style={{ position:'absolute', right:-1, bottom:-1, width:11, height:11, borderRadius:'50%', background:'var(--success)', border:'2px solid var(--bg-surface)' }} />}
+            </span>
+            <span style={{ display:'flex', flexDirection:'column', alignItems:'flex-start', lineHeight:1.2 }}>
+              <span style={{ fontWeight:600, fontSize:'.85rem', whiteSpace:'nowrap' }}>{p.displayName || 'ReLivR user'}</span>
+              <span style={{ fontSize:'.68rem', color:'var(--text-muted)', fontFamily:'var(--font-mono)' }}>
+                {p.online ? 'online' : 'open now'}{p.avgRating > 0 ? ` · ★ ${Number(p.avgRating).toFixed(1)}` : ''}
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function TaskBrowse({ setPage, setSelectedTask, openProfile }) {
   const { state } = useStore()
   const [skill, setSkill]   = useState('')
   const [cat, setCat]       = useState(null)
@@ -2815,6 +2870,8 @@ function TaskBrowse({ setPage, setSelectedTask }) {
           )
         })}
       </div>
+
+      <AvailableNowRail openProfile={openProfile} />
 
       <div style={{ display:'flex', gap:10, marginBottom:18, flexWrap:'wrap', alignItems:'center', justifyContent:'space-between' }}>
         <Mono>{filtered.length} open task{filtered.length!==1?'s':''} near Rhodes</Mono>
@@ -5512,6 +5569,114 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
   )
 }
 
+// Batch 4: providers set their availability here — a master "available for work"
+// toggle plus optional weekly working hours (SAST). Both feed the Available-Now
+// rail: the toggle is the opt-in, working hours make you "open now" off-heartbeat.
+const WEEKDAYS = [[1,'Mon'],[2,'Tue'],[3,'Wed'],[4,'Thu'],[5,'Fri'],[6,'Sat'],[7,'Sun']]
+function AvailabilityCard() {
+  const toast = useToast()
+  const [loading, setLoading]   = useState(true)
+  const [saving, setSaving]     = useState(false)
+  const [available, setAvailable] = useState(false)
+  const [days, setDays]         = useState(() => new Set())
+  const [start, setStart]       = useState('09:00')
+  const [end, setEnd]           = useState('17:00')
+  const token = () => localStorage.getItem('rl_token')
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(API_BASE + '/availability/me', { headers: { Authorization: `Bearer ${token()}` } })
+        if (!res.ok) throw new Error('not ok')
+        const d = await res.json()
+        if (cancelled) return
+        setAvailable(!!d.availableForWork)
+        if (d.workingHours) {
+          setDays(new Set(d.workingHours.days || []))
+          if (d.workingHours.start) setStart(d.workingHours.start)
+          if (d.workingHours.end) setEnd(d.workingHours.end)
+        }
+      } catch { /* keep defaults */ }
+      finally { if (!cancelled) setLoading(false) }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  function toggleDay(d) {
+    setDays(prev => { const n = new Set(prev); n.has(d) ? n.delete(d) : n.add(d); return n })
+  }
+
+  async function save() {
+    // Working hours are optional — a provider can be "available" on presence alone.
+    let workingHours = null
+    if (days.size > 0) {
+      if (!(start < end)) { toast('Start time must be before end time', 'error'); return }
+      workingHours = { days: [...days].sort((a,b)=>a-b), start, end }
+    }
+    setSaving(true)
+    try {
+      const res = await fetch(API_BASE + '/availability', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({ availableForWork: available, workingHours }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.errors?.[0]?.msg || data.message || 'Could not save')
+      toast('Availability saved', 'success')
+    } catch (err) {
+      toast(err.message === 'Failed to fetch' ? 'Backend offline — not saved' : err.message, 'error')
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <DCard hover={false}>
+      <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:6 }}>Availability</Mono>
+      <p style={{ fontSize:'.8rem', color:'var(--text-muted)', marginBottom:16, lineHeight:1.5 }}>
+        Turn this on to appear in the <strong style={{ color:'var(--text-secondary)' }}>Available now</strong> rail when you're online or within your working hours. Off means you're never shown as available.
+      </p>
+      {loading ? <div style={{ padding:20, textAlign:'center' }}><Spinner /></div> : (
+        <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
+          <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
+            <input type="checkbox" checked={available} onChange={e => setAvailable(e.target.checked)} style={{ width:18, height:18, accentColor:'var(--accent)', cursor:'pointer' }} />
+            <span style={{ fontWeight:600, fontSize:'.9rem' }}>I'm available for work</span>
+          </label>
+          <div style={{ opacity: available ? 1 : 0.5, pointerEvents: available ? 'auto' : 'none', transition:'opacity 150ms ease' }}>
+            <Mono size="0.68rem" style={{ display:'block', marginBottom:8 }}>Working hours (optional · SAST)</Mono>
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:12 }}>
+              {WEEKDAYS.map(([n, label]) => {
+                const on = days.has(n)
+                return (
+                  <button key={n} type="button" onClick={() => toggleDay(n)}
+                    style={{ padding:'6px 12px', borderRadius:100, fontSize:'.78rem', fontWeight:600, cursor:'pointer', border:`1px solid ${on?'var(--accent)':'var(--border)'}`, background:on?'var(--accent)':'var(--bg-surface)', color:on?'#fff':'var(--text-secondary)' }}>
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+            <div style={{ display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
+              <label style={{ display:'flex', flexDirection:'column', gap:4, fontSize:'.72rem', color:'var(--text-muted)', fontFamily:'var(--font-mono)' }}>
+                From
+                <input type="time" value={start} onChange={e => setStart(e.target.value)}
+                  style={{ padding:'8px 10px', borderRadius:10, border:'1px solid var(--border)', background:'var(--bg-surface)', color:'var(--text-primary)', fontSize:'.9rem' }} />
+              </label>
+              <label style={{ display:'flex', flexDirection:'column', gap:4, fontSize:'.72rem', color:'var(--text-muted)', fontFamily:'var(--font-mono)' }}>
+                To
+                <input type="time" value={end} onChange={e => setEnd(e.target.value)}
+                  style={{ padding:'8px 10px', borderRadius:10, border:'1px solid var(--border)', background:'var(--bg-surface)', color:'var(--text-primary)', fontSize:'.9rem' }} />
+              </label>
+            </div>
+            <p style={{ fontSize:'.72rem', color:'var(--text-muted)', marginTop:10, lineHeight:1.5 }}>
+              Pick no days to stay available on your online status alone.
+            </p>
+          </div>
+          <Btn loading={saving} onClick={save} style={{ alignSelf:'flex-start' }}>Save availability</Btn>
+        </div>
+      )}
+    </DCard>
+  )
+}
+
 function Profile({ openProfile }) {
   const { user, logout, updateUser } = useAuth()
   const [avatarBusy, setAvatarBusy] = useState(false)
@@ -5868,6 +6033,7 @@ function Profile({ openProfile }) {
               <Textarea label="Services offered" value={services} onChange={e=>setServices(e.target.value)} style={{ minHeight:90 }} hint="What can people hire you for? Rates, availability, specialities." />
             </div>
           </DCard>
+          <AvailabilityCard />
           <DCard hover={false}>
             <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:16 }}>Professional Profile</Mono>
             <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
@@ -8041,6 +8207,25 @@ export default function App() {
     return () => { stop = true; clearInterval(id) }
   }, [user]) // eslint-disable-line
 
+  // ── Presence heartbeat (Batch 4) ────────────────────────────────────────────
+  // Keeps a logged-in provider showing as "online" in the Available-Now rail while
+  // they idle on a page. Only fires when the tab is visible, so a backgrounded tab
+  // correctly goes stale. requireAuth bumps last_seen_at on the ping.
+  useEffect(() => {
+    if (!user) return
+    async function beat() {
+      if (document.visibilityState !== 'visible') return
+      try {
+        await fetch(API_BASE + '/availability/heartbeat', {
+          method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('rl_token')}` },
+        })
+      } catch { /* offline — presence will simply go stale */ }
+    }
+    beat()
+    const id = setInterval(beat, 180000) // every 3 min; the 5-min online window absorbs a miss
+    return () => clearInterval(id)
+  }, [user]) // eslint-disable-line
+
   // ── Session restore on every page load ──────────────────────────────────────
   // Reads the JWT from localStorage, validates it, and fetches the user's
   // current profile from the backend. If the token is expired or invalid,
@@ -8311,7 +8496,7 @@ export default function App() {
   function renderDashPage() {
     switch (dashPage) {
       case 'dashboard':            return user.role==='admin' ? <AdminDashboard /> : <Dashboard setPage={setDashPage} setSelectedTask={setSelectedTask} />
-      case 'tasks-browse':         return <TaskBrowse setPage={setDashPage} setSelectedTask={setSelectedTask} />
+      case 'tasks-browse':         return <TaskBrowse setPage={setDashPage} setSelectedTask={setSelectedTask} openProfile={(uid) => { setSelectedUser(uid); setDashPage('public-profile') }} />
       case 'search':               return <SearchResults query={searchQuery} setPage={setDashPage} setSelectedTask={setSelectedTask} openProfile={(uid) => { setSelectedUser(uid); setDashPage('public-profile') }} />
 
       case 'task-detail':          return <TaskDetail taskId={selectedTask} setPage={setDashPage} openChat={(userId, name) => { setMessageTarget({ userId, name }); setDashPage('messages') }} openProfile={(uid) => { setSelectedUser(uid); setDashPage('public-profile') }} />
