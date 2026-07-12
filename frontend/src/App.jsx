@@ -302,6 +302,24 @@ function useAuth()  { return useContext(AuthCtx) }
 function useStore() { return useContext(StoreCtx) }
 function useToast() { return useContext(ToastCtx) }
 
+// Shows a one-off toast stashed in sessionStorage by a pre-render flow (e.g. the
+// /verify-student email link handled in App before the toast context exists).
+function PendingToast() {
+  const toast = useToast()
+  useEffect(() => {
+    const show = () => {
+      let raw; try { raw = sessionStorage.getItem('rl_pending_toast') } catch { return }
+      if (!raw) return
+      try { sessionStorage.removeItem('rl_pending_toast') } catch { /* ignore */ }
+      try { const { msg, kind } = JSON.parse(raw); toast(msg, kind || 'success') } catch { /* ignore */ }
+    }
+    show()
+    window.addEventListener('relivr:pending-toast', show)
+    return () => window.removeEventListener('relivr:pending-toast', show)
+  }, []) // eslint-disable-line
+  return null
+}
+
 const initialState = {
   tasks:         MOCK_TASKS.map(t => ({ ...t })),
   bids:          MOCK_BIDS.map(b => ({ ...b })),
@@ -800,8 +818,8 @@ function LandingFooter({ onNav }) {
         <div className="footer-grid" style={{ display:'grid', gridTemplateColumns:'2fr repeat(4,1fr)', gap:44, marginBottom:44 }}>
           <div>
             <Logo onClick={() => onNav('home')} />
-            <p style={{ fontSize:'.875rem', color:'#7c7585', lineHeight:1.75, maxWidth:220, margin:'14px 0 16px' }}>The peer-to-peer service marketplace built for Rhodes University students.</p>
-            <div style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em' }}>Rhodes University · Makhanda, EC</div>
+            <p style={{ fontSize:'.875rem', color:'#7c7585', lineHeight:1.75, maxWidth:220, margin:'14px 0 16px' }}>The peer-to-peer service marketplace for your local community.</p>
+            <div style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em' }}>Proudly South African</div>
           </div>
           {Object.entries(links).map(([cat, items]) => (
             <div key={cat}>
@@ -836,7 +854,7 @@ function LandingFooter({ onNav }) {
 const INTENT_OPTIONS = [
   { value:'post', icon:'＋', label:'Get things done',  desc:'Post tasks, receive offers' },
   { value:'earn', icon:'◈', label:'Earn money',       desc:'Bid on tasks, build a rep' },
-  { value:'both', icon:'⇄', label:'Both',             desc:'The full campus economy' },
+  { value:'both', icon:'⇄', label:'Both',             desc:'The full local economy' },
 ]
 function IntentChips({ value, onChange }) {
   return (
@@ -994,7 +1012,7 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
         <div style={{ padding:'18px 22px 14px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div>
             <div style={{ fontFamily:'var(--fd)', fontSize:'1.25rem', fontWeight:800 }}>{mode==='login'?'Welcome back':(step===1?'Create your account':'Set up your profile')}</div>
-            <div style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em', marginTop:2 }}>{mode==='register' ? `ReLivR · Step ${step} of 2` : 'ReLivR · Rhodes Campus'}</div>
+            <div style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em', marginTop:2 }}>{mode==='register' ? `ReLivR · Step ${step} of 2` : 'ReLivR · Your community'}</div>
           </div>
           <button onClick={onClose} aria-label="Close dialog" style={{ background:'none', border:'none', color:'var(--text-muted)', cursor:'pointer', fontSize:'1.1rem', padding:'4px 8px' }}>✕</button>
         </div>
@@ -1082,7 +1100,7 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
               <>
                 <IntentChips value={intent} onChange={setIntent} />
                 <div>
-                  <label>Campus residence / area</label>
+                  <label>Your area / neighbourhood</label>
                   <select value={campus} onChange={e => setCampus(e.target.value)}>
                     <option value="">Select your area…</option>
                     {CAMPUS_ZONES.map(z => <option key={z} value={z}>{z}</option>)}
@@ -1201,7 +1219,7 @@ function GoogleOnboardingModal({ user, onDone }) {
         </div>
         <div style={{ padding:22, display:'flex', flexDirection:'column', gap:13 }}>
           <p style={{ fontSize:'.85rem', color:'var(--text-secondary)', lineHeight:1.55, margin:0 }}>
-            Your Google account is connected. Tell us a little about you so ReLivR fits your campus life — it takes 20 seconds.
+            Your Google account is connected. Tell us a little about you so ReLivR fits your life — it takes 20 seconds.
           </p>
           <IntentChips value={intent} onChange={setIntent} />
           <div>
@@ -1262,6 +1280,14 @@ const STEPS_DATA = [
   { n:'04', role:'Both',    color:'var(--purple)',title:'Work & Release',      desc:'Communicate through the platform. When done, release payment. Both sides win.' },
 ]
 
+// Batch 6: the second "How it works" track — for businesses listing on ReLivR.
+const BIZ_STEPS_DATA = [
+  { n:'01', title:'List your business',      desc:'Create your free page — photos, hours, contact, and your area. It shows up in the Local directory.' },
+  { n:'02', title:'Add catalog & deals',     desc:'List what you sell and post limited-time specials. Student-only deals reach verified students.' },
+  { n:'03', title:'Boost & share your QR',   desc:'Promote your page to the top of Local, and print your QR so anyone can open it in a single tap.' },
+  { n:'04', title:'Grow with trust',         desc:'Collect reviews, watch views and followers in Analytics, and turn one-off customers into regulars.' },
+]
+
 const STATS_DATA = [
   { v:'R0',   l:'Cost to Start' },
   { v:'Beta', l:'Free While in Beta' },
@@ -1274,7 +1300,7 @@ const STATS_DATA = [
 const SCENARIOS_DATA = [
   { icon:'💻', who:'The coder',   title:'Turn your skills into rent money',  text:'Debug a script between lectures. Build a component over the weekend. Your degree is already earning — you just haven\'t invoiced it yet.' },
   { icon:'📚', who:'The swamped', title:'Buy back your afternoon',           text:'Laundry run, essay proofread, groceries collected — post it in a minute and get your hours back for the things only you can do.' },
-  { icon:'🎓', who:'The campus',  title:'Trade with people you can trust',   text:'Everyone here is a verified student on your campus, building a public track record with every task. Not a stranger from the internet.' },
+  { icon:'🤝', who:'The neighbour', title:'Trade with people you can trust',   text:'Everyone here builds a public track record with every task, and can verify their identity and university. Not a stranger from the internet.' },
 ]
 
 function CampusStrip() {
@@ -1286,7 +1312,7 @@ function CampusStrip() {
   return (
     <section className="reveal" style={{ padding:'88px 24px', borderBottom:'1px solid var(--border)' }}>
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
-        <div className="slabel" style={{ marginBottom:28 }}>Real campus, real people</div>
+        <div className="slabel" style={{ marginBottom:28 }}>Real people, real trust</div>
         <div className="tasks-grid" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:20 }}>
           {slots.map((s,i) => (
             <figure key={i} className="lcard photo-card" style={{ margin:0, padding:0, overflow:'hidden', borderRadius:18 }}>
@@ -1429,7 +1455,7 @@ function Hero({ onOpenAuth }) {
           <div style={{ flex:1 }}>
             <div style={{ display:'inline-flex', alignItems:'center', gap:8, background:'rgba(126,34,206,.1)', border:'1px solid rgba(126,34,206,.25)', borderRadius:100, padding:'5px 14px', marginBottom:28, animation:'fadeUp .6s ease both' }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--amber)', animation:'pulse 2s infinite', flexShrink:0 }} />
-              <span style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', letterSpacing:'.1em', textTransform:'uppercase' }}>Now in beta on Rhodes Campus</span>
+              <span style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', letterSpacing:'.1em', textTransform:'uppercase' }}>Now in beta</span>
             </div>
             <h1 style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(2.8rem,6.5vw,5.2rem)', lineHeight:1.0, letterSpacing:'-.02em', marginBottom:24, animation:'fadeUp .6s .1s ease both', opacity:0, animationFillMode:'forwards' }}>
               Live more.<br /><span style={{ background:'linear-gradient(100deg, transparent 0%, var(--highlight) 6%, var(--highlight) 94%, transparent 100%)', padding:'0 0.18em', borderRadius:12, WebkitBoxDecorationBreak:'clone', boxDecorationBreak:'clone' }}>stress less.</span>
@@ -1459,7 +1485,7 @@ function Hero({ onOpenAuth }) {
               </div>
             ))}
             <div style={{ textAlign:'center', padding:'6px 0' }}>
-              <span style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', letterSpacing:'.1em', textTransform:'uppercase' }}>The kind of tasks campus posts →</span>
+              <span style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', letterSpacing:'.1em', textTransform:'uppercase' }}>The kind of tasks people post →</span>
             </div>
           </div>
         </div>
@@ -1483,23 +1509,48 @@ function StatsBar() {
   )
 }
 
+// Batch 6: two scannable tracks — one for people using ReLivR, one for businesses.
 function HowItWorks() {
   return (
     <section id="how-it-works" className="reveal" style={{ padding:'100px 24px' }}>
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
-        <div style={{ marginBottom:56 }}>
+        <div style={{ marginBottom:44 }}>
           <div className="slabel" style={{ marginBottom:14 }}>How It Works</div>
-          <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.8rem)', fontWeight:800, lineHeight:1.1, maxWidth:440 }}>From task to payment in four steps</h2>
+          <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.8rem)', fontWeight:800, lineHeight:1.1, maxWidth:520 }}>Two ways to use ReLivR — pick your track</h2>
         </div>
-        <div className="steps-grid" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:2 }}>
+
+        {/* Track 1 — people */}
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:18 }}>
+          <span style={{ fontSize:'1.3rem' }}>🙋</span>
+          <h3 style={{ fontFamily:'var(--fd)', fontSize:'1.25rem', fontWeight:800, margin:0 }}>For you — post a task or earn</h3>
+        </div>
+        <div className="steps-grid" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:2, marginBottom:52 }}>
           {STEPS_DATA.map((s,i) => (
-            <div key={i} style={{ padding:'32px 26px', background:i%2===0?'var(--bg-surface)':'var(--bg-base)', border:'1px solid var(--border)', position:'relative' }}>
-              <div style={{ fontFamily:'var(--fd)', fontSize:'3.5rem', fontWeight:800, color:'var(--border-strong)', lineHeight:1, marginBottom:16, userSelect:'none' }}>{s.n}</div>
+            <div key={i} style={{ padding:'30px 24px', background:i%2===0?'var(--bg-surface)':'var(--bg-base)', border:'1px solid var(--border)' }}>
+              <div style={{ fontFamily:'var(--fd)', fontSize:'3rem', fontWeight:800, color:'var(--border-strong)', lineHeight:1, marginBottom:14, userSelect:'none' }}>{s.n}</div>
               <div style={{ display:'inline-block', background:s.color==='var(--amber)'?'rgba(126,34,206,.1)':s.color==='var(--green)'?'rgba(16,185,129,.1)':'rgba(180,83,9,.1)', border:`1px solid ${s.color==='var(--amber)'?'rgba(126,34,206,.3)':s.color==='var(--green)'?'rgba(16,185,129,.3)':'rgba(180,83,9,.3)'}`, borderRadius:100, padding:'3px 11px', marginBottom:12 }}>
                 <span style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:s.color, textTransform:'uppercase', letterSpacing:'.1em' }}>{s.role}</span>
               </div>
-              <h3 style={{ fontFamily:'var(--fd)', fontSize:'1.15rem', fontWeight:700, marginBottom:10 }}>{s.title}</h3>
-              <p style={{ fontSize:'.875rem', color:'#665f72', lineHeight:1.7 }}>{s.desc}</p>
+              <h4 style={{ fontFamily:'var(--fd)', fontSize:'1.1rem', fontWeight:700, marginBottom:9 }}>{s.title}</h4>
+              <p style={{ fontSize:'.86rem', color:'#665f72', lineHeight:1.65 }}>{s.desc}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Track 2 — businesses */}
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:18 }}>
+          <span style={{ fontSize:'1.3rem' }}>🏪</span>
+          <h3 style={{ fontFamily:'var(--fd)', fontSize:'1.25rem', fontWeight:800, margin:0 }}>For your business — get discovered locally</h3>
+        </div>
+        <div className="steps-grid" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:2 }}>
+          {BIZ_STEPS_DATA.map((s,i) => (
+            <div key={i} style={{ padding:'30px 24px', background:i%2===0?'var(--bg-surface)':'var(--bg-base)', border:'1px solid var(--border)' }}>
+              <div style={{ fontFamily:'var(--fd)', fontSize:'3rem', fontWeight:800, color:'var(--border-strong)', lineHeight:1, marginBottom:14, userSelect:'none' }}>{s.n}</div>
+              <div style={{ display:'inline-block', background:'rgba(180,83,9,.1)', border:'1px solid rgba(180,83,9,.3)', borderRadius:100, padding:'3px 11px', marginBottom:12 }}>
+                <span style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--highlight)', textTransform:'uppercase', letterSpacing:'.1em' }}>Business</span>
+              </div>
+              <h4 style={{ fontFamily:'var(--fd)', fontSize:'1.1rem', fontWeight:700, marginBottom:9 }}>{s.title}</h4>
+              <p style={{ fontSize:'.86rem', color:'#665f72', lineHeight:1.65 }}>{s.desc}</p>
             </div>
           ))}
         </div>
@@ -1517,7 +1568,7 @@ function Features() {
             <div className="slabel" style={{ marginBottom:14 }}>Features</div>
             <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.8rem)', fontWeight:800, lineHeight:1.1 }}>Everything you need.<br />Nothing you don't.</h2>
           </div>
-          <p style={{ maxWidth:320, color:'#665f72', fontSize:'.9rem', lineHeight:1.7 }}>Built specifically for campus life. Lightweight, fast, and designed around the way students actually work.</p>
+          <p style={{ maxWidth:320, color:'#665f72', fontSize:'.9rem', lineHeight:1.7 }}>Built for the way people actually get things done locally. Lightweight, fast, and designed to earn trust.</p>
         </div>
         <div className="feat-grid" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:1, border:'1px solid var(--border)', borderRadius:14, overflow:'hidden' }}>
           {FEATURES_DATA.map((f,i) => (
@@ -1542,7 +1593,7 @@ function LiveTasks({ onOpenAuth }) {
         <div style={{ marginBottom:44, display:'flex', justifyContent:'space-between', alignItems:'flex-end', flexWrap:'wrap', gap:16 }}>
           <div>
             <div className="slabel" style={{ marginBottom:14 }}>Example tasks</div>
-            <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.6rem,3vw,2.4rem)', fontWeight:800, lineHeight:1.1 }}>What gets posted on campus</h2>
+            <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.6rem,3vw,2.4rem)', fontWeight:800, lineHeight:1.1 }}>What gets posted near you</h2>
           </div>
           <button className="btn-s" onClick={() => onOpenAuth('register')}>Browse Real Tasks →</button>
         </div>
@@ -1558,7 +1609,7 @@ function LiveTasks({ onOpenAuth }) {
                 {t.tags.map(tag => <span key={tag} style={{ background:'var(--bg-elevated)', border:'1px solid var(--border-strong)', color:'#7c7585', fontFamily:'var(--fm)', fontSize:'.58rem', padding:'2px 7px', borderRadius:3, textTransform:'uppercase', letterSpacing:'.06em' }}>{tag}</span>)}
               </div>
               <div style={{ display:'flex', justifyContent:'space-between', paddingTop:10, borderTop:'1px solid var(--border)' }}>
-                <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)' }}>📍 Rhodes Campus</span>
+                <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)' }}>📍 Your area</span>
                 <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)' }}>sign up to see live tasks</span>
               </div>
             </div>
@@ -1601,7 +1652,7 @@ function Pricing({ onOpenAuth }) {
             </div>
             <p style={{ color:'#6d6678', fontSize:'.875rem', marginBottom:24 }}>secure payouts coming soon</p>
             <Divider style={{ marginBottom:20 }} />
-            {['Bid on any open task','Verified student trust score','Instant escrow payouts — coming soon','Build a campus reputation','Zero upfront cost'].map(item => (
+            {['Bid on any open task','Verified trust score','Instant escrow payouts — coming soon','Build a local reputation','Zero upfront cost'].map(item => (
               <div key={item} style={{ display:'flex', gap:9, alignItems:'center', marginBottom:10 }}>
                 <span style={{ color:'var(--amber)', fontSize:'.875rem', flexShrink:0 }}>✓</span>
                 <span style={{ fontSize:'.875rem', color:'#454050' }}>{item}</span>
@@ -1623,8 +1674,8 @@ function Testimonials() {
     <section className="reveal" style={{ padding:'100px 24px' }}>
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
         <div style={{ marginBottom:56 }}>
-          <div className="slabel" style={{ marginBottom:14 }}>Made for campus life</div>
-          <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.8rem)', fontWeight:800, lineHeight:1.1 }}>Whoever you are on campus,<br />ReLivR works for you.</h2>
+          <div className="slabel" style={{ marginBottom:14 }}>Made for real life</div>
+          <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.8rem)', fontWeight:800, lineHeight:1.1 }}>Whoever you are,<br />ReLivR works for you.</h2>
         </div>
         <div className="test-grid" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16 }}>
           {SCENARIOS_DATA.map((t,i) => (
@@ -1650,9 +1701,9 @@ function LandingAbout() {
         <div className="about-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:72, alignItems:'center' }}>
           <div>
             <div className="slabel" style={{ marginBottom:18 }}>About ReLivR</div>
-            <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.6rem)', fontWeight:800, lineHeight:1.1, marginBottom:22 }}>Built for students,<br />by students.</h2>
-            <p style={{ color:'#665f72', lineHeight:1.8, marginBottom:18, fontSize:'.9rem' }}>ReLivR started with a simple observation: Rhodes University has thousands of talented students who need extra income, and thousands more who need help getting things done. We built the infrastructure to connect them safely.</p>
-            <p style={{ color:'#665f72', lineHeight:1.8, fontSize:'.9rem' }}>Every feature — from the escrow payment system to the trust score engine — was designed with one campus in mind. No bloat. Just a fast, safe marketplace that works.</p>
+            <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.6rem)', fontWeight:800, lineHeight:1.1, marginBottom:22 }}>Built for your<br />community.</h2>
+            <p style={{ color:'#665f72', lineHeight:1.8, marginBottom:18, fontSize:'.9rem' }}>ReLivR started with a simple observation: every community has thousands of talented people who need extra income, and thousands more who need help getting things done. We built the infrastructure to connect them safely.</p>
+            <p style={{ color:'#665f72', lineHeight:1.8, fontSize:'.9rem' }}>Every feature — from the escrow payment system to the trust score engine — was designed for real, local trust. No bloat. Just a fast, safe marketplace that works.</p>
           </div>
           <div style={{ background:'var(--bg-base)', border:'1px solid var(--border)', borderRadius:14, padding:26, fontFamily:'var(--fm)', fontSize:'.78rem', lineHeight:2, color:'#7c7585' }}>
             <div style={{ color:'var(--text-muted)', marginBottom:8, fontSize:'.6rem', textTransform:'uppercase', letterSpacing:'.1em' }}>// Task lifecycle</div>
@@ -1853,14 +1904,14 @@ function LandingCTA({ onOpenAuth }) {
   return (
     <section className="reveal" style={{ padding:'80px 24px' }}>
       <div style={{ maxWidth:1100, margin:'0 auto', position:'relative', borderRadius:28, overflow:'hidden', boxShadow:'var(--shadow-xl)' }}>
-        <img src="/img/community.webp" alt="Rhodes students together on campus" loading="lazy" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }} />
+        <img src="/img/community.webp" alt="Neighbours helping each other in the community" loading="lazy" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }} />
         <div style={{ position:'absolute', inset:0, background:'linear-gradient(115deg, rgba(19,17,24,.88) 0%, rgba(19,17,24,.6) 52%, rgba(126,34,206,.5) 100%)' }} />
         <div style={{ position:'relative', zIndex:1, padding:'clamp(44px,7vw,86px) clamp(26px,6vw,72px)', maxWidth:640 }}>
           <div className="slabel" style={{ color:'var(--highlight)', marginBottom:18 }}>Get Started</div>
           <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(2rem,4vw,3.4rem)', fontWeight:800, lineHeight:1.06, marginBottom:18, letterSpacing:'-.02em', color:'#fff' }}>
-            Ready to join your<br /><span style={{ color:'var(--highlight)' }}>campus economy?</span>
+            Ready to join your<br /><span style={{ color:'var(--highlight)' }}>local economy?</span>
           </h2>
-          <p style={{ color:'rgba(255,255,255,.82)', maxWidth:440, marginBottom:32, lineHeight:1.7, fontSize:'.98rem' }}>Be part of the founding class — the Rhodes students who shape ReLivR from day one, post the first tasks, and earn the first ratings.</p>
+          <p style={{ color:'rgba(255,255,255,.82)', maxWidth:440, marginBottom:32, lineHeight:1.7, fontSize:'.98rem' }}>Be part of the founding community — the first members who shape ReLivR from day one, post the first tasks, and earn the first ratings.</p>
           <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
             <button className="btn-p" style={{ fontSize:'.95rem', padding:'14px 34px' }} onClick={() => onOpenAuth('register')}>Create Free Account →</button>
             <button onClick={() => onOpenAuth('login')} style={{ fontSize:'.95rem', padding:'14px 34px', borderRadius:12, border:'1px solid rgba(255,255,255,.35)', background:'rgba(255,255,255,.08)', backdropFilter:'blur(8px)', color:'#fff', fontFamily:'var(--fd)', fontWeight:700, cursor:'pointer' }}>Sign In</button>
@@ -1945,9 +1996,9 @@ function HowItWorksPage({ onNav }) {
   ]
   return (
     <SidebarPage title="How ReLivR Works" subtitle="Product" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>Overview</h2><p>ReLivR is a peer-to-peer service marketplace for students, launching first at Rhodes University. It connects people who need tasks done (Creators) with people who have the skills to do them (Earners).</p><div className="highlight"><p>🎓 ReLivR is launching Rhodes-first. Verifying your Rhodes student email (@ru.ac.za) earns a verified-student badge and boosts your trust.</p></div></div>
+      <div id="overview"><h2>Overview</h2><p>ReLivR is a peer-to-peer service marketplace for your local community — open to everyone. It connects people who need tasks done (Creators) with people who have the skills to do them (Earners).</p><div className="highlight"><p>🎓 Anyone can join. If you’re at a South African university, verifying your student email earns a verified-student badge, boosts your trust, and unlocks student-only deals.</p></div></div>
       <div id="creators"><h2>For Creators</h2><h3>Posting a Task</h3><p>Creating a task takes less than 60 seconds. Provide a title, description, budget, deadline, and skill tags. Once posted, your task is immediately visible and earners with matching skills are notified automatically.</p><h3>Reviewing Bids</h3><p>Earners submit bids with a proposed price and pitch. You can review all bids, message earners directly, and take as long as you need before accepting.</p><h3>Accepting a Bid</h3><p>When you accept a bid, all other bids are automatically declined and the winning earner is notified. You are then prompted to fund the escrow — this secures the payment without charging you yet.</p><h3>Releasing Payment</h3><p>Once the task is complete to your satisfaction, you release the payment. Funds transfer immediately to the earner's account. You are then prompted to leave a review.</p></div>
-      <div id="earners"><h2>For Earners</h2><h3>Finding Tasks</h3><p>Browse the task feed by skill, keyword, or campus zone. The Suggestions tab surfaces tasks specifically matched to your skill profile using our Jaccard similarity algorithm.</p><h3>Submitting a Bid</h3><p>Write a pitch explaining why you're the right person for the task and propose your price. You can bid on multiple tasks simultaneously and withdraw a bid at any time before it's accepted.</p><h3>Getting Paid</h3><p>Payments are processed via Paystack and paid out to your linked bank account. The platform retains a 10% fee from your payout on each completed task.</p></div>
+      <div id="earners"><h2>For Earners</h2><h3>Finding Tasks</h3><p>Browse the task feed by skill, keyword, or area. The Suggestions tab surfaces tasks specifically matched to your skill profile using our Jaccard similarity algorithm.</p><h3>Submitting a Bid</h3><p>Write a pitch explaining why you're the right person for the task and propose your price. You can bid on multiple tasks simultaneously and withdraw a bid at any time before it's accepted.</p><h3>Getting Paid</h3><p>Payments are processed via Paystack and paid out to your linked bank account. The platform retains a 10% fee from your payout on each completed task.</p></div>
       <div id="payments"><h2>Payments & Escrow</h2><p>ReLivR uses an escrow model to protect both parties:</p><ul><li>Creator funds escrow → the payment is held securely (no transfer yet)</li><li>Work is completed → Creator releases payment</li><li>The payment is captured → transferred to the earner minus the 10% platform fee</li><li>If disputed → Escrow is frozen until admin resolves it</li></ul><div className="highlight"><p>Your card is authorised but not charged until you release payment. If you raise a dispute before releasing, no charge is made.</p></div></div>
       <div id="messaging"><h2>Messaging</h2><p>Every task has a built-in messaging thread between the creator and the accepted earner. Messages are stored and visible to admin in the event of a dispute — so keep communication professional and on-platform.</p></div>
       <div id="disputes"><h2>Disputes</h2><p>If something goes wrong, either party can raise a dispute. This immediately freezes the escrow and notifies our admin team. The admin reviews all messages, task requirements, and evidence submitted, then decides to either refund the creator or release payment to the earner.</p></div>
@@ -1966,7 +2017,7 @@ function FeaturesPage({ onNav }) {
   ]
   return (
     <SidebarPage title="Platform Features" subtitle="Product" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>All Features</h2><p>ReLivR is built with a focused feature set designed around the realities of campus life. Everything was chosen because it solves a real problem for students.</p></div>
+      <div id="overview"><h2>All Features</h2><p>ReLivR is built with a focused feature set designed around the realities of local, peer-to-peer work. Everything was chosen because it solves a real problem for real people.</p></div>
       <div id="matching"><h2>Smart Matching Engine</h2><p>When a task is posted, our matching engine automatically identifies earners whose skill profiles overlap with the task's skill tags using Jaccard similarity scoring. Earners are ranked by skill overlap score, average rating bonus (up to +20% for 5-star earners), and account longevity.</p></div>
       <div id="trust"><h2>Trust Score System</h2><p>Every user has a trust score between 0 and 100, calculated from:</p><ul><li><strong style={{color:'#3b3548'}}>Identity (40pts)</strong> — verified Rhodes student email @ru.ac.za (30pts) + verified email or Google sign-in (10pts)</li><li><strong style={{color:'#3b3548'}}>Track record (40pts)</strong> — completed tasks (up to 20pts) + average rating (up to 20pts)</li><li><strong style={{color:'#3b3548'}}>Longevity (20pts)</strong> — 5 points per month, capped at 20</li><li><strong style={{color:'#3b3548'}}>Dispute penalty</strong> — -10pts per dispute raised against you</li></ul><div className="highlight"><p>Levels: Unverified (0–19) · New (20–49) · Established (50–79) · Verified (80–100)</p></div></div>
       <div id="escrow"><h2>Escrow System</h2><p>Our escrow uses an authorise-then-capture model through our payment provider, Paystack. Funds are authorised when escrow is funded, but no actual charge occurs until the creator releases payment. The 10% platform fee is deducted from the earner's payout, not added to the creator's charge.</p></div>
@@ -2012,9 +2063,9 @@ function TrustSafetyPage({ onNav }) {
   ]
   return (
     <SidebarPage title="Trust & Safety" subtitle="Product" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>Our Commitment to Safety</h2><p>ReLivR is built on the principle that two students from the same campus should be able to transact with confidence. Every feature exists to make that possible.</p><div className="highlight"><p>🔒 All payments are held in escrow and never leave the platform until both parties are satisfied — or an admin resolves a dispute.</p></div></div>
+      <div id="overview"><h2>Our Commitment to Safety</h2><p>ReLivR is built on the principle that two neighbours in the same community should be able to transact with confidence. Every feature exists to make that possible.</p><div className="highlight"><p>🔒 All payments are held in escrow and never leave the platform until both parties are satisfied — or an admin resolves a dispute.</p></div></div>
       <div id="trust-scores"><h2>Trust Scores</h2><p>Every user has a visible trust score calculated from verifiable signals: verified identity, completed transactions, earned ratings, and account history. A high trust score is not a guarantee of quality, but it is a meaningful signal that a user has a real, verified identity and a track record on the platform.</p></div>
-      <div id="verification"><h2>Identity Verification</h2><p>Verifying your Rhodes student email (@ru.ac.za) earns a verified-student badge and boosts your trust. Email verification and Google sign-in further confirm a real identity and help prevent anonymous bad-faith accounts from accumulating trust.</p></div>
+      <div id="verification"><h2>Identity Verification</h2><p>Verifying a South African university student email earns a verified-student badge and boosts your trust. Email verification and Google sign-in further confirm a real identity and help prevent anonymous bad-faith accounts from accumulating trust.</p></div>
       <div id="escrow"><h2>Payment Safety</h2><p>ReLivR never holds your money directly — payments are processed and held in escrow by our payment provider, Paystack, a PCI-DSS-compliant processor. Your card details are never stored by ReLivR.</p></div>
       <div id="reporting"><h2>Reporting Issues</h2><p>If you encounter a problem:</p><ul><li><strong style={{color:'#3b3548'}}>Raise a dispute</strong> — for unresolved task delivery issues. Freezes escrow immediately.</li><li><strong style={{color:'#3b3548'}}>Report a user</strong> — for conduct violations, harassment, or fraud.</li><li><strong style={{color:'#3b3548'}}>Contact support</strong> — for account issues or technical problems.</li></ul></div>
       <div id="prohibited"><h2>Prohibited Conduct</h2><p>The following result in immediate account suspension:</p><ul><li>Off-platform payment requests or arrangements</li><li>Creating fake reviews or inflating trust scores</li><li>Harassment, threats, or discriminatory language</li><li>Posting tasks or services that are illegal under South African law</li><li>Academic dishonesty services</li></ul></div>
@@ -2149,7 +2200,7 @@ function HelpCentrePage({ onNav }) {
   ]
   return (
     <SidebarPage title="Help Centre" subtitle="Support" sections={sections} onNav={onNav}>
-      <div id="getting-started"><h2>Getting Started</h2><h3>How do I create an account?</h3><p>Click "Get Started" on the homepage, fill in your name, email, and password, and choose whether you want to post tasks (Creator) or earn money (Earner). You can explore both roles after signup.</p><h3>Is it free to sign up?</h3><p>Yes. Creating an account is completely free. There are no monthly fees or charges for browsing.</p><h3>Do I need a Rhodes email?</h3><p>Any email works to create an account. Verifying a Rhodes student email (@ru.ac.za) earns a verified-student badge and increases your trust score.</p></div>
+      <div id="getting-started"><h2>Getting Started</h2><h3>How do I create an account?</h3><p>Click "Get Started" on the homepage, fill in your name, email, and password, and choose whether you want to post tasks (Creator) or earn money (Earner). You can explore both roles after signup.</p><h3>Is it free to sign up?</h3><p>Yes. Creating an account is completely free. There are no monthly fees or charges for browsing.</p><h3>Do I need a university email?</h3><p>No — anyone can join with any email. If you’re at a South African university, verifying your student email earns a verified-student badge, increases your trust score, and unlocks student-only deals.</p></div>
       <div id="creators"><h2>For Creators</h2><h3>How do I post a task?</h3><p>Log in, click "Post Task", fill in the details (title, description, budget, deadline, skill tags), review, and submit. It goes live immediately.</p><h3>What if the earner does poor work?</h3><p>Don't release payment. Use in-platform messaging to give specific feedback and request revisions. If the earner refuses, raise a dispute. Do not release payment until you are satisfied.</p></div>
       <div id="earners"><h2>For Earners</h2><h3>How do I write a good pitch?</h3><p>Be specific. Reference the task directly, explain your relevant experience, give a realistic timeline, and be honest about your price. Generic pitches get ignored.</p><h3>How quickly do I get paid?</h3><p>Once the creator releases payment, Paystack processes the payout. Payout timing is typically 1–3 business days for South African bank accounts.</p></div>
       <div id="payments"><h2>Payments</h2><h3>My payment failed. What do I do?</h3><p>Check your card details are correct and that you have sufficient funds. If the problem persists, try a different card or contact your bank.</p><h3>Can I get a refund if I'm not happy?</h3><p>Refunds are only processed through the dispute resolution system. Do not release payment until you are satisfied — once released we cannot reverse the transfer.</p></div>
@@ -2235,8 +2286,8 @@ function GuidelinesPage({ onNav }) {
   ]
   return (
     <SidebarPage title="Community Guidelines" subtitle="Support" sections={sections} onNav={onNav}>
-      <div id="overview"><h2>Our Community Standards</h2><p>ReLivR works because students trust each other. These guidelines exist to protect that trust and ensure the platform remains a safe, fair place for everyone on campus.</p></div>
-      <div id="respect"><h2>Respect</h2><p>Every person on ReLivR is a member of the Rhodes community. Treat them accordingly.</p><ul><li>Communicate professionally, even when disagreements arise</li><li>No harassment, threats, hate speech, or discriminatory language</li><li>Respect boundaries — if someone withdraws from a transaction, accept it</li><li>Do not share other users' personal information outside the platform</li></ul></div>
+      <div id="overview"><h2>Our Community Standards</h2><p>ReLivR works because members trust each other. These guidelines exist to protect that trust and ensure the platform remains a safe, fair place for everyone in the community.</p></div>
+      <div id="respect"><h2>Respect</h2><p>Every person on ReLivR is a member of your local community. Treat them accordingly.</p><ul><li>Communicate professionally, even when disagreements arise</li><li>No harassment, threats, hate speech, or discriminatory language</li><li>Respect boundaries — if someone withdraws from a transaction, accept it</li><li>Do not share other users' personal information outside the platform</li></ul></div>
       <div id="honesty"><h2>Honesty</h2><ul><li>Represent your skills and experience accurately</li><li>Describe tasks accurately — do not misrepresent scope or requirements</li><li>Do not create fake reviews or manipulate trust scores</li><li>Do not impersonate other users or create multiple accounts</li></ul></div>
       <div id="tasks"><h2>Acceptable Tasks</h2><p>Not permitted:</p><ul><li>Anything illegal under South African law</li><li>Academic dishonesty — writing essays for submission as original work</li><li>Adult or sexual content of any kind</li><li>Services designed to harm or harass an individual</li></ul><p>Tutoring, explaining concepts, proofreading with attribution, and study assistance are acceptable.</p></div>
       <div id="payments"><h2>Payment Integrity</h2><ul><li>All payments must go through the escrow system</li><li>Do not release payment if the work is not completed to the agreed standard</li><li>Do not raise frivolous disputes to delay payment</li></ul></div>
@@ -2874,7 +2925,7 @@ function TaskBrowse({ setPage, setSelectedTask, openProfile }) {
       <AvailableNowRail openProfile={openProfile} />
 
       <div style={{ display:'flex', gap:10, marginBottom:18, flexWrap:'wrap', alignItems:'center', justifyContent:'space-between' }}>
-        <Mono>{filtered.length} open task{filtered.length!==1?'s':''} near Rhodes</Mono>
+        <Mono>{filtered.length} open task{filtered.length!==1?'s':''} near you</Mono>
         <div style={{ display:'flex', gap:8, alignItems:'flex-end' }}>
         <SelectField value={status} onChange={e => setStatus(e.target.value)} style={{ minWidth:150 }}>
           <option value="all">All Statuses</option>
@@ -2911,7 +2962,7 @@ function TaskBrowse({ setPage, setSelectedTask, openProfile }) {
                 <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.05rem' }}>R{task.budget}</span>
               </div>
               <h2 style={{ fontFamily:'var(--font-display)', fontSize:'1.05rem', fontWeight:700, marginBottom:6, lineHeight:1.3 }}>{task.title}</h2>
-              <Mono style={{ display:'block', marginBottom:10 }}>📍 {task.campus_zone || 'Rhodes Campus'}{dist!=null?` · ${dist<1?Math.round(dist*1000)+'m':dist.toFixed(1)+'km'} away`:''} · {timeAgo(task.created_at)}{task.expected_duration ? ` · ⏱ ${task.expected_duration}` : ''}</Mono>
+              <Mono style={{ display:'block', marginBottom:10 }}>📍 {task.campus_zone || 'Your area'}{dist!=null?` · ${dist<1?Math.round(dist*1000)+'m':dist.toFixed(1)+'km'} away`:''} · {timeAgo(task.created_at)}{task.expected_duration ? ` · ⏱ ${task.expected_duration}` : ''}</Mono>
               <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:12 }}>{task.skill_tags.slice(0,3).map(t => <Tag key={t}>{t}</Tag>)}</div>
               <Divider style={{ marginBottom:10 }} />
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
@@ -4893,12 +4944,12 @@ function LocalBrowse({ setPage }) {
   return (
     <div className="page-enter">
       <div style={{ position:'relative', borderRadius:22, overflow:'hidden', marginBottom:22, boxShadow:'var(--shadow-md)' }}>
-        <img src="/img/local-cafe.webp" alt="Local café near campus" loading="lazy" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }} />
+        <img src="/img/local-cafe.webp" alt="A local café in the neighbourhood" loading="lazy" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }} />
         <div style={{ position:'absolute', inset:0, background:'linear-gradient(105deg, rgba(19,17,24,.82) 0%, rgba(19,17,24,.5) 55%, rgba(19,17,24,.2) 100%)' }} />
         <div style={{ position:'relative', zIndex:1, padding:'clamp(26px,5vw,44px)' }}>
           <div className="slabel" style={{ color:'var(--highlight)', marginBottom:12 }}>Local Directory</div>
-          <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'clamp(1.6rem,3vw,2.2rem)', marginBottom:6, color:'#fff', letterSpacing:'-.01em' }}>Local in Makhanda</h1>
-          <p style={{ color:'rgba(255,255,255,.85)', fontSize:'.95rem', maxWidth:440 }}>Discover the businesses around Grahamstown — supported by ReLivR.</p>
+          <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'clamp(1.6rem,3vw,2.2rem)', marginBottom:6, color:'#fff', letterSpacing:'-.01em' }}>Local businesses</h1>
+          <p style={{ color:'rgba(255,255,255,.85)', fontSize:'.95rem', maxWidth:440 }}>Discover the businesses around you — supported by ReLivR.</p>
         </div>
       </div>
 
@@ -5277,7 +5328,7 @@ function BusinessForm({ business, onDone, onCancel }) {
 
 // Trust/verification badge definitions — rendered on public profiles
 const BADGE_DEFS = {
-  ru_student:    { icon:'🎓', label:'Rhodes student',  color:'#9333ea', desc:'Verified @ru.ac.za email' },
+  ru_student:    { icon:'🎓', label:'Verified student', color:'#9333ea', desc:'Verified SA university email' },
   email_verified:{ icon:'✓',  label:'Verified',        color:'#15803d', desc:'Email verified via Google' },
   google_linked: { icon:'🔗', label:'Google-linked',   color:'#1d4ed8', desc:'Signed in with Google' },
   top_rated:     { icon:'⭐', label:'Top rated',        color:'#d97706', desc:'4.5+ stars across 5+ reviews' },
@@ -5713,6 +5764,79 @@ function AvailabilityCard() {
   )
 }
 
+// Batch 6: students map + verify a university email to unlock student-only perks.
+// Anyone can use ReLivR without this; it's purely the student-benefits gate.
+function StudentVerifyCard() {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [loading, setLoading] = useState(true)
+  const [state, setState] = useState({ email: null, verified: false }) // from /auth/me
+  const [input, setInput] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const load = () => fetch(API_BASE + '/auth/me', { headers: { Authorization: `Bearer ${token()}` } })
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('load')))
+    .then(({ user }) => setState({ email: user?.student_email || null, verified: !!user?.student_verified }))
+    .catch(() => {})
+    .finally(() => setLoading(false))
+  useEffect(() => { load() }, [])
+
+  async function sendLink() {
+    const email = input.trim()
+    if (!email) { toast('Enter your university email', 'error'); return }
+    setBusy(true)
+    try {
+      const res = await fetch(API_BASE + '/auth/student-email', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ studentEmail: email }) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.errors?.[0]?.msg || d.message || 'Could not send the link')
+      toast(d.message || 'Verification link sent — check your inbox', 'success')
+      setInput(''); load()
+    } catch (e) { toast(e.message === 'Failed to fetch' ? 'Backend offline' : e.message, 'error') }
+    finally { setBusy(false) }
+  }
+
+  async function unlink() {
+    if (!window.confirm('Remove your student email? You’ll lose student-only perks until you verify again.')) return
+    setBusy(true)
+    try {
+      const res = await fetch(API_BASE + '/auth/student-email', { method: 'DELETE', headers: { Authorization: `Bearer ${token()}` } })
+      if (!res.ok) throw new Error('Could not unlink')
+      toast('Student email removed', 'success'); setState({ email: null, verified: false })
+    } catch (e) { toast(e.message, 'error') } finally { setBusy(false) }
+  }
+
+  return (
+    <DCard hover={false}>
+      <Mono size="0.68rem" color="var(--text-secondary)" style={{ display: 'block', marginBottom: 6 }}>Student verification</Mono>
+      <p style={{ fontSize: '.8rem', color: 'var(--text-muted)', marginBottom: 16, lineHeight: 1.5 }}>
+        Anyone can use ReLivR. If you’re at a South African university, verify your campus email to unlock <strong style={{ color: 'var(--text-secondary)' }}>student-only deals</strong>.
+      </p>
+      {loading ? <div style={{ padding: 16, textAlign: 'center' }}><Spinner /></div>
+        : state.verified ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: '.9rem', color: 'var(--success)' }}>
+              <span>✓</span> Verified student — <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{state.email}</span>
+            </span>
+            <button onClick={unlink} disabled={busy} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '.78rem', fontFamily: 'var(--font-mono)', cursor: 'pointer' }}>Unlink</button>
+          </div>
+        ) : state.email ? (
+          <div>
+            <p style={{ fontSize: '.85rem', color: 'var(--text-secondary)', marginBottom: 10 }}>Pending — we emailed a link to <strong>{state.email}</strong>. Click it to finish.</p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Btn size="sm" variant="secondary" loading={busy} onClick={() => { setInput(state.email); sendLink() }}>Resend link</Btn>
+              <button onClick={unlink} disabled={busy} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '.78rem', fontFamily: 'var(--font-mono)', cursor: 'pointer' }}>Use a different email</button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Input label="University email" value={input} onChange={e => setInput(e.target.value)} placeholder="you@ru.ac.za" type="email" hint="We’ll email a link to confirm it’s yours." />
+            <Btn loading={busy} onClick={sendLink} style={{ alignSelf: 'flex-start' }}>Send verification link</Btn>
+          </div>
+        )}
+    </DCard>
+  )
+}
+
 function Profile({ openProfile }) {
   const { user, logout, updateUser } = useAuth()
   const [avatarBusy, setAvatarBusy] = useState(false)
@@ -6070,6 +6194,7 @@ function Profile({ openProfile }) {
             </div>
           </DCard>
           <AvailabilityCard />
+          <StudentVerifyCard />
           <DCard hover={false}>
             <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:16 }}>Professional Profile</Mono>
             <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
@@ -6660,7 +6785,7 @@ function BusinessDeals({ biz }) {
     <div className="page-enter">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
         <div>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.4rem', margin: 0 }}>Campus Deals</h2>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.4rem', margin: 0 }}>Local Deals</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '.88rem', marginTop: 4 }}>Post a limited-time special. It appears on the public Deals page and auto-hides the moment it expires.</p>
         </div>
         <Btn onClick={() => { setEditing(null); setView('form') }}>＋ New deal</Btn>
@@ -6967,7 +7092,7 @@ function DealsPage() {
   return (
     <div className="page-enter">
       <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.6rem', margin: 0 }}>Campus Deals</h1>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.6rem', margin: 0 }}>Local Deals</h1>
         <p style={{ color: 'var(--text-secondary)', marginTop: 6 }}>Limited-time specials from local businesses. Grab them before they expire.</p>
       </div>
       {deals === null ? <div style={{ padding: 60, textAlign: 'center' }}><Spinner /></div>
@@ -7049,7 +7174,7 @@ function BusinessClients() {
     <div className="page-enter">
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.4rem', margin: 0 }}>Client History</h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '.88rem', marginTop: 4 }}>Everyone who's claimed your Campus Deals — your repeat-customer base.</p>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '.88rem', marginTop: 4 }}>Everyone who's claimed your Local Deals — your repeat-customer base.</p>
       </div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
         <BizStatTile label="Redemptions" value={data.total_redemptions} />
@@ -8171,15 +8296,15 @@ const ONBOARDING_KEY = 'rl_onboarding_seen_v1'
 // in localStorage by the onboarding flows). Unknown/absent intent → full tour.
 function buildWalkthroughSlides(intent) {
   const slides = [
-    { icon:'logo', title:'Welcome to ReLivR', body:'Your campus marketplace — post what you need done, or earn by helping out. Here’s the 30-second tour.' },
+    { icon:'logo', title:'Welcome to ReLivR', body:'Your local marketplace — post what you need done, or earn by helping out. Here’s the 30-second tour.' },
   ]
   if (intent !== 'earn') slides.push(
     { icon:'＋', title:'Post a task in seconds', body:'Describe what you need and set a budget. Students nearby send offers — you pick who to work with, chat, and confirm when it’s done.' })
   if (intent !== 'post') slides.push(
     { icon:'◈', title:'Bid & get hired', body:'Browse open tasks that match your skills, send a pitch with your price, and message the poster to lock in details. Every job builds your public rating.' })
   slides.push(
-    { icon:'◇', title:'Discover Local & Deals', body:'Browse campus businesses Instagram-style and grab student-only deals — verified students get exclusive QR discounts.' },
-    { icon:'☂', title:'Stay safe on campus', body:'Everyone is a real, verified student. Ratings and trust scores are public, and if anything goes wrong our dispute team steps in. Your data stays protected under POPIA.' },
+    { icon:'◇', title:'Discover Local & Deals', body:'Browse local businesses Instagram-style and grab deals — verified students also get exclusive student-only QR discounts.' },
+    { icon:'☂', title:'Stay safe', body:'Members verify their identity, and ratings and trust scores are public. If anything goes wrong our dispute team steps in. Your data stays protected under POPIA.' },
   )
   return slides
 }
@@ -8376,6 +8501,24 @@ export default function App() {
     const id = setInterval(beat, 180000) // every 3 min; the 5-min online window absorbs a miss
     return () => clearInterval(id)
   }, [user]) // eslint-disable-line
+
+  // ── Student email verification link (Batch 6) ───────────────────────────────
+  // The emailed link opens /verify-student?token=…; verify (public endpoint),
+  // stash a toast, and bounce to a clean URL. Works logged-in or out.
+  useEffect(() => {
+    if (window.location.pathname !== '/verify-student') return
+    const finish = (msg, kind) => {
+      try { sessionStorage.setItem('rl_pending_toast', JSON.stringify({ msg, kind })) } catch { /* ignore */ }
+      window.history.replaceState({}, '', localStorage.getItem('rl_token') ? '/profile' : '/')
+      window.dispatchEvent(new Event('relivr:pending-toast'))
+    }
+    const t = new URLSearchParams(window.location.search).get('token')
+    if (!t) { finish('That verification link is missing its token.', 'error'); return }
+    fetch(API_BASE + '/auth/student-email/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: t }) })
+      .then(r => r.json().then(d => ({ ok: r.ok, d })).catch(() => ({ ok: r.ok, d: {} })))
+      .then(({ ok, d }) => finish(ok ? (d.message || 'Student email verified — perks unlocked!') : (d.message || 'This verification link is invalid or expired.'), ok ? 'success' : 'error'))
+      .catch(() => finish('Could not reach the server to verify. Try the link again.', 'error'))
+  }, []) // eslint-disable-line
 
   // ── Session restore on every page load ──────────────────────────────────────
   // Reads the JWT from localStorage, validates it, and fetches the user's
@@ -8689,6 +8832,8 @@ export default function App() {
     <AuthCtx.Provider value={authValue}>
       <StoreCtx.Provider value={storeValue}>
         <ToastProvider>
+
+          <PendingToast />
 
           {/* ── OAUTH CALLBACK — must be inside AuthCtx so useAuth() works ── */}
           {view === 'oauth-callback' && <OAuthCallback />}
