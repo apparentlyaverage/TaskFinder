@@ -235,15 +235,18 @@ const GTASK = 'ffffffff-ffff-4fff-8fff-ffffffffffff'
 
 describe('god-mode: DELETE /admin/users/:id', () => {
   it('soft-deletes a user and writes an audit row (200)', async () => {
-    let audited = false
+    let audited = false, deleteSql = ''
     mockDb(pool, sql => {
       if (/SELECT email, role FROM users/.test(sql)) return { rows: [{ email: 'x@y.com', role: 'member' }] }
-      if (/UPDATE\s+users[\s\S]*email = 'deleted/.test(sql)) return { rows: [{ user_id: GTARGET }] }
+      if (/UPDATE\s+users[\s\S]*email = 'deleted/.test(sql)) { deleteSql = sql; return { rows: [{ user_id: GTARGET }] } }
       if (/INSERT INTO activity_logs/.test(sql)) { audited = true; return { rows: [] } }
     })
     const res = await request(app).delete(`/admin/users/${GTARGET}`).set('Authorization', `Bearer ${adminToken}`).send({ reason: 'spam' })
     expect(res.status).toBe(200)
     expect(audited).toBe(true)
+    // POPIA erasure: the god-mode delete must also scrub the encrypted SA ID + its hash.
+    expect(deleteSql).toMatch(/id_number_enc\s*=\s*NULL/)
+    expect(deleteSql).toMatch(/id_number_hash\s*=\s*NULL/)
   })
   it('refuses to delete your own account (400)', async () => {
     mockDb(pool)

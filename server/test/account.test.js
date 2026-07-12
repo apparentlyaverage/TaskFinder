@@ -69,10 +69,18 @@ describe('DELETE /profile/account', () => {
   it('deletes (anonymises) with the correct password (200)', async () => {
     const hash = await bcrypt.hash('RealPass123', 12)
     mockDb(pool)
-    pool.connect.mockResolvedValue(mockClient(sql => /SELECT password_hash.*FROM users/.test(sql) ? { rows: [{ password_hash: hash, email: 'a@x.com' }] } : undefined))
+    let userUpdateSql = ''
+    pool.connect.mockResolvedValue(mockClient(sql => {
+      if (/SELECT password_hash.*FROM users/.test(sql)) return { rows: [{ password_hash: hash, email: 'a@x.com' }] }
+      if (/UPDATE users[\s\S]*deleted_at = NOW\(\)/.test(sql)) userUpdateSql = sql
+      return undefined
+    }))
     const res = await request(app).delete('/profile/account').set('Authorization', `Bearer ${token}`).send({ password: 'RealPass123' })
     expect(res.status).toBe(200)
     expect(res.body.message).toMatch(/deleted/i)
+    // POPIA erasure must scrub the encrypted SA ID + its uniqueness hash.
+    expect(userUpdateSql).toMatch(/id_number_enc\s*=\s*NULL/)
+    expect(userUpdateSql).toMatch(/id_number_hash\s*=\s*NULL/)
   })
 })
 

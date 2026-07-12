@@ -39,7 +39,7 @@ describe('POST /auth/register — intent', () => {
     pool.connect.mockResolvedValue(registerClient(capture))
     const res = await request(app).post('/auth/register').send({
       email: 'new@ru.ac.za', password: 'Password123', displayName: 'Naledi',
-      intent: 'earn', popiaConsent: true,
+      intent: 'earn', idNumber: '8001015009087', popiaConsent: true,
     })
     expect(res.status).toBe(201)
     expect(capture.profileParams).toContain('earn')

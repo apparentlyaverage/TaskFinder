@@ -100,6 +100,7 @@ describe('POST /auth/register', () => {
     email: 'new@example.com',
     password: 'Password123',
     displayName: 'New User',
+    idNumber: '8001015009087', // valid SA ID (13-digit + Luhn)
     popiaConsent: true,
   }
 
@@ -132,7 +133,7 @@ describe('POST /auth/register', () => {
 })
 
 describe('POST /auth/register — data-driven location validation', () => {
-  const base = { email: 'loc@example.com', password: 'Password123', displayName: 'Loc', popiaConsent: true }
+  const base = { email: 'loc@example.com', password: 'Password123', displayName: 'Loc', idNumber: '8001015009087', popiaConsent: true }
 
   function mockRegisterClient() {
     return {

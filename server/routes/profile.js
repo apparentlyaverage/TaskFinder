@@ -398,9 +398,12 @@ router.delete('/account',
         }
       }
       // Anonymise the account; bump token_version to kill every active session.
+      // id_number_enc/hash are cleared too — POPIA erasure must remove the
+      // encrypted ID and its uniqueness hash, not just the login PII.
       await client.query(
         `UPDATE users
             SET email = $1, password_hash = NULL, google_id = NULL, phone_number = NULL,
+                id_number_enc = NULL, id_number_hash = NULL,
                 deleted_at = NOW(), token_version = token_version + 1, updated_at = NOW()
           WHERE user_id = $2`,
         [`deleted-${req.userId}@deleted.local`, req.userId])

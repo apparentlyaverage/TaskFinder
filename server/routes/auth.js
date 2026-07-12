@@ -10,6 +10,7 @@ import { pool } from '../db.js'
 import { emailVerify, emailPasswordReset, emailPasswordChanged, emailWelcome, emailNewLogin } from '../emails.js'
 import { requireAuth } from '../middleware.js'
 import { validateLocationName, resolveLocationId } from '../locationValidate.js'
+import { saIdValidator, encryptId, hashId, idConfigured } from '../idnumber.js'
 import log from '../log.js'
 
 const router = Router()
@@ -48,10 +49,17 @@ function issueToken(user) {
   )
 }
 
+// Fields whose raw value must never be reflected back — express-validator's
+// errors.array() includes the offending `value` by default, which would leak
+// the SA ID number (POPIA-sensitive) or password into a 422 response body.
+const REDACT_FIELDS = new Set(['idNumber', 'password'])
+
 function check(req, res, next) {
   const errors = validationResult(req)
-  if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() })
-  next()
+  if (errors.isEmpty()) return next()
+  const safe = errors.array().map(e =>
+    (e.type === 'field' && REDACT_FIELDS.has(e.path)) ? { ...e, value: undefined } : e)
+  return res.status(422).json({ errors: safe })
 }
 
 // ── Single-use email tokens (password reset / email verify) ───────────────────
@@ -222,12 +230,25 @@ router.post('/register',
     body('campusZone').optional({ nullable: true }).trim().custom(validateLocationName),
     body('bio').optional({ nullable: true }).trim().isLength({ max: 1000 }),
     body('intent').optional({ nullable: true }).isIn(['post', 'earn', 'both']),
+    // Identity verification (batch 3): required, strict 13-digit + Luhn SA ID.
+    // Stored encrypted at rest (see idnumber.js); never logged or returned.
+    body('idNumber').trim().custom(saIdValidator),
     body('popiaConsent').custom(v => v === true || v === 'true')
       .withMessage('You must accept the privacy policy to register.'),
   ],
   check,
   async (req, res) => {
     const { email, password, role = 'member', displayName, campusZone, bio, intent } = req.body
+
+    // Encrypt the (already validated) ID for storage + a keyed hash for the
+    // one-account-per-ID unique index. No-op if the key isn't configured (dev):
+    // the ID was still validated, we just don't persist it. Crypto errors
+    // fail-open — a key hiccup must not block a legitimate signup.
+    let idEnc = null, idHash = null
+    if (idConfigured()) {
+      try { idEnc = encryptId(req.body.idNumber); idHash = hashId(req.body.idNumber) }
+      catch (e) { log.error('auth.id_encrypt_failed', { reqId: req.id, msg: e.message }) }
+    }
 
     // Validate + normalise the phone (throws → caught below as 422)
     let phoneNumber
@@ -253,10 +274,11 @@ router.post('/register',
       const hash = await bcrypt.hash(password, SALT_ROUNDS)
       const { rows } = await client.query(
         `INSERT INTO users (email, password_hash, role, phone_number,
-           popia_consent, popia_consent_at, popia_consent_ip, popia_consent_version)
-         VALUES ($1, $2, $3, $4, TRUE, NOW(), $5, $6)
+           popia_consent, popia_consent_at, popia_consent_ip, popia_consent_version,
+           id_number_enc, id_number_hash)
+         VALUES ($1, $2, $3, $4, TRUE, NOW(), $5, $6, $7, $8)
          RETURNING user_id, email, role`,
-        [email, hash, role, phoneNumber || null, clientIp(req), POPIA_CONSENT_VERSION])
+        [email, hash, role, phoneNumber || null, clientIp(req), POPIA_CONSENT_VERSION, idEnc, idHash])
       const newUser = rows[0]
       const locationId = await resolveLocationId(campusZone)   // best-effort FK (TD-12)
       // Email signups answer the onboarding questions inside the modal, so the
@@ -285,6 +307,11 @@ router.post('/register',
       })
     } catch (err) {
       await client.query('ROLLBACK')
+      // The one-account-per-ID unique index fires here as 23505 (the email dup
+      // is pre-checked above). Give a specific, non-leaky message.
+      if (err.code === '23505' && /id_number_hash/.test(err.constraint || '')) {
+        return res.status(409).json({ message: 'This ID number is already registered to another account.' })
+      }
       log.error('auth.register_failed', { reqId: req.id, msg: err.message })
       return res.status(500).json({ message: 'Internal server error.' })
     } finally {

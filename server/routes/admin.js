@@ -326,6 +326,7 @@ router.delete('/users/:id',
       const { rows } = await pool.query(
         `UPDATE users
             SET email = 'deleted+' || user_id || '@deleted.local',
+                id_number_enc = NULL, id_number_hash = NULL,
                 deleted_at = NOW(), suspended_at = NULL, token_version = token_version + 1
           WHERE user_id = $1 AND deleted_at IS NULL
           RETURNING user_id`, [req.params.id])

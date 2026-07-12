@@ -514,6 +514,22 @@ function titleCase(s) {
   return String(s ?? '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
+// Client-side SA ID validation — mirrors server/idnumber.js so users get instant
+// feedback. The server re-validates authoritatively; this is UX only.
+function saIdCheck(raw) {
+  const id = String(raw ?? '').replace(/\D/g, '')
+  if (!id) return { ok: false, reason: '' }
+  if (id.length !== 13) return { ok: false, reason: 'Must be 13 digits' }
+  const mm = +id.slice(2, 4), dd = +id.slice(4, 6)
+  if (mm < 1 || mm > 12) return { ok: false, reason: 'Invalid birth month' }
+  if (dd < 1 || dd > 31) return { ok: false, reason: 'Invalid birth day' }
+  if (id[10] !== '0' && id[10] !== '1') return { ok: false, reason: 'Invalid ID number' }
+  let sum = 0, alt = false
+  for (let i = id.length - 1; i >= 0; i--) { let d = id.charCodeAt(i) - 48; if (alt) { d *= 2; if (d > 9) d -= 9 } sum += d; alt = !alt }
+  if (sum % 10 !== 0) return { ok: false, reason: 'Checksum failed — re-check the number' }
+  return { ok: true, reason: '' }
+}
+
 function Badge({ children, variant='default' }) {
   const map = {
     default:     { background:'var(--bg-elevated)',            color:'var(--text-secondary)' },
@@ -868,6 +884,8 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
   const [skills, setSkills]     = useState('')
   const [bio, setBio]           = useState('')
   const [intent, setIntent]     = useState('')
+  const [idNumber, setIdNumber] = useState('')
+  const idState = saIdCheck(idNumber)
 
   const CAMPUS_ZONES = useLocations()
 
@@ -878,6 +896,7 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
     if (mode==='register' && !name.trim()) return 'Please enter your name'
     if (!email.includes('@')) return 'Enter a valid email address'
     if (password.length < 8)  return 'Password must be at least 8 characters'
+    if (mode==='register' && !idState.ok) return idState.reason ? `ID number: ${idState.reason.toLowerCase()}` : 'Please enter your 13-digit SA ID number'
     if (mode==='register' && !consent) return 'Please accept the Terms and Privacy Policy to continue'
     return null
   }
@@ -913,6 +932,7 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
             skills:      skills || null,
             bio:         bio || null,
             intent:      intent || null,
+            idNumber:    idNumber.replace(/\D/g, ''),
             popiaConsent: consent,
           }
 
@@ -1037,6 +1057,19 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
                   </div>
                 </div>
                 <div><label>Password <span style={{ color:'var(--text-muted)' }}>(min 8 chars)</span></label><input type="password" aria-label="Password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
+                <div>
+                  <label>SA ID number</label>
+                  <input aria-label="SA ID number" inputMode="numeric" maxLength={16} value={idNumber}
+                    onChange={e => setIdNumber(e.target.value)} placeholder="13-digit South African ID"
+                    style={{ borderColor: idNumber && !idState.ok ? 'var(--danger)' : (idState.ok ? 'var(--success)' : undefined) }} required />
+                  <div style={{ fontSize:'.72rem', marginTop:5, lineHeight:1.45, color: idNumber && !idState.ok ? 'var(--danger)' : 'var(--text-muted)' }}>
+                    {idNumber && !idState.ok
+                      ? idState.reason
+                      : idState.ok
+                        ? '✓ Valid ID number'
+                        : '🔒 Verifies you\'re a real person. Encrypted at rest — never shown to anyone.'}
+                  </div>
+                </div>
                 <label style={{ display:'flex', gap:8, alignItems:'flex-start', cursor:'pointer' }}>
                   <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} style={{ width:'auto', marginTop:3, flexShrink:0, accentColor:'var(--accent)' }} />
                   <span style={{ fontSize:'.76rem', color:'var(--text-secondary)', lineHeight:1.5 }}>I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color:'var(--accent)', fontWeight:600, textDecoration:'underline' }}>Terms of Service</a> and <a href="/privacy" target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color:'var(--accent)', fontWeight:600, textDecoration:'underline' }}>Privacy Policy</a>, and consent to ReLivR processing my data under POPIA.</span>
@@ -2043,7 +2076,7 @@ function PrivacyPage({ onNav }) {
     <SidebarPage title="Privacy Policy" subtitle="Legal" sections={sections} onNav={onNav}>
       <p style={{ color:'var(--text-muted)', fontFamily:'var(--fm)', fontSize:'.62rem', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:24 }}>Last updated: 28 June 2026</p>
       <div id="intro"><h2>1. Introduction</h2><p>ReLivR is committed to protecting your personal information and processes it in accordance with the Protection of Personal Information Act 4 of 2013 (POPIA) and other applicable South African law. This policy explains what we collect, how we use it, who we share it with, and your rights.</p></div>
-      <div id="collect"><h2>2. What We Collect</h2><ul><li>Identity and profile information — your name, display name, profile photo, headline, skills, and any bio or services you add</li><li>Contact information — email address, phone number, and physical or campus address</li><li>Account information — login credentials and preferences</li><li>Payment and transaction information — once payments are enabled</li><li>Location — your campus or area (which you choose from a list) helps facilitate tasks. Separately, if you tap "Sort by distance" on Browse Tasks or Local, your browser asks your device for its current position and uses it — on your device only — to sort results by proximity. That coordinate is never sent to or stored on our servers; it exists only in your browser for that browsing session.</li><li>Communications — messages with other users and with support</li><li>Technical and device information — IP address, device/browser type, a hashed identifier derived from your browser (used to detect new sign-ins), cookies, local storage and usage data</li><li>Content you create — tasks, bids, reviews and ratings, and (for businesses) listings and deal posts</li><li>Social and activity information — the users and businesses you follow and the deals you redeem</li></ul><p>Some information (name, email, password) is required to use the Platform; other information is optional.</p></div>
+      <div id="collect"><h2>2. What We Collect</h2><ul><li>Identity and profile information — your name, display name, profile photo, headline, skills, and any bio or services you add</li><li>Identity verification — your South African ID number, collected at sign-up to confirm you are a real person. It is <strong style={{color:'#3b3548'}}>encrypted at rest</strong>, never shown to other users, and used only for verification and fraud prevention.</li><li>Contact information — email address, phone number, and physical or campus address</li><li>Account information — login credentials and preferences</li><li>Payment and transaction information — once payments are enabled</li><li>Location — your campus or area (which you choose from a list) helps facilitate tasks. Separately, if you tap "Sort by distance" on Browse Tasks or Local, your browser asks your device for its current position and uses it — on your device only — to sort results by proximity. That coordinate is never sent to or stored on our servers; it exists only in your browser for that browsing session.</li><li>Communications — messages with other users and with support</li><li>Technical and device information — IP address, device/browser type, a hashed identifier derived from your browser (used to detect new sign-ins), cookies, local storage and usage data</li><li>Content you create — tasks, bids, reviews and ratings, and (for businesses) listings and deal posts</li><li>Social and activity information — the users and businesses you follow and the deals you redeem</li></ul><p>Some information (name, email, password) is required to use the Platform; other information is optional.</p></div>
       <div id="lawful"><h2>3. Lawful Basis for Processing</h2><p>We process personal information where you have consented, where it is necessary to perform our contract with you, to comply with a legal obligation, to protect a legitimate interest, or as otherwise permitted by law — consistent with POPIA's eight conditions for lawful processing.</p></div>
       <div id="use"><h2>4. How We Use It</h2><p>We use your information to create and manage accounts, match users with taskers, process payments, facilitate communication, verify identity and prevent fraud, provide support, improve and secure the Platform, comply with legal obligations, and send service-related notifications. <strong style={{color:'#3b3548'}}>We do not sell your personal information.</strong></p></div>
       <div id="share"><h2>5. Who We Share With</h2><p>We share personal information only as needed to operate the Platform:</p><ul><li>Payment processors (e.g. Paystack), once payments are enabled</li><li>Cloud hosting and database providers (e.g. Railway, Vercel, Neon)</li><li>Image-hosting providers for photos you upload (e.g. Cloudinary)</li><li>Authentication and email providers (e.g. Google / Gmail, and email-delivery services)</li><li>Analytics providers that help us improve the Platform</li><li>Other users and businesses when you interact — for example, your display name is shared with the other party when you post a task, bid, message or leave a review; and when you redeem a business's deal, your name is shared with that business. Your public profile and reviews are visible to other users.</li><li>Law enforcement or regulators where required by law</li></ul></div>
