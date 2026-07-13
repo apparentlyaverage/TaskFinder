@@ -1321,7 +1321,7 @@ function CampusStrip() {
     { img:'/img/campus-tutoring.webp', caption:'Skills, shared',      tag:'Tutoring' },
   ]
   return (
-    <section className="reveal" style={{ padding:'88px 24px', borderBottom:'1px solid var(--border)' }}>
+    <section className="reveal" style={{ padding:'clamp(48px,6vw,66px) 24px', borderBottom:'1px solid var(--border)' }}>
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
         <div className="slabel" style={{ marginBottom:28 }}>Real people, real trust</div>
         <div className="tasks-grid" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:20 }}>
@@ -1458,7 +1458,7 @@ function InstallAppButton({ variant = 'primary', style }) {
 
 function Hero({ onOpenAuth }) {
   return (
-    <section className="hero-section" style={{ minHeight:'92vh', display:'flex', alignItems:'center', padding:'128px 24px 72px', position:'relative' }}>
+    <section className="hero-section" style={{ display:'flex', alignItems:'center', padding:'104px 24px 60px', position:'relative' }}>
       <div style={{ maxWidth:1200, margin:'0 auto', width:'100%' }}>
         <div className="hero-inner" style={{ display:'flex', alignItems:'center', gap:64 }}>
           <div style={{ flex:1, animation:'fadeUp .6s ease both' }}>
@@ -1537,7 +1537,7 @@ function StatsBar() {
 // Batch 6: two scannable tracks — one for people using ReLivR, one for businesses.
 function HowItWorks() {
   return (
-    <section id="how-it-works" className="reveal" style={{ padding:'100px 24px' }}>
+    <section id="how-it-works" className="reveal" style={{ padding:'clamp(52px,7vw,74px) 24px' }}>
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
         <div style={{ marginBottom:44 }}>
           <div className="slabel" style={{ marginBottom:14 }}>How It Works</div>
@@ -1549,7 +1549,7 @@ function HowItWorks() {
           <span style={{ width:34, height:34, borderRadius:'var(--radius-sm)', background:'var(--accent-glow)', display:'inline-flex', alignItems:'center', justifyContent:'center' }}><Icon name="hand" size={19} color="var(--accent)" /></span>
           <h3 style={{ fontFamily:'var(--fd)', fontSize:'1.25rem', fontWeight:800, margin:0 }}>For you — post a task or earn</h3>
         </div>
-        <div className="steps-grid" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:2, marginBottom:52 }}>
+        <div className="steps-grid" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:2, marginBottom:34 }}>
           {STEPS_DATA.map((s,i) => (
             <div key={i} style={{ padding:'30px 24px', background:i%2===0?'var(--bg-surface)':'var(--bg-base)', border:'1px solid var(--border)' }}>
               <div style={{ fontFamily:'var(--fd)', fontSize:'3rem', fontWeight:800, color:'var(--border-strong)', lineHeight:1, marginBottom:14, userSelect:'none' }}>{s.n}</div>
@@ -1586,9 +1586,9 @@ function HowItWorks() {
 
 function Features() {
   return (
-    <section id="features" className="reveal" style={{ padding:'100px 24px', background:'var(--bg-surface)', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)' }}>
+    <section id="features" className="reveal" style={{ padding:'clamp(52px,7vw,74px) 24px', background:'var(--bg-surface)', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)' }}>
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
-        <div style={{ marginBottom:56, display:'flex', justifyContent:'space-between', alignItems:'flex-end', flexWrap:'wrap', gap:20 }}>
+        <div style={{ marginBottom:38, display:'flex', justifyContent:'space-between', alignItems:'flex-end', flexWrap:'wrap', gap:20 }}>
           <div>
             <div className="slabel" style={{ marginBottom:14 }}>Features</div>
             <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.8rem)', fontWeight:800, lineHeight:1.1 }}>Everything you need.<br />Nothing you don't.</h2>
@@ -1613,7 +1613,7 @@ function Features() {
 
 function LiveTasks({ onOpenAuth }) {
   return (
-    <section className="reveal" style={{ padding:'100px 24px' }}>
+    <section className="reveal" style={{ padding:'clamp(52px,7vw,74px) 24px' }}>
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
         <div style={{ marginBottom:44, display:'flex', justifyContent:'space-between', alignItems:'flex-end', flexWrap:'wrap', gap:16 }}>
           <div>
@@ -1647,9 +1647,9 @@ function LiveTasks({ onOpenAuth }) {
 
 function Pricing({ onOpenAuth }) {
   return (
-    <section id="pricing" className="reveal" style={{ padding:'100px 24px', background:'var(--bg-surface)', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)' }}>
+    <section id="pricing" className="reveal" style={{ padding:'clamp(52px,7vw,74px) 24px', background:'var(--bg-surface)', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)' }}>
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
-        <div style={{ marginBottom:56, textAlign:'center' }}>
+        <div style={{ marginBottom:38, textAlign:'center' }}>
           <div className="slabel" style={{ justifyContent:'center', marginBottom:14 }}>Pricing</div>
           <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.8rem)', fontWeight:800, lineHeight:1.1, marginBottom:14 }}>Simple. Fair. Transparent.</h2>
           <p style={{ color:'#665f72', maxWidth:420, margin:'0 auto', lineHeight:1.7, fontSize:'.9rem' }}>No subscriptions. No hidden fees. We only make money when you do.</p>
@@ -1696,9 +1696,9 @@ function Pricing({ onOpenAuth }) {
 // founding-member quotes post-beta.
 function Testimonials() {
   return (
-    <section className="reveal" style={{ padding:'100px 24px' }}>
+    <section className="reveal" style={{ padding:'clamp(52px,7vw,74px) 24px' }}>
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
-        <div style={{ marginBottom:56 }}>
+        <div style={{ marginBottom:38 }}>
           <div className="slabel" style={{ marginBottom:14 }}>Made for real life</div>
           <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.8rem)', fontWeight:800, lineHeight:1.1 }}>Whoever you are,<br />ReLivR works for you.</h2>
         </div>
@@ -1721,7 +1721,7 @@ function Testimonials() {
 
 function LandingAbout() {
   return (
-    <section id="about" className="reveal" style={{ padding:'100px 24px', background:'var(--bg-surface)', borderTop:'1px solid var(--border)' }}>
+    <section id="about" className="reveal" style={{ padding:'clamp(52px,7vw,74px) 24px', background:'var(--bg-surface)', borderTop:'1px solid var(--border)' }}>
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
         <div className="about-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:72, alignItems:'center' }}>
           <div>
@@ -1927,7 +1927,7 @@ function LaunchGate({ user, onLogout, onViewLanding }) {
 
 function LandingCTA({ onOpenAuth }) {
   return (
-    <section className="reveal" style={{ padding:'80px 24px' }}>
+    <section className="reveal" style={{ padding:'clamp(48px,6vw,66px) 24px' }}>
       <div style={{ maxWidth:1100, margin:'0 auto', position:'relative', borderRadius:28, overflow:'hidden', boxShadow:'var(--shadow-xl)' }}>
         <img src="/img/community.webp" alt="Neighbours helping each other in the community" loading="lazy" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }} />
         <div style={{ position:'absolute', inset:0, background:'linear-gradient(115deg, rgba(19,17,24,.88) 0%, rgba(19,17,24,.6) 52%, rgba(126,34,206,.5) 100%)' }} />
@@ -3911,11 +3911,15 @@ function TemplatesPanel({ setPage, setSelectedTask }) {
         </div>
       )}
       <Modal open={open} onClose={() => setOpen(false)} title="New task template" maxWidth={480}>
-        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-          <Input label="Title" value={form.title} onChange={e => setForm(f => ({ ...f, title:e.target.value }))} />
-          <div><label>Description</label><textarea value={form.description} onChange={e => setForm(f => ({ ...f, description:e.target.value }))} style={{ minHeight:100 }} /></div>
-          <Input label="Budget (R)" type="number" value={form.budget} onChange={e => setForm(f => ({ ...f, budget:e.target.value }))} />
-          <Input label="Deadline (days from posting)" type="number" value={form.deadlineDays} onChange={e => setForm(f => ({ ...f, deadlineDays:e.target.value }))} />
+        <form autoComplete="off" onSubmit={e => { e.preventDefault(); create() }} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          {/* Anti-autofill honeypot: Chrome pins its saved phone/name onto the first
+              text field regardless of a single field's autoComplete. An off-screen
+              decoy input absorbs it so the real Title stays clean. */}
+          <input type="text" tabIndex={-1} aria-hidden="true" autoComplete="off" style={{ position:'absolute', opacity:0, height:0, width:0, pointerEvents:'none' }} />
+          <Input label="Title" name="template-title" autoComplete="off" value={form.title} onChange={e => setForm(f => ({ ...f, title:e.target.value }))} />
+          <div><label>Description</label><textarea autoComplete="off" value={form.description} onChange={e => setForm(f => ({ ...f, description:e.target.value }))} style={{ minHeight:100 }} /></div>
+          <Input label="Budget (R)" type="number" name="template-budget" autoComplete="off" value={form.budget} onChange={e => setForm(f => ({ ...f, budget:e.target.value }))} />
+          <Input label="Deadline (days from posting)" type="number" name="template-deadline" autoComplete="off" value={form.deadlineDays} onChange={e => setForm(f => ({ ...f, deadlineDays:e.target.value }))} />
           <div>
             <label>Recurrence</label>
             <select value={form.recurrence} onChange={e => setForm(f => ({ ...f, recurrence:e.target.value }))}>
@@ -3926,10 +3930,10 @@ function TemplatesPanel({ setPage, setSelectedTask }) {
             </select>
           </div>
           <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
-            <Btn variant="ghost" onClick={() => setOpen(false)} disabled={saving}>Cancel</Btn>
-            <Btn variant="primary" loading={saving} onClick={create}>Save template</Btn>
+            <Btn variant="ghost" type="button" onClick={() => setOpen(false)} disabled={saving}>Cancel</Btn>
+            <Btn variant="primary" type="button" loading={saving} onClick={create}>Save template</Btn>
           </div>
-        </div>
+        </form>
       </Modal>
     </DCard>
   )
