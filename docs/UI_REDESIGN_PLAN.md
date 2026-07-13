@@ -1,8 +1,17 @@
 # ReLivR — UI Redesign Plan
 
-> Status: **DRAFT for approval** · Authored 2026-07-13 · Owner sign-off required before Phase 1.
+> Status: **✅ SHIPPED (Phases 0–3)** · Authored 2026-07-13 · Owner gave full creative liberty.
 > Scope: visual/interaction redesign of the existing single-file React app (`frontend/src/App.jsx`).
 > Companion pitch artifact (mashup research, visual): the "ReLivR — UI Redesign Plan" artifact.
+>
+> **Delivered on `main`:** Phase 0 [`3a4f834`] (hero-copy bug + student-label sweep) ·
+> Phases 1–2 [`0606d1d`] (Icon.jsx real icon system, --verified/--live tokens, de-templated
+> hero, task-card rail removal, DCard affordance split, nav/empty-state/landing icon migration) ·
+> Phase 3 [`e2cc43b`] (live category counts, --live presence dot, business trust triad).
+> Geometric-glyph "icons" 141→16; hero de-templated (no dot-grid / glow / fake phone / float);
+> frontend build clean + 3/3 tests; live-verified with zero console errors.
+> Long-tail follow-ups (remaining decorative emoji on legal/pricing pages; optional provider
+> directory + tiered catalog pricing) are noted as v2 in §7 Phase 3 / §8.
 
 This is a **refinement, not a rebrand.** The purple/orchid palette, Inter typography, the layered
 shadow scale, and the Batch-6 two-track "How it works" all stay. The problem ReLivR has is not taste
