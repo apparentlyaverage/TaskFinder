@@ -2930,13 +2930,18 @@ function TaskBrowse({ setPage, setSelectedTask, openProfile }) {
 
   const filtersActive = skill||cat||status!=='all'||sort!=='newest'
 
+  // Live category counts from the loaded open tasks (Serv-style "populated" signal).
+  // Honest: reflects the tasks actually loaded, never a fabricated number.
+  const catCounts = {}
+  tasks.forEach(t => { if (t.status === 'open') { const n = categoryFor(t).name; catCounts[n] = (catCounts[n] || 0) + 1 } })
+
   return (
     <div className="page-enter">
       {/* Marketplace hero — search-first, like Fiverr/FB Marketplace */}
       <div style={{ marginBottom:18 }}>
         <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'clamp(1.5rem,3vw,2.1rem)', letterSpacing:'-0.01em', marginBottom:14 }}>What do you need done?</h1>
         <div style={{ position:'relative', maxWidth:560 }}>
-          <span style={{ position:'absolute', left:16, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', fontSize:'1.05rem' }}>⌕</span>
+          <span style={{ position:'absolute', left:15, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', display:'flex' }}><Icon name="search" size={18} /></span>
           <input id="feed-search" placeholder="Search — laundry, python, tutoring…" value={skill} onChange={e => setSkill(e.target.value)}
             style={{ padding:'14px 16px 14px 44px', borderRadius:14, fontSize:'1rem', background:'var(--bg-surface)', boxShadow:'0 1px 4px rgba(19,17,24,.07)' }} />
         </div>
@@ -2950,6 +2955,7 @@ function TaskBrowse({ setPage, setSelectedTask, openProfile }) {
             <button key={c.name} onClick={() => setCat(active ? null : c.name)}
               style={{ display:'flex', alignItems:'center', gap:7, padding:'8px 14px', borderRadius:100, whiteSpace:'nowrap', cursor:'pointer', transition:'all 150ms ease', border:`1.5px solid ${active?'var(--accent)':'var(--border)'}`, background:active?'var(--accent-glow)':'var(--bg-surface)', color:active?'var(--accent)':'var(--text-secondary)', fontWeight:600, fontSize:'.85rem', fontFamily:'var(--font-body)' }}>
               <Icon name={categoryIcon(c.name)} size={15} color={active?'var(--accent)':'var(--text-muted)'} />{titleCase(c.name)}
+              {catCounts[c.name] > 0 && <span style={{ fontFamily:'var(--font-mono)', fontSize:'.7rem', fontWeight:600, color:active?'var(--accent)':'var(--text-muted)', opacity:.85 }}>{catCounts[c.name]}</span>}
             </button>
           )
         })}
@@ -4941,16 +4947,31 @@ function LocalBrowse({ setPage }) {
             </div>
             {b.description && <p style={{ color:'var(--text-secondary)', lineHeight:1.65, margin:'0 0 10px' }}>{b.description}</p>}
             <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-              {b.address && <Mono>📍 {b.address}</Mono>}
-              {b.hours   && <Mono>🕒 {b.hours}</Mono>}
+              {b.address && <Mono style={{ display:'inline-flex', alignItems:'center', gap:6 }}><Icon name="pin" size={13} /> {b.address}</Mono>}
+              {b.hours   && <Mono style={{ display:'inline-flex', alignItems:'center', gap:6 }}><Icon name="clock" size={13} /> {b.hours}</Mono>}
             </div>
           </div>
 
           {/* Contact actions */}
           <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-            {b.phone    && <a href={`tel:${b.phone}`} onClick={() => trackBizEvent(b.business_id, 'phone_click')} style={{ textDecoration:'none' }}><Btn variant="secondary" size="sm">📞 Call</Btn></a>}
-            {b.whatsapp && <a href={`https://wa.me/${b.whatsapp.replace(/[^0-9]/g,'')}`} onClick={() => trackBizEvent(b.business_id, 'whatsapp_click')} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}><Btn variant="secondary" size="sm">💬 WhatsApp</Btn></a>}
-            {b.link_url && <a href={b.link_url} onClick={() => trackBizEvent(b.business_id, 'link_click')} target="_blank" rel="noopener noreferrer nofollow" style={{ textDecoration:'none' }}><Btn variant="ghost" size="sm">🔗 Website</Btn></a>}
+            {b.phone    && <a href={`tel:${b.phone}`} onClick={() => trackBizEvent(b.business_id, 'phone_click')} style={{ textDecoration:'none' }}><Btn variant="secondary" size="sm"><Icon name="phone" size={14} /> Call</Btn></a>}
+            {b.whatsapp && <a href={`https://wa.me/${b.whatsapp.replace(/[^0-9]/g,'')}`} onClick={() => trackBizEvent(b.business_id, 'whatsapp_click')} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}><Btn variant="secondary" size="sm"><Icon name="message" size={14} /> WhatsApp</Btn></a>}
+            {b.link_url && <a href={b.link_url} onClick={() => trackBizEvent(b.business_id, 'link_click')} target="_blank" rel="noopener noreferrer nofollow" style={{ textDecoration:'none' }}><Btn variant="ghost" size="sm"><Icon name="link" size={14} /> Website</Btn></a>}
+          </div>
+
+          {/* Trust triad (Serv pattern) — every claim is a real ReLivR guarantee */}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginTop:16 }}>
+            {[
+              { icon:'shield', color:'var(--verified)', title:'Verified owner', desc:'ID-checked at signup' },
+              { icon:'star',   color:'var(--accent)',   title:'Community-rated', desc:'Real ratings & reviews' },
+              { icon:'lock',   color:'var(--text-secondary)', title:'POPIA-protected', desc:'Your data stays private' },
+            ].map(x => (
+              <div key={x.title} style={{ background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:'var(--radius-md)', padding:'14px 12px', textAlign:'center' }}>
+                <div style={{ width:32, height:32, margin:'0 auto 8px', borderRadius:'var(--radius-sm)', background:'var(--bg-elevated)', display:'flex', alignItems:'center', justifyContent:'center' }}><Icon name={x.icon} size={17} color={x.color} /></div>
+                <div style={{ fontWeight:700, fontSize:'.78rem', marginBottom:2 }}>{x.title}</div>
+                <div style={{ fontSize:'.68rem', color:'var(--text-muted)', lineHeight:1.35 }}>{x.desc}</div>
+              </div>
+            ))}
           </div>
         </div>
 
