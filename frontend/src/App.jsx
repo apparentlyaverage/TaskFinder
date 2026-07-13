@@ -1270,7 +1270,7 @@ const TASK_EXAMPLES = [
   { title:'Fix Python script crashing on import', budget:'R180', tags:['python','debugging'] },
   { title:'Proofread 3000-word essay',            budget:'R120', tags:['writing','editing'] },
   { title:'Laundry pickup & delivery',            budget:'R80',  tags:['errands','delivery'] },
-  { title:'React component for student portal',   budget:'R350', tags:['react','javascript'] },
+  { title:'React component for a booking widget', budget:'R350', tags:['react','javascript'] },
   { title:'Guitar lesson — 1 hour',               budget:'R150', tags:['music','tutoring'] },
   { title:'Translate doc Zulu → English',         budget:'R200', tags:['translation','lang'] },
 ]
@@ -4396,13 +4396,25 @@ function Messages({ target, clearTarget }) {
   )
 }
 
-function Notifications({ setPage, setSelectedTask }) {
+function Notifications({ setPage, setSelectedTask, openProfile }) {
   const { state, dispatch } = useStore()
   const toast = useToast()
   const [notifs, setNotifs] = useState(state.notifications)
   const [offline, setOffline] = useState(false)
   const token = () => localStorage.getItem('rl_token')
-  const icons = { 'bid.submitted':'⚡','bid.accepted':'🎉','task.matched':'🎯','task.completed':'✅','payment.released':'💰','escrow.funded':'🔒','dispute.resolved':'⚖️','review.received':'⭐','task.created':'✓' }
+  // type → Icon name. Covers every type the backend emits; unknown → bell.
+  const NOTIF_ICON = {
+    'bid.submitted':'zap', 'bid.accepted':'check-circle',
+    'task.submitted':'inbox', 'task.completed':'check-circle', 'task.changes_requested':'refresh',
+    'task.cancelled':'x', 'task.price_proposed':'tag',
+    'message.received':'message', 'review.received':'star', 'business.review':'star',
+    'deal.new':'tag', 'deal.redeemed':'check-circle', 'dispute.opened':'scale', 'dispute.resolved':'scale',
+    'follow.new':'heart', 'booking.new':'calendar', 'booking.cancelled':'calendar',
+    'retainer.started':'refresh', 'retainer.cancelled':'x', 'onboarding_fee':'wallet',
+  }
+  const notifIcon = (t) => NOTIF_ICON[t] || 'bell'
+  // Which notifications lead somewhere on click (drives the "Click to view" hint).
+  const routes = (t = '') => /^(task\.|bid\.|message\.|deal\.|booking\.|retainer\.|dispute\.|follow\.)/.test(t) || t === 'review.received' || t === 'business.review'
 
   // Load notifications from backend, fall back to store if offline
   async function load() {
@@ -4437,7 +4449,16 @@ function Notifications({ setPage, setSelectedTask }) {
 
   function handleClick(n) {
     setNotifs(prev => prev.map(x => x.notification_id===n.notification_id ? { ...x, is_read:true } : x))
-    if (n.reference_id && state.tasks.find(t=>t.task_id===n.reference_id)) { setSelectedTask(n.reference_id); setPage('task-detail') }
+    const t = n.type || '', ref = n.reference_id
+    if (/^(task\.|bid\.)/.test(t) && ref)            { setSelectedTask(ref); setPage('task-detail'); return }
+    if (t === 'message.received')                    { setPage('messages'); return }
+    if (t === 'follow.new' && ref && openProfile)    { openProfile(ref); return }
+    if (t.startsWith('deal.'))                       { setPage('deals'); return }
+    if (t.startsWith('booking.') || t.startsWith('retainer.')) { setPage('schedule'); return }
+    if (t.startsWith('dispute.'))                    { setPage('tasks-mine'); return }
+    if (t === 'review.received' || t === 'business.review') { setPage('profile'); return }
+    // Fallback: a task we happen to already have loaded.
+    if (ref && state.tasks.find(x=>x.task_id===ref)) { setSelectedTask(ref); setPage('task-detail') }
   }
   return (
     <div className="page-enter" style={{ maxWidth:680 }}>
@@ -4452,14 +4473,14 @@ function Notifications({ setPage, setSelectedTask }) {
             style={{ background:n.is_read?'var(--bg-surface)':'var(--bg-elevated)', border:`1px solid ${n.is_read?'var(--border)':'var(--border-strong)'}`, borderRadius:'var(--radius-md)', padding:'14px 16px', display:'flex', gap:14, cursor:'pointer', transition:'all 150ms ease' }}
             onMouseEnter={e => e.currentTarget.style.borderColor='var(--border-strong)'}
             onMouseLeave={e => e.currentTarget.style.borderColor=n.is_read?'var(--border)':'var(--border-strong)'}>
-            <div style={{ fontSize:'1.25rem', flexShrink:0, marginTop:2 }}>{icons[n.type]||'🔔'}</div>
+            <div style={{ flexShrink:0, marginTop:2, width:34, height:34, borderRadius:'50%', background:n.is_read?'var(--bg-elevated)':'var(--accent-glow)', display:'flex', alignItems:'center', justifyContent:'center' }}><Icon name={notifIcon(n.type)} size={17} color={n.is_read?'var(--text-muted)':'var(--accent)'} /></div>
             <div style={{ flex:1 }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:3 }}>
                 <span style={{ fontWeight:n.is_read?400:600, fontSize:'0.9rem' }}>{n.title}</span>
                 <Mono style={{ flexShrink:0, marginLeft:10 }}>{new Date(n.created_at).toLocaleDateString()}</Mono>
               </div>
               <p style={{ fontSize:'0.85rem', color:'var(--text-secondary)', lineHeight:1.5 }}>{n.body}</p>
-              {state.tasks.find(t=>t.task_id===n.reference_id)&&<Mono color="var(--accent)" size="0.65rem" style={{ display:'block', marginTop:6 }}>Click to view →</Mono>}
+              {routes(n.type)&&<Mono color="var(--accent)" size="0.65rem" style={{ display:'block', marginTop:6 }}>Click to view →</Mono>}
             </div>
             {!n.is_read&&<div style={{ width:8, height:8, borderRadius:'50%', background:'var(--accent)', flexShrink:0, marginTop:6 }} />}
           </div>
@@ -4470,7 +4491,7 @@ function Notifications({ setPage, setSelectedTask }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  LOCAL BUSINESS LISTINGS — student-facing browse + admin management
+//  LOCAL BUSINESS LISTINGS — public-facing browse + admin management
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const BIZ_CATEGORIES = [
@@ -8859,7 +8880,7 @@ export default function App() {
       case 'my-bids':              return <MyBids setPage={setDashPage} setSelectedTask={setSelectedTask} />
       case 'suggestions':          return <Suggestions setPage={setDashPage} setSelectedTask={setSelectedTask} />
       case 'messages':             return <Messages target={messageTarget} clearTarget={() => setMessageTarget(null)} />
-      case 'notifications':        return <Notifications setPage={setDashPage} setSelectedTask={setSelectedTask} />
+      case 'notifications':        return <Notifications setPage={setDashPage} setSelectedTask={setSelectedTask} openProfile={(uid) => { setSelectedUser(uid); setDashPage('public-profile') }} />
       case 'profile':              return <Profile openProfile={(uid) => { setSelectedUser(uid); setDashPage('public-profile') }} />
       case 'public-profile':       return <PublicProfile userId={selectedUser} setPage={setDashPage} openChat={(uid, name) => { setMessageTarget({ userId: uid, name }); setDashPage('messages') }} />
       case 'admin-disputes':       return <AdminDisputes setPage={setDashPage} setSelectedDispute={setSelectedDispute} />
