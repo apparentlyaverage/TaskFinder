@@ -1461,7 +1461,7 @@ function Hero({ onOpenAuth }) {
               Live more.<br /><span style={{ background:'linear-gradient(100deg, transparent 0%, var(--highlight) 6%, var(--highlight) 94%, transparent 100%)', padding:'0 0.18em', borderRadius:12, WebkitBoxDecorationBreak:'clone', boxDecorationBreak:'clone' }}>stress less.</span>
             </h1>
             <p style={{ fontSize:'clamp(.95rem,1.8vw,1.2rem)', color:'#5f5970', lineHeight:1.75, maxWidth:520, marginBottom:36, animation:'fadeUp .6s .2s ease both', opacity:0, animationFillMode:'forwards' }}>
-              ReLivR connects students. Post a task, earn money, or get things done — with verified student trust scores. Secure escrow payments (recurring, split &amp; more) are coming soon.
+              ReLivR connects your community. Post a task, earn money, or get things done — with verified, trust-scored members you can rely on. Secure escrow payments (recurring, split &amp; more) are coming soon.
             </p>
             <div style={{ display:'flex', gap:12, flexWrap:'wrap', animation:'fadeUp .6s .3s ease both', opacity:0, animationFillMode:'forwards' }}>
               <button className="btn-p" style={{ fontSize:'.95rem', padding:'14px 30px' }} onClick={() => onOpenAuth('register')}>Post a Task Free →</button>
@@ -5255,7 +5255,7 @@ function BusinessForm({ business, onDone, onCancel }) {
             <SelectField label="Category" value={f.category} onChange={set('category')}>
               {BIZ_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </SelectField>
-            <Textarea label="Description" value={f.description} onChange={set('description')} hint="1–2 sentences students will see." />
+            <Textarea label="Description" value={f.description} onChange={set('description')} hint="1–2 sentences customers will see." />
             <Input label="Address" value={f.address} onChange={set('address')} placeholder="e.g. 12 High Street, Makhanda" />
             <SelectField label="Zone / area (for Local's distance sort)" value={f.campusZone} onChange={set('campusZone')}>
               <option value="">Not specified</option>
@@ -5301,7 +5301,7 @@ function BusinessForm({ business, onDone, onCancel }) {
         </DCard>
 
         <DCard hover={false}>
-          <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:14 }}>Internal (not shown to students)</Mono>
+          <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:14 }}>Internal (not shown to customers)</Mono>
           <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
             <SelectField label="Status" value={f.status} onChange={set('status')}>
               <option value="pending">Pending (hidden)</option>
@@ -6187,7 +6187,7 @@ function Profile({ openProfile }) {
           </DCard>
           <DCard hover={false}>
             <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:6 }}>Showcase &amp; advertising</Mono>
-            <p style={{ fontSize:'.8rem', color:'var(--text-muted)', marginBottom:16, lineHeight:1.5 }}>This is what students see on your public profile. A strong headline and services section help you win more work.</p>
+            <p style={{ fontSize:'.8rem', color:'var(--text-muted)', marginBottom:16, lineHeight:1.5 }}>This is what customers see on your public profile. A strong headline and services section help you win more work.</p>
             <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
               <Input label="Headline" value={headline} onChange={e=>setHeadline(e.target.value)} hint="One line, e.g. “First-year Stats tutor & freelance designer”" />
               <Textarea label="Services offered" value={services} onChange={e=>setServices(e.target.value)} style={{ minHeight:90 }} hint="What can people hire you for? Rates, availability, specialities." />
@@ -6477,7 +6477,7 @@ function dealTimeLeft(expiresAt) {
 const isoToLocalInput = (iso) => iso ? new Date(new Date(iso).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''
 const daysFromNowLocal = (days) => new Date(Date.now() + days * 86400000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
 
-// One deal as students see it (public grid + live preview in the editor).
+// One deal as customers see it (public grid + live preview in the editor).
 function DealCard({ d, onRedeem, claimed }) {
   const expired = d.expires_at && new Date(d.expires_at).getTime() <= Date.now()
   return (
@@ -6623,7 +6623,7 @@ function DealForm({ biz, deal, onDone, onCancel }) {
           </div>
         </DCard>
         <div>
-          <Mono style={{ display: 'block', marginBottom: 10 }}>Live preview — how students see it</Mono>
+          <Mono style={{ display: 'block', marginBottom: 10 }}>Live preview — how customers see it</Mono>
           <div style={{ maxWidth: 280 }}><DealCard d={preview} /></div>
         </div>
       </div>
@@ -7318,7 +7318,7 @@ function BusinessPageEditor({ biz, onSaved }) {
         {sectionLabel('— Hours & location')}
         <Input label="Opening hours" value={f.hours} onChange={set('hours')} />
         <Input label="Address" value={f.address} onChange={set('address')} />
-        <SelectField label="Zone / area (lets students sort Local by distance)" value={f.campusZone} onChange={set('campusZone')}>
+        <SelectField label="Zone / area (lets customers sort Local by distance)" value={f.campusZone} onChange={set('campusZone')}>
           <option value="">Not specified</option>
           {zones.map(z => <option key={z} value={z}>{z}</option>)}
         </SelectField>
@@ -7396,7 +7396,7 @@ function BusinessPageEditor({ biz, onSaved }) {
       </DCard>
 
       <div>
-        <Mono style={{ display:'block', marginBottom:10 }}>Live preview — how students see you</Mono>
+        <Mono style={{ display:'block', marginBottom:10 }}>Live preview — how customers see you</Mono>
         <BusinessPreviewCard b={preview} />
       </div>
     </div>
@@ -7431,7 +7431,7 @@ function BusinessAnalytics() {
   }, [days])
 
   if (loading) return <div style={{ padding:60, textAlign:'center' }}><Spinner /></div>
-  if (!data)   return <EmptyState icon="📊" message="No analytics yet — they’ll appear as students view your page." />
+  if (!data)   return <EmptyState icon="📊" message="No analytics yet — they’ll appear as customers view your page." />
 
   const t = data.totals || {}
   const clickRows = [
@@ -8299,7 +8299,7 @@ function buildWalkthroughSlides(intent) {
     { icon:'logo', title:'Welcome to ReLivR', body:'Your local marketplace — post what you need done, or earn by helping out. Here’s the 30-second tour.' },
   ]
   if (intent !== 'earn') slides.push(
-    { icon:'＋', title:'Post a task in seconds', body:'Describe what you need and set a budget. Students nearby send offers — you pick who to work with, chat, and confirm when it’s done.' })
+    { icon:'＋', title:'Post a task in seconds', body:'Describe what you need and set a budget. People nearby send offers — you pick who to work with, chat, and confirm when it’s done.' })
   if (intent !== 'post') slides.push(
     { icon:'◈', title:'Bid & get hired', body:'Browse open tasks that match your skills, send a pitch with your price, and message the poster to lock in details. Every job builds your public rating.' })
   slides.push(
