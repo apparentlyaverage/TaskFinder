@@ -10,6 +10,7 @@ import React, {
 } from 'react'
 import { createPortal } from 'react-dom'
 import QRCode from 'qrcode'
+import Icon, { hasIcon } from './Icon.jsx'
 import {
   MOCK_TASKS, MOCK_BIDS, MOCK_NOTIFICATIONS,
   MOCK_MESSAGES, MOCK_DISPUTES, MOCK_SUGGESTIONS,
@@ -95,6 +96,13 @@ _style.textContent = `
   --danger:        #b91c1c;
   --info:          #1d4ed8;
   --warning:       #b45309;
+  /* Redesign: two SEMANTIC accents so trust + presence stop borrowing brand-purple.
+     Verified (green) = ID/student verified, escrow-safe. Live (blue) = online now,
+     real-time. Each means exactly one thing, like --success/--danger. */
+  --verified:      #0d7a5f;
+  --verified-dim:  #e2f3ec;
+  --live:          #0369a1;
+  --live-dim:      #e0f2fe;
   /* Clean, industry-standard sans (Inter) for everything, with a native system
      fallback stack; a native monospace stack for the small uppercase eyebrow
      labels. No decorative/display face — reads as a real product, not a demo. */
@@ -572,9 +580,12 @@ function Badge({ children, variant='default' }) {
 
 function DCard({ children, style={}, onClick, hover=true, className='' }) {
   const [hov, setHov] = useState(false)
+  // Redesign: only genuinely-clickable cards LIFT (feedback should match affordance);
+  // non-interactive cards get a quiet border emphasis instead of a template-y float.
+  const interactive = hover && !!onClick
   return (
     <div className={className} onClick={onClick} onMouseEnter={() => hover&&setHov(true)} onMouseLeave={() => hover&&setHov(false)}
-      style={{ background:'var(--bg-surface)', border:`1px solid ${hov?'var(--border-strong)':'var(--border)'}`, borderRadius:'var(--radius-md)', padding:20, transition:'all 150ms ease', ...(hover&&hov?{transform:'translateY(-2px)',boxShadow:'0 8px 32px rgba(19,17,24,.10)'}:{}), ...(onClick?{cursor:'pointer'}:{}), ...style }}>
+      style={{ background:'var(--bg-surface)', border:`1px solid ${hov?'var(--border-strong)':'var(--border)'}`, borderRadius:'var(--radius-md)', padding:20, transition:'transform 150ms var(--ease), box-shadow 150ms var(--ease), border-color 150ms var(--ease)', ...(interactive&&hov?{transform:'translateY(-2px)',boxShadow:'var(--shadow-md)'}:{}), ...(onClick?{cursor:'pointer'}:{}), ...style }}>
       {children}
     </div>
   )
@@ -614,10 +625,10 @@ function PageTitle({ children, sub }) {
   )
 }
 
-function EmptyState({ icon='◻', message, action }) {
+function EmptyState({ icon='inbox', message, action }) {
   return (
     <div style={{ textAlign:'center', padding:'56px 24px' }}>
-      <div style={{ width:60, height:60, margin:'0 auto 14px', borderRadius:'50%', background:'var(--bg-elevated)', border:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.5rem', color:'var(--text-muted)' }}>{icon}</div>
+      <div style={{ width:60, height:60, margin:'0 auto 14px', borderRadius:'50%', background:'var(--bg-elevated)', border:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.5rem', color:'var(--text-muted)' }}>{hasIcon(icon) ? <Icon name={icon} size={26} color="var(--text-muted)" /> : icon}</div>
       <Mono style={{ display:'block', marginBottom:action?18:0, maxWidth:320, marginLeft:'auto', marginRight:'auto', lineHeight:1.6 }}>{message}</Mono>
       {action && action}
     </div>
@@ -1265,12 +1276,12 @@ const TASK_EXAMPLES = [
 ]
 
 const FEATURES_DATA = [
-  { icon:'⚡', title:'Post in 60 Seconds',   desc:'Describe your task, set a budget, and go live instantly. No lengthy forms, no approval process.' },
-  { icon:'🎯', title:'Smart Matching',       desc:'Our engine surfaces your task to earners with the exact skills you need — automatically.' },
-  { icon:'🔒', title:'Escrow — Coming Soon', desc:'Secure held-until-done payments are on the roadmap. During beta, you agree a price and settle directly.' },
-  { icon:'⭐', title:'Trust Scores',         desc:'Every user builds a verified reputation. Know who you\'re working with before you commit.' },
-  { icon:'💬', title:'Built-in Messaging',   desc:'Negotiate, clarify, and collaborate — all in one place without switching apps.' },
-  { icon:'⚖️', title:'Dispute Resolution',  desc:'If something goes wrong, our admin team steps in. Fair outcomes, every time.' },
+  { icon:'zap',     title:'Post in 60 Seconds',   desc:'Describe your task, set a budget, and go live instantly. No lengthy forms, no approval process.' },
+  { icon:'target',  title:'Smart Matching',       desc:'Our engine surfaces your task to earners with the exact skills you need — automatically.' },
+  { icon:'lock',    title:'Escrow — Coming Soon', desc:'Secure held-until-done payments are on the roadmap. During beta, you agree a price and settle directly.' },
+  { icon:'shield',  title:'Trust Scores',         desc:'Every user builds a verified reputation. Know who you\'re working with before you commit.' },
+  { icon:'message', title:'Built-in Messaging',   desc:'Negotiate, clarify, and collaborate — all in one place without switching apps.' },
+  { icon:'scale',   title:'Dispute Resolution',   desc:'If something goes wrong, our admin team steps in. Fair outcomes, every time.' },
 ]
 
 const STEPS_DATA = [
@@ -1298,9 +1309,9 @@ const STATS_DATA = [
 // Honest pre-launch social proof: scenario cards, not invented testimonials.
 // Swap for real founding-member quotes (with consent) once the beta produces them.
 const SCENARIOS_DATA = [
-  { icon:'💻', who:'The coder',   title:'Turn your skills into rent money',  text:'Debug a script between lectures. Build a component over the weekend. Your degree is already earning — you just haven\'t invoiced it yet.' },
-  { icon:'📚', who:'The swamped', title:'Buy back your afternoon',           text:'Laundry run, essay proofread, groceries collected — post it in a minute and get your hours back for the things only you can do.' },
-  { icon:'🤝', who:'The neighbour', title:'Trade with people you can trust',   text:'Everyone here builds a public track record with every task, and can verify their identity and university. Not a stranger from the internet.' },
+  { icon:'code',  who:'The skilled',  title:'Turn your skills into extra income', text:'Debug a script between meetings. Build a component over the weekend. Your skills are already valuable — you just haven\'t invoiced them yet.' },
+  { icon:'clock', who:'The swamped',  title:'Buy back your afternoon',            text:'Laundry run, essay proofread, groceries collected — post it in a minute and get your hours back for the things only you can do.' },
+  { icon:'users', who:'The neighbour', title:'Trade with people you can trust',    text:'Everyone here builds a public track record with every task, and can verify their identity and university. Not a stranger from the internet.' },
 ]
 
 function CampusStrip() {
@@ -1447,45 +1458,59 @@ function InstallAppButton({ variant = 'primary', style }) {
 
 function Hero({ onOpenAuth }) {
   return (
-    <section className="hero-section" style={{ minHeight:'100vh', display:'flex', alignItems:'center', padding:'128px 24px 72px', position:'relative', overflow:'hidden' }}>
-      <div style={{ position:'absolute', inset:0, zIndex:0, backgroundImage:'linear-gradient(rgba(19,17,24,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(19,17,24,.05) 1px,transparent 1px)', backgroundSize:'56px 56px' }} />
-      <div style={{ position:'absolute', top:'15%', right:'8%', width:500, height:500, background:'radial-gradient(circle,rgba(126,34,206,.07) 0%,transparent 70%)', zIndex:0 }} />
-      <div style={{ maxWidth:1200, margin:'0 auto', width:'100%', position:'relative', zIndex:1 }}>
-        <div className="hero-inner" style={{ display:'flex', alignItems:'center', gap:60 }}>
-          <div style={{ flex:1 }}>
-            <div style={{ display:'inline-flex', alignItems:'center', gap:8, background:'rgba(126,34,206,.1)', border:'1px solid rgba(126,34,206,.25)', borderRadius:100, padding:'5px 14px', marginBottom:28, animation:'fadeUp .6s ease both' }}>
-              <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--amber)', animation:'pulse 2s infinite', flexShrink:0 }} />
-              <span style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', letterSpacing:'.1em', textTransform:'uppercase' }}>Now in beta</span>
+    <section className="hero-section" style={{ minHeight:'92vh', display:'flex', alignItems:'center', padding:'128px 24px 72px', position:'relative' }}>
+      <div style={{ maxWidth:1200, margin:'0 auto', width:'100%' }}>
+        <div className="hero-inner" style={{ display:'flex', alignItems:'center', gap:64 }}>
+          <div style={{ flex:1, animation:'fadeUp .6s ease both' }}>
+            <div style={{ display:'inline-flex', alignItems:'center', gap:8, background:'var(--bg-surface)', border:'1px solid var(--border-strong)', borderRadius:100, padding:'5px 13px 5px 11px', marginBottom:26, boxShadow:'var(--shadow-xs)' }}>
+              <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--verified)', flexShrink:0 }} />
+              <span style={{ fontFamily:'var(--fm)', fontSize:'.63rem', color:'var(--text-secondary)', letterSpacing:'.1em', textTransform:'uppercase' }}>Proudly South African · Now in beta</span>
             </div>
-            <h1 style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(2.8rem,6.5vw,5.2rem)', lineHeight:1.0, letterSpacing:'-.02em', marginBottom:24, animation:'fadeUp .6s .1s ease both', opacity:0, animationFillMode:'forwards' }}>
-              Live more.<br /><span style={{ background:'linear-gradient(100deg, transparent 0%, var(--highlight) 6%, var(--highlight) 94%, transparent 100%)', padding:'0 0.18em', borderRadius:12, WebkitBoxDecorationBreak:'clone', boxDecorationBreak:'clone' }}>stress less.</span>
+            <h1 style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(2.8rem,6.5vw,5rem)', lineHeight:1.0, letterSpacing:'-.025em', marginBottom:22, textWrap:'balance' }}>
+              Live more.<br /><span style={{ background:'var(--highlight)', padding:'0 .14em', borderRadius:8, WebkitBoxDecorationBreak:'clone', boxDecorationBreak:'clone' }}>stress less.</span>
             </h1>
-            <p style={{ fontSize:'clamp(.95rem,1.8vw,1.2rem)', color:'#5f5970', lineHeight:1.75, maxWidth:520, marginBottom:36, animation:'fadeUp .6s .2s ease both', opacity:0, animationFillMode:'forwards' }}>
-              ReLivR connects your community. Post a task, earn money, or get things done — with verified, trust-scored members you can rely on. Secure escrow payments (recurring, split &amp; more) are coming soon.
+            <p style={{ fontSize:'clamp(.98rem,1.6vw,1.15rem)', color:'var(--text-secondary)', lineHeight:1.7, maxWidth:500, marginBottom:30 }}>
+              ReLivR connects your community. Post a task, earn money, or get things done — with verified, trust-scored members you can rely on. Secure escrow payments are coming soon.
             </p>
-            <div style={{ display:'flex', gap:12, flexWrap:'wrap', animation:'fadeUp .6s .3s ease both', opacity:0, animationFillMode:'forwards' }}>
-              <button className="btn-p" style={{ fontSize:'.95rem', padding:'14px 30px' }} onClick={() => onOpenAuth('register')}>Post a Task Free →</button>
-              <button className="btn-s" style={{ fontSize:'.95rem', padding:'14px 30px' }} onClick={() => onOpenAuth('register')}>Start Earning</button>
-              <InstallAppButton variant="secondary" style={{ fontSize:'.95rem', padding:'14px 30px' }} />
+            <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
+              <button className="btn-p" style={{ fontSize:'.95rem', padding:'14px 26px' }} onClick={() => onOpenAuth('register')}>Post a Task Free <Icon name="arrow" size={16} /></button>
+              <button className="btn-s" style={{ fontSize:'.95rem', padding:'14px 26px' }} onClick={() => onOpenAuth('register')}>Start Earning</button>
+              <InstallAppButton variant="secondary" style={{ fontSize:'.95rem', padding:'14px 26px' }} />
             </div>
-            <p style={{ marginTop:20, fontSize:'.78rem', color:'var(--text-muted)', fontFamily:'var(--fm)', animation:'fadeUp .6s .4s ease both', opacity:0, animationFillMode:'forwards' }}>
-              No credit card required · Free to post · Free while in beta
-            </p>
+            {/* Proof strip — real numbers pulled up under the CTA (Thumbtack/Serv pattern) */}
+            <div style={{ display:'flex', gap:'clamp(20px,3vw,40px)', marginTop:34, flexWrap:'wrap' }}>
+              {STATS_DATA.map((s,i) => (
+                <div key={i}>
+                  <div style={{ fontFamily:'var(--fd)', fontSize:'1.5rem', fontWeight:800, color:'var(--text-primary)', lineHeight:1, letterSpacing:'-.01em' }}>{s.v}</div>
+                  <div style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em', marginTop:5 }}>{s.l}</div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="hide-m" style={{ width:316, flexShrink:0, display:'flex', flexDirection:'column', gap:10, animation:'slideL .8s .4s ease both', opacity:0, animationFillMode:'forwards', border:'10px solid #131118', borderRadius:40, padding:'34px 14px 22px', background:'var(--bg-base)', boxShadow:'0 24px 64px rgba(19,17,24,.18)', position:'relative' }}>
-            {TASK_EXAMPLES.slice(0,3).map((t,i) => (
-              <div key={i} style={{ background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:14, padding:'14px 16px', animation:`float ${3+i*.5}s ${i*.3}s ease-in-out infinite` }}>
-                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
-                  <span style={{ fontSize:'.84rem', fontWeight:500, lineHeight:1.3, maxWidth:180 }}>{t.title}</span>
-                  <span style={{ fontFamily:'var(--fm)', fontSize:'.88rem', color:'var(--amber)', fontWeight:500, flexShrink:0, marginLeft:8 }}>{t.budget}</span>
-                </div>
-                <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
-                  {t.tags.map(tag => <span key={tag} style={{ background:'var(--bg-elevated)', border:'1px solid var(--border-strong)', color:'#7c7585', fontFamily:'var(--fm)', fontSize:'.58rem', padding:'2px 7px', borderRadius:3, textTransform:'uppercase', letterSpacing:'.06em' }}>{tag}</span>)}
-                </div>
+
+          {/* Honest product snapshot — a real task-feed panel, not a fake phone */}
+          <div className="hide-m" style={{ width:352, flexShrink:0, animation:'slideL .7s .15s ease both', opacity:0, animationFillMode:'forwards' }}>
+            <div style={{ background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:'var(--radius-lg)', boxShadow:'var(--shadow-lg)', overflow:'hidden' }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', borderBottom:'1px solid var(--border)' }}>
+                <span style={{ display:'inline-flex', alignItems:'center', gap:7, fontWeight:700, fontSize:'.85rem' }}><Icon name="pin" size={15} color="var(--accent)" />Open near you</span>
+                <span style={{ display:'inline-flex', alignItems:'center', gap:5, fontFamily:'var(--fm)', fontSize:'.6rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'.06em', color:'var(--live)', background:'var(--live-dim)', padding:'3px 8px', borderRadius:100 }}><span style={{ width:5, height:5, borderRadius:'50%', background:'var(--live)' }} />Live</span>
               </div>
-            ))}
-            <div style={{ textAlign:'center', padding:'6px 0' }}>
-              <span style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', letterSpacing:'.1em', textTransform:'uppercase' }}>The kind of tasks people post →</span>
+              <div style={{ display:'flex', flexDirection:'column' }}>
+                {TASK_EXAMPLES.slice(0,3).map((t,i) => (
+                  <div key={i} style={{ padding:'13px 16px', borderBottom:i<2?'1px solid var(--border)':'none' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10, marginBottom:8 }}>
+                      <span style={{ fontSize:'.85rem', fontWeight:600, lineHeight:1.35 }}>{t.title}</span>
+                      <span style={{ fontFamily:'var(--fd)', fontSize:'.92rem', fontWeight:800, color:'var(--text-primary)', flexShrink:0, fontVariantNumeric:'tabular-nums' }}>{t.budget}</span>
+                    </div>
+                    <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+                      {t.tags.map(tag => <span key={tag} style={{ background:'var(--bg-elevated)', color:'var(--text-secondary)', fontFamily:'var(--fm)', fontSize:'.56rem', padding:'2px 7px', borderRadius:'var(--radius-sm)', textTransform:'uppercase', letterSpacing:'.06em' }}>{tag}</span>)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ padding:'11px 16px', background:'var(--bg-base)', display:'flex', alignItems:'center', gap:7, fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.06em' }}>
+                <Icon name="check-circle" size={13} color="var(--verified)" />Every member is trust-scored
+              </div>
             </div>
           </div>
         </div>
@@ -1521,7 +1546,7 @@ function HowItWorks() {
 
         {/* Track 1 — people */}
         <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:18 }}>
-          <span style={{ fontSize:'1.3rem' }}>🙋</span>
+          <span style={{ width:34, height:34, borderRadius:'var(--radius-sm)', background:'var(--accent-glow)', display:'inline-flex', alignItems:'center', justifyContent:'center' }}><Icon name="hand" size={19} color="var(--accent)" /></span>
           <h3 style={{ fontFamily:'var(--fd)', fontSize:'1.25rem', fontWeight:800, margin:0 }}>For you — post a task or earn</h3>
         </div>
         <div className="steps-grid" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:2, marginBottom:52 }}>
@@ -1539,7 +1564,7 @@ function HowItWorks() {
 
         {/* Track 2 — businesses */}
         <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:18 }}>
-          <span style={{ fontSize:'1.3rem' }}>🏪</span>
+          <span style={{ width:34, height:34, borderRadius:'var(--radius-sm)', background:'var(--accent-glow)', display:'inline-flex', alignItems:'center', justifyContent:'center' }}><Icon name="store" size={19} color="var(--accent)" /></span>
           <h3 style={{ fontFamily:'var(--fd)', fontSize:'1.25rem', fontWeight:800, margin:0 }}>For your business — get discovered locally</h3>
         </div>
         <div className="steps-grid" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:2 }}>
@@ -1575,7 +1600,7 @@ function Features() {
             <div key={i} style={{ padding:'32px 28px', background:'var(--bg-base)', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', transition:'background 200ms', cursor:'default' }}
               onMouseEnter={e => e.currentTarget.style.background='var(--bg-elevated)'}
               onMouseLeave={e => e.currentTarget.style.background='var(--bg-base)'}>
-              <div style={{ fontSize:'1.7rem', marginBottom:14 }}>{f.icon}</div>
+              <div style={{ width:44, height:44, borderRadius:'var(--radius-md)', background:'var(--accent-glow)', display:'flex', alignItems:'center', justifyContent:'center', marginBottom:16 }}><Icon name={f.icon} size={22} color="var(--accent)" /></div>
               <h3 style={{ fontFamily:'var(--fd)', fontSize:'1.1rem', fontWeight:700, marginBottom:9 }}>{f.title}</h3>
               <p style={{ fontSize:'.875rem', color:'#6d6678', lineHeight:1.7 }}>{f.desc}</p>
             </div>
@@ -1680,7 +1705,7 @@ function Testimonials() {
         <div className="test-grid" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16 }}>
           {SCENARIOS_DATA.map((t,i) => (
             <div key={i} className="lcard">
-              <div style={{ fontSize:'1.7rem', marginBottom:14 }}>{t.icon}</div>
+              <div style={{ width:44, height:44, borderRadius:'var(--radius-md)', background:'var(--accent-glow)', display:'flex', alignItems:'center', justifyContent:'center', marginBottom:16 }}><Icon name={t.icon} size={22} color="var(--accent)" /></div>
               <h3 style={{ fontFamily:'var(--fd)', fontSize:'1.1rem', fontWeight:700, marginBottom:10 }}>{t.title}</h3>
               <p style={{ fontSize:'.9rem', color:'#454050', lineHeight:1.8, marginBottom:22 }}>{t.text}</p>
               <div style={{ paddingTop:14, borderTop:'1px solid var(--border)' }}>
@@ -2229,13 +2254,13 @@ function ContactPage({ onNav }) {
           <p style={{ color:'#5f5970', lineHeight:1.8, marginBottom:28, fontSize:'.9rem' }}>Have a question, problem, or feedback? We read every message and respond within 24 hours on business days.</p>
           <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
             {[
-              { icon:'📧', label:'General enquiries', value:'hello@reliv.co.za' },
-              { icon:'🔒', label:'Privacy & data',    value:'privacy@reliv.co.za' },
-              { icon:'⚖️', label:'Legal',             value:'legal@reliv.co.za' },
-              { icon:'🛠️', label:'Technical support', value:'support@reliv.co.za' },
+              { icon:'message', label:'General enquiries', value:'hello@reliv.co.za' },
+              { icon:'lock',    label:'Privacy & data',    value:'privacy@reliv.co.za' },
+              { icon:'scale',   label:'Legal',             value:'legal@reliv.co.za' },
+              { icon:'shield',  label:'Technical support', value:'support@reliv.co.za' },
             ].map(item => (
               <div key={item.label} style={{ background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:12, padding:'14px 16px', display:'flex', gap:12, alignItems:'center' }}>
-                <span style={{ fontSize:'1.2rem', flexShrink:0 }}>{item.icon}</span>
+                <span style={{ flexShrink:0, color:'var(--accent)' }}><Icon name={item.icon} size={20} /></span>
                 <div>
                   <div style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:2 }}>{item.label}</div>
                   <a href={`mailto:${item.value}`} style={{ color:'var(--amber)', fontSize:'.875rem' }}>{item.value}</a>
@@ -2470,25 +2495,25 @@ const NAV = {
   // First 5 = native bottom-tab bar on mobile; the rest stay desktop-only.
   // Roles merged: every member can both post tasks and bid on them.
   member: [
-    { id:'tasks-browse',  label:'Home',      icon:'⌂' },
-    { id:'tasks-new',     label:'Post',      icon:'＋' },
-    { id:'tasks-mine',    label:'My Tasks',  icon:'▤' },
-    { id:'messages',      label:'Messages',  icon:<ChatIcon /> },
-    { id:'profile',       label:'Profile',   icon:'◷' },
-    { id:'local-browse',  label:'Local',     icon:'◇' },
-    { id:'following',     label:'Following', icon:'♡' },
-    { id:'schedule',      label:'Schedule',  icon:'◴' },
-    { id:'my-bids',       label:'My Bids',   icon:'◈' },
-    { id:'dashboard',     label:'Stats',     icon:'⊞' },
-    { id:'notifications', label:'Alerts',    icon:'◉' },
+    { id:'tasks-browse',  label:'Home',      icon:'home' },
+    { id:'tasks-new',     label:'Post',      icon:'plus' },
+    { id:'tasks-mine',    label:'My Tasks',  icon:'inbox' },
+    { id:'messages',      label:'Messages',  icon:'message' },
+    { id:'profile',       label:'Profile',   icon:'user' },
+    { id:'local-browse',  label:'Local',     icon:'store' },
+    { id:'following',     label:'Following', icon:'heart' },
+    { id:'schedule',      label:'Schedule',  icon:'calendar' },
+    { id:'my-bids',       label:'My Bids',   icon:'tag' },
+    { id:'dashboard',     label:'Stats',     icon:'chart' },
+    { id:'notifications', label:'Alerts',    icon:'bell' },
   ],
   admin: [
-    { id:'dashboard',       label:'Dashboard',  icon:'⊞' },
-    { id:'admin-disputes',  label:'Disputes',   icon:'⚖' },
-    { id:'admin-users',     label:'Users',      icon:'◈' },
-    { id:'admin-businesses',label:'Businesses', icon:'◇' },
-    { id:'tasks-browse',    label:'All Tasks',  icon:'▤' },
-    { id:'notifications',   label:'Alerts',     icon:'◐' },
+    { id:'dashboard',       label:'Dashboard',  icon:'chart' },
+    { id:'admin-disputes',  label:'Disputes',   icon:'scale' },
+    { id:'admin-users',     label:'Users',      icon:'users' },
+    { id:'admin-businesses',label:'Businesses', icon:'store' },
+    { id:'tasks-browse',    label:'All Tasks',  icon:'inbox' },
+    { id:'notifications',   label:'Alerts',     icon:'bell' },
   ],
 }
 
@@ -2631,7 +2656,7 @@ function DashSidebar({ page, setPage, unreadCount, onGoHome }) {
               style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'9px 12px', borderRadius:'var(--radius-sm)', fontSize:'0.875rem', fontWeight:500, fontFamily:'var(--font-body)', cursor:'pointer', textAlign:'left', transition:'all 150ms ease', border:'none', color:active?'var(--accent)':'var(--text-secondary)', background:active?'var(--accent-glow)':'transparent', borderLeft:active?'2px solid var(--accent)':'2px solid transparent' }}
               onMouseEnter={e => { if (!active) { e.currentTarget.style.background='var(--bg-hover)'; e.currentTarget.style.color='var(--text-primary)' } }}
               onMouseLeave={e => { if (!active) { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='var(--text-secondary)' } }}>
-              <span style={{ display:'flex', alignItems:'center', gap:10 }}><span style={{ fontSize:'1.05rem', width:20, textAlign:'center', lineHeight:1 }}>{item.icon}</span><span>{item.label}</span></span>
+              <span style={{ display:'flex', alignItems:'center', gap:10 }}><span style={{ width:20, display:'flex', justifyContent:'center' }}>{hasIcon(item.icon) ? <Icon name={item.icon} size={18} color={active?'var(--accent)':'currentColor'} /> : item.icon}</span><span>{item.label}</span></span>
               {item.id==='notifications' && unreadCount>0 && (
                 <span style={{ background:'var(--accent)', color:'#fff', fontFamily:'var(--font-mono)', fontSize:'0.6rem', fontWeight:700, padding:'1px 6px', borderRadius:10, minWidth:18, textAlign:'center' }}>{unreadCount}</span>
               )}
@@ -2755,6 +2780,14 @@ const CATEGORIES = [
   { name:'Other',           icon:'✨', g:['#f3f1ec','#ddd8cb'], kw:[] },
 ]
 
+// Redesign: map category name → Icon name, so both the fallback list above AND
+// DB-fetched categories render a real stroked icon (never the old emoji).
+const CATEGORY_ICON = {
+  'Tech & Coding':'code', 'Tutoring':'book', 'Errands':'bike', 'Design':'palette',
+  'Writing':'pen', 'Music & Arts':'music', 'Moving & Labour':'truck', 'Other':'sparkles',
+}
+const categoryIcon = (name) => CATEGORY_ICON[name] || 'sparkles'
+
 function categoryFor(task) {
   const hay = ((task.skill_tags || []).join(' ') + ' ' + (task.title || '')).toLowerCase()
   return CATEGORIES.find(c => c.kw.some(k => hay.includes(k))) || CATEGORIES[CATEGORIES.length - 1]
@@ -2801,7 +2834,7 @@ function AvailableNowRail({ openProfile }) {
   return (
     <div style={{ marginBottom:18 }}>
       <div className="slabel" style={{ color:'var(--text-secondary)', marginBottom:8, display:'flex', alignItems:'center', gap:8 }}>
-        <span style={{ width:7, height:7, borderRadius:'50%', background:'var(--success)', boxShadow:'0 0 0 3px color-mix(in srgb, var(--success) 22%, transparent)' }} />
+        <span style={{ width:7, height:7, borderRadius:'50%', background:'var(--live)', boxShadow:'0 0 0 3px color-mix(in srgb, var(--live) 22%, transparent)' }} />
         Available now
       </div>
       <div className="feed-scroll" style={{ display:'flex', gap:10, overflowX:'auto', paddingBottom:4 }}>
@@ -2815,7 +2848,7 @@ function AvailableNowRail({ openProfile }) {
               {p.avatarUrl
                 ? <img src={p.avatarUrl} alt="" style={{ width:34, height:34, borderRadius:'50%', objectFit:'cover' }} />
                 : <span style={{ width:34, height:34, borderRadius:'50%', background:'var(--accent)', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:'.85rem' }}>{(p.displayName || '?').charAt(0).toUpperCase()}</span>}
-              {p.online && <span aria-label="Online" title="Online" style={{ position:'absolute', right:-1, bottom:-1, width:11, height:11, borderRadius:'50%', background:'var(--success)', border:'2px solid var(--bg-surface)' }} />}
+              {p.online && <span aria-label="Online" title="Online" style={{ position:'absolute', right:-1, bottom:-1, width:11, height:11, borderRadius:'50%', background:'var(--live)', border:'2px solid var(--bg-surface)' }} />}
             </span>
             <span style={{ display:'flex', flexDirection:'column', alignItems:'flex-start', lineHeight:1.2 }}>
               <span style={{ fontWeight:600, fontSize:'.85rem', whiteSpace:'nowrap' }}>{p.displayName || 'ReLivR user'}</span>
@@ -2916,7 +2949,7 @@ function TaskBrowse({ setPage, setSelectedTask, openProfile }) {
           return (
             <button key={c.name} onClick={() => setCat(active ? null : c.name)}
               style={{ display:'flex', alignItems:'center', gap:7, padding:'8px 14px', borderRadius:100, whiteSpace:'nowrap', cursor:'pointer', transition:'all 150ms ease', border:`1.5px solid ${active?'var(--accent)':'var(--border)'}`, background:active?'var(--accent-glow)':'var(--bg-surface)', color:active?'var(--accent)':'var(--text-secondary)', fontWeight:600, fontSize:'.85rem', fontFamily:'var(--font-body)' }}>
-              <span style={{ fontSize:'1rem' }}>{c.icon}</span>{titleCase(c.name)}
+              <Icon name={categoryIcon(c.name)} size={15} color={active?'var(--accent)':'var(--text-muted)'} />{titleCase(c.name)}
             </button>
           )
         })}
@@ -2953,27 +2986,29 @@ function TaskBrowse({ setPage, setSelectedTask, openProfile }) {
           const c = categoryFor(task)   // category drives the card's colour + label (no cover image)
           const dist = taskDistance(task)
           return (
-          <DCard key={task.task_id} onClick={() => { setSelectedTask(task.task_id); setPage('task-detail') }} style={{ padding:0, overflow:'hidden', borderLeft:`4px solid ${c.g[1]}` }}>
-            <div style={{ padding:'14px 16px 16px' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, marginBottom:10 }}>
-                <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontFamily:'var(--font-mono)', fontSize:'.68rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', color:'var(--text-secondary)', background:c.g[0], borderRadius:100, padding:'3px 10px' }}>
-                  <span aria-hidden="true">{c.icon}</span>{c.name}
+          <DCard key={task.task_id} onClick={() => { setSelectedTask(task.task_id); setPage('task-detail') }} style={{ padding:'15px 16px 16px' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, marginBottom:11 }}>
+                <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontFamily:'var(--font-mono)', fontSize:'.66rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'.05em', color:'var(--text-secondary)', background:'var(--bg-elevated)', borderRadius:100, padding:'4px 11px 4px 9px' }}>
+                  <Icon name={categoryIcon(c.name)} size={13} color={c.g[1]} />{c.name}
                 </span>
-                <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.05rem' }}>R{task.budget}</span>
+                <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.1rem', fontVariantNumeric:'tabular-nums' }}>R{task.budget}</span>
               </div>
-              <h2 style={{ fontFamily:'var(--font-display)', fontSize:'1.05rem', fontWeight:700, marginBottom:6, lineHeight:1.3 }}>{task.title}</h2>
-              <Mono style={{ display:'block', marginBottom:10 }}>📍 {task.campus_zone || 'Your area'}{dist!=null?` · ${dist<1?Math.round(dist*1000)+'m':dist.toFixed(1)+'km'} away`:''} · {timeAgo(task.created_at)}{task.expected_duration ? ` · ⏱ ${task.expected_duration}` : ''}</Mono>
+              <h2 style={{ fontFamily:'var(--font-display)', fontSize:'1.05rem', fontWeight:700, marginBottom:8, lineHeight:1.3, textWrap:'balance' }}>{task.title}</h2>
+              <div style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'wrap', marginBottom:11, fontFamily:'var(--font-mono)', fontSize:'.68rem', letterSpacing:'.04em', textTransform:'uppercase', color:'var(--text-muted)' }}>
+                <Icon name="pin" size={12} /><span>{task.campus_zone || 'Your area'}{dist!=null?` · ${dist<1?Math.round(dist*1000)+'m':dist.toFixed(1)+'km'} away`:''}</span>
+                <span>· {timeAgo(task.created_at)}</span>
+                {task.expected_duration && <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}>· <Icon name="clock" size={11} />{task.expected_duration}</span>}
+              </div>
               <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:12 }}>{task.skill_tags.slice(0,3).map(t => <Tag key={t}>{t}</Tag>)}</div>
               <Divider style={{ marginBottom:10 }} />
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
                 <Badge variant={task.status}>{task.status.replace('_',' ')}</Badge>
                 <Mono>{bidCount(task.task_id)} bid{bidCount(task.task_id)!==1?'s':''} · Due {new Date(task.deadline).toLocaleDateString()}</Mono>
               </div>
-            </div>
           </DCard>
           )
         })}
-        {filtered.length===0 && <div style={{ gridColumn:'1/-1' }}><EmptyState icon="◻" message="No tasks match your filter" action={filtersActive?<Btn variant="secondary" size="sm" onClick={() => { setSkill(''); setCat(null); setStatus('all'); setSort('newest') }}>Clear Filters</Btn>:null} /></div>}
+        {filtered.length===0 && <div style={{ gridColumn:'1/-1' }}><EmptyState icon="inbox" message="No tasks match your filter" action={filtersActive?<Btn variant="secondary" size="sm" onClick={() => { setSkill(''); setCat(null); setStatus('all'); setSort('newest') }}>Clear Filters</Btn>:null} /></div>}
       </div>
     </div>
   )
@@ -3387,7 +3422,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
 
           <DCard hover={false}>
             <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:16 }}>Bids ({bids.length})</Mono>
-            {bids.length===0 ? <EmptyState icon="◻" message="No bids yet" /> : (
+            {bids.length===0 ? <EmptyState icon="inbox" message="No bids yet" /> : (
               <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
                 {[...bids].sort((a,b)=>parseFloat(a.amount)-parseFloat(b.amount)).map(bid => (
                   <div key={bid.bid_id} style={{ background:'var(--bg-elevated)', borderRadius:'var(--radius-md)', padding:'14px 16px', border:`1px solid ${bid.status==='accepted'?'var(--accent)':'var(--border)'}`, opacity:bid.status==='rejected'?0.55:1 }}>
@@ -3999,7 +4034,7 @@ function MyTasks({ setPage, setSelectedTask }) {
             </DCard>
           )
         })}
-        {filtered.length===0&&<EmptyState icon="▤" message={filter==='draft' ? 'No drafts — use "Save as Draft" while posting' : `No ${filter==='all'?'':filter.replace('_',' ')} tasks`} action={<Btn size="sm" onClick={() => setPage('tasks-new')}>Post a Task</Btn>} />}
+        {filtered.length===0&&<EmptyState icon="inbox" message={filter==='draft' ? 'No drafts — use "Save as Draft" while posting' : `No ${filter==='all'?'':filter.replace('_',' ')} tasks`} action={<Btn size="sm" onClick={() => setPage('tasks-new')}>Post a Task</Btn>} />}
       </div>
     </div>
   )
@@ -4079,7 +4114,7 @@ function MyBids({ setPage, setSelectedTask }) {
             </DCard>
           )
         })}
-        {filtered.length===0&&<EmptyState icon="◻" message="No bids in this category" action={<Btn size="sm" onClick={() => setPage('tasks-browse')}>Browse Tasks</Btn>} />}
+        {filtered.length===0&&<EmptyState icon="inbox" message="No bids in this category" action={<Btn size="sm" onClick={() => setPage('tasks-browse')}>Browse Tasks</Btn>} />}
       </div>
     </div>
   )
@@ -4096,7 +4131,7 @@ function Suggestions({ setPage, setSelectedTask }) {
         <PageTitle sub="Ranked by Jaccard similarity score against your skill profile">For You</PageTitle>
         <Mono size="0.72rem" color="var(--text-secondary)">{suggestions.length} matches</Mono>
       </div>
-      {suggestions.length===0&&<EmptyState icon="🎯" message="No more suggestions — check back soon" action={<Btn onClick={() => setDismissed(new Set())}>Reset</Btn>} />}
+      {suggestions.length===0&&<EmptyState icon="target" message="No more suggestions — check back soon" action={<Btn onClick={() => setDismissed(new Set())}>Reset</Btn>} />}
       <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
         {suggestions.map(s => (
           <DCard key={s.task_id}>
@@ -4304,7 +4339,7 @@ function Messages({ target, clearTarget }) {
         <div className="msg-thread" style={{ flex:1, display:'flex', flexDirection:'column' }}>
           {!activeId ? (
             <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center' }}>
-              <EmptyState icon="◎" message="Select a conversation" />
+              <EmptyState icon="target" message="Select a conversation" />
             </div>
           ) : (
             <>
@@ -4320,7 +4355,7 @@ function Messages({ target, clearTarget }) {
               </div>
 
               <div style={{ flex:1, overflowY:'auto', padding:'16px 18px', display:'flex', flexDirection:'column', gap:12 }}>
-                {messages.length===0 && <EmptyState icon="◎" message="Start the conversation" />}
+                {messages.length===0 && <EmptyState icon="target" message="Start the conversation" />}
                 {messages.map(m => {
                   const mine = m.sender_id === myId
                   return (
@@ -4400,7 +4435,7 @@ function Notifications({ setPage, setSelectedTask }) {
         <PageTitle sub={`${notifs.filter(n=>!n.is_read).length} unread`}>Notifications</PageTitle>
         {notifs.some(n=>!n.is_read)&&<Btn variant="ghost" size="sm" onClick={markAll}>Mark all read</Btn>}
       </div>
-      {notifs.length===0&&<EmptyState icon="◐" message="No notifications yet" />}
+      {notifs.length===0&&<EmptyState icon="clock" message="No notifications yet" />}
       <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
         {notifs.map(n => (
           <div key={n.notification_id} onClick={() => handleClick(n)}
@@ -4612,7 +4647,7 @@ function FollowingPage({ openProfile, setPage }) {
     <div className="page-enter">
       <PageTitle sub="People and businesses you follow">Following</PageTitle>
       <div style={{ marginBottom: 22 }}><MyRetainers /></div>
-      {empty ? <EmptyState icon="👥" message="You're not following anyone yet — follow people and businesses to see them here" />
+      {empty ? <EmptyState icon="users" message="You're not following anyone yet — follow people and businesses to see them here" />
         : <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
           {data.users.length > 0 && <div>
             <Mono style={{ display: 'block', marginBottom: 10 }}>People ({data.users.length})</Mono>
@@ -4923,7 +4958,7 @@ function LocalBrowse({ setPage }) {
 
         {/* Photo grid */}
         {photos.length === 0
-          ? <EmptyState icon="◇" message="No photos yet." />
+          ? <EmptyState icon="inbox" message="No photos yet." />
           : <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'clamp(2px,1vw,6px)', marginTop:4 }}>
               {photos.map((src, i) => (
                 <div key={i} onClick={() => setLightbox(i)} style={{ aspectRatio:'1 / 1', overflow:'hidden', cursor:'pointer', background:'var(--bg-elevated)' }}>
@@ -4970,7 +5005,7 @@ function LocalBrowse({ setPage }) {
 
       {loading ? <div style={{ padding:50, textAlign:'center' }}><Spinner /></div>
        : businesses.length === 0 ? (
-        <EmptyState icon="◇" message={cat==='all' ? 'No local businesses listed yet — check back soon!' : `No businesses in ${cat} yet`} />
+        <EmptyState icon="inbox" message={cat==='all' ? 'No local businesses listed yet — check back soon!' : `No businesses in ${cat} yet`} />
       ) : (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:'clamp(8px,1.5vw,16px)' }}>
           {businesses
@@ -5039,7 +5074,7 @@ function AdminBusinesses() {
 
       {loading ? <div style={{ padding:50, textAlign:'center' }}><Spinner /></div>
        : businesses.length === 0 ? (
-        <EmptyState icon="◇" message="No businesses yet — add your first local partner." action={<Btn onClick={() => setEditing('new')}>＋ Add Business</Btn>} />
+        <EmptyState icon="inbox" message="No businesses yet — add your first local partner." action={<Btn onClick={() => setEditing('new')}>＋ Add Business</Btn>} />
       ) : (
         <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
           {businesses.map(b => (
@@ -5378,9 +5413,9 @@ function SearchResults({ query, setPage, setSelectedTask, openProfile }) {
       <PageTitle sub={query ? `Results for “${query}”` : 'Type in the search bar above'}>Search</PageTitle>
 
       {loading && <div style={{ padding:48, textAlign:'center' }}><Spinner /></div>}
-      {!loading && error && <EmptyState icon="◷" message={error} />}
+      {!loading && error && <EmptyState icon="clock" message={error} />}
       {!loading && !error && total === 0 && (
-        <EmptyState icon="◻" message={query ? `No people, businesses, or tasks match “${query}”.` : 'Search for people, businesses, or tasks.'} />
+        <EmptyState icon="inbox" message={query ? `No people, businesses, or tasks match “${query}”.` : 'Search for people, businesses, or tasks.'} />
       )}
 
       {!loading && !error && total > 0 && (
@@ -5468,7 +5503,7 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
   }, [userId])
 
   if (loading) return <div style={{ padding:60, textAlign:'center' }}><Spinner /></div>
-  if (error || !data) return <EmptyState icon="◷" message={error || 'Profile not found'} action={<Btn onClick={() => setPage('tasks-browse')}>← Back to Browse</Btn>} />
+  if (error || !data) return <EmptyState icon="clock" message={error || 'Profile not found'} action={<Btn onClick={() => setPage('tasks-browse')}>← Back to Browse</Btn>} />
 
   const { profile, counts, stats = {}, badges = [], posted, completed, reviews } = data
   const name = profile.display_name || 'ReLivR member'
@@ -5649,7 +5684,7 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
         ))}
 
         {list.length===0 && (
-          <EmptyState icon="◻" message={tab==='completed' ? 'No completed tasks yet' : tab==='posted' ? 'No tasks posted yet' : 'No reviews yet'} />
+          <EmptyState icon="inbox" message={tab==='completed' ? 'No completed tasks yet' : tab==='posted' ? 'No tasks posted yet' : 'No reviews yet'} />
         )}
       </div>
     </div>
@@ -6294,7 +6329,7 @@ function Profile({ openProfile }) {
       )}
       {tab==='reviews'&&(
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-          {myReviews.length===0&&<EmptyState icon="★" message="No reviews yet — complete a task to receive your first review" />}
+          {myReviews.length===0&&<EmptyState icon="star" message="No reviews yet — complete a task to receive your first review" />}
           {myReviews.map(r => (
             <DCard key={r.review_id} hover={false}>
               <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
@@ -6720,7 +6755,7 @@ function BusinessCatalog({ biz }) {
         <Btn onClick={startNew}>＋ New item</Btn>
       </div>
       {products === null ? <div style={{ padding: 50, textAlign: 'center' }}><Spinner /></div>
-        : products.length === 0 ? <EmptyState icon="▦" message="Nothing in your catalog yet — add your first item" action={<Btn size="sm" onClick={startNew}>＋ New item</Btn>} />
+        : products.length === 0 ? <EmptyState icon="package" message="Nothing in your catalog yet — add your first item" action={<Btn size="sm" onClick={startNew}>＋ New item</Btn>} />
           : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {products.map(p => (
               <DCard key={p.product_id} hover={false} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: 12, opacity: p.is_available ? 1 : 0.6 }}>
@@ -6800,7 +6835,7 @@ function BusinessDeals({ biz }) {
         </div>
       </DCard>
       {deals === null ? <div style={{ padding: 50, textAlign: 'center' }}><Spinner /></div>
-        : deals.length === 0 ? <EmptyState icon="🏷" message="No deals yet — post your first special" action={<Btn size="sm" onClick={() => setView('form')}>＋ New deal</Btn>} />
+        : deals.length === 0 ? <EmptyState icon="tag" message="No deals yet — post your first special" action={<Btn size="sm" onClick={() => setView('form')}>＋ New deal</Btn>} />
           : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {deals.map(d => {
               const expired = d.status === 'expired' || new Date(d.expires_at).getTime() <= Date.now()
@@ -6941,7 +6976,7 @@ function AvailabilityManager({ hostType }) {
         <Btn size="sm" loading={saving} onClick={addSlot} style={{ marginTop: 12 }}>Add slot</Btn>
       </DCard>
       {slots === null ? <div style={{ padding: 30, textAlign: 'center' }}><Spinner /></div>
-        : slots.length === 0 ? <EmptyState icon="◴" message="No availability yet — add a slot above." />
+        : slots.length === 0 ? <EmptyState icon="clock" message="No availability yet — add a slot above." />
           : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {slots.map(s => (
               <DCard key={s.slot_id} hover={false} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -6977,7 +7012,7 @@ function SchedulePage() {
       <AvailabilityManager hostType="user" />
       <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.05rem', margin: '24px 0 12px' }}>My bookings</h3>
       {bookings === null ? null
-        : bookings.length === 0 ? <EmptyState icon="◴" message="You haven’t booked anything yet." />
+        : bookings.length === 0 ? <EmptyState icon="clock" message="You haven’t booked anything yet." />
           : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {bookings.map(b => (
               <DCard key={b.booking_id} hover={false} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -7096,7 +7131,7 @@ function DealsPage() {
         <p style={{ color: 'var(--text-secondary)', marginTop: 6 }}>Limited-time specials from local businesses. Grab them before they expire.</p>
       </div>
       {deals === null ? <div style={{ padding: 60, textAlign: 'center' }}><Spinner /></div>
-        : deals.length === 0 ? <EmptyState icon="🏷" message="No live deals right now — check back soon" />
+        : deals.length === 0 ? <EmptyState icon="tag" message="No live deals right now — check back soon" />
           : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
             {deals.map(d => <DealCard key={d.deal_id} d={d} onRedeem={claim} claimed={!!claimed[d.deal_id]} />)}
           </div>}
@@ -7130,7 +7165,7 @@ function AdminDeals() {
     <div className="page-enter">
       <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5rem', marginBottom: 16 }}>Deals moderation</h1>
       {deals === null ? <Spinner />
-        : deals.length === 0 ? <EmptyState icon="🏷" message="No deals posted yet" />
+        : deals.length === 0 ? <EmptyState icon="tag" message="No deals posted yet" />
           : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {deals.map(d => {
               const expired = d.status === 'expired' || new Date(d.expires_at).getTime() <= Date.now()
@@ -7168,7 +7203,7 @@ function BusinessClients() {
   }, [])
 
   if (loading) return <div style={{ padding: 50, textAlign: 'center' }}><Spinner /></div>
-  if (!data) return <EmptyState icon="◷" message="Couldn't load your client history" />
+  if (!data) return <EmptyState icon="clock" message="Couldn't load your client history" />
 
   return (
     <div className="page-enter">
@@ -7190,7 +7225,7 @@ function BusinessClients() {
       )}
       <Mono style={{ display: 'block', marginBottom: 10 }}>Recent redemptions</Mono>
       {data.recent.length === 0
-        ? <EmptyState icon="👥" message="No redemptions yet — share your deals to start building your client base" />
+        ? <EmptyState icon="users" message="No redemptions yet — share your deals to start building your client base" />
         : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {data.recent.map(r => (
             <DCard key={r.redemption_id} hover={false} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px' }}>
@@ -7431,7 +7466,7 @@ function BusinessAnalytics() {
   }, [days])
 
   if (loading) return <div style={{ padding:60, textAlign:'center' }}><Spinner /></div>
-  if (!data)   return <EmptyState icon="📊" message="No analytics yet — they’ll appear as customers view your page." />
+  if (!data)   return <EmptyState icon="chart" message="No analytics yet — they’ll appear as customers view your page." />
 
   const t = data.totals || {}
   const clickRows = [
@@ -7504,7 +7539,7 @@ function AdminDashboard() {
   }, [])
 
   if (loading) return <div style={{ padding:48, textAlign:'center' }}><Spinner /></div>
-  if (error || !stats) return <EmptyState icon="◷" message={error || 'No stats'} />
+  if (error || !stats) return <EmptyState icon="clock" message={error || 'No stats'} />
 
   const t = stats.tasks?.by_status || {}
   const d = stats.disputes?.by_status || {}
@@ -7539,7 +7574,7 @@ function AdminDashboard() {
       )}
       <DCard hover={false}>
         <Mono style={{ display:'block', marginBottom:12 }}>Recent activity</Mono>
-        {activity.length === 0 ? <EmptyState icon="◷" message="No activity recorded yet — actions will appear here." /> : (
+        {activity.length === 0 ? <EmptyState icon="clock" message="No activity recorded yet — actions will appear here." /> : (
           <div style={{ display:'flex', flexDirection:'column' }}>
             {activity.map((a, i) => (
               <div key={a.activity_id} style={{ display:'flex', justifyContent:'space-between', gap:10, padding:'9px 0', borderBottom:i<activity.length-1?'1px solid var(--border)':'none' }}>
@@ -7587,7 +7622,7 @@ function AdminDisputes({ setPage, setSelectedDispute }) {
         ))}
       </div>
       {loading ? <div style={{ padding:40, textAlign:'center' }}><Spinner /></div> :
-       filtered.length===0 ? <EmptyState icon="⚖" message="No disputes in this category" /> : (
+       filtered.length===0 ? <EmptyState icon="scale" message="No disputes in this category" /> : (
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
           {filtered.map(d => (
             <DCard key={d.dispute_id} onClick={() => { setSelectedDispute(d.dispute_id); setPage('admin-dispute-detail') }}>
@@ -7757,7 +7792,7 @@ function AdminTasks() {
         </SelectField>
       </div>
       {tasks === null ? <div style={{ padding:40, textAlign:'center' }}><Spinner /></div>
-        : tasks.length === 0 ? <EmptyState icon="▤" message="No tasks match" />
+        : tasks.length === 0 ? <EmptyState icon="inbox" message="No tasks match" />
           : <DCard hover={false} style={{ padding:0, overflow:'hidden' }}>
             <div style={{ overflowX:'auto' }}>
               <table style={{ width:'100%', borderCollapse:'collapse', minWidth:720 }}>
@@ -7812,7 +7847,7 @@ function AdminAudit() {
         </SelectField>
       </div>
       {rows === null ? <div style={{ padding:40, textAlign:'center' }}><Spinner /></div>
-        : rows.length === 0 ? <EmptyState icon="▦" message="No audit entries yet" />
+        : rows.length === 0 ? <EmptyState icon="package" message="No audit entries yet" />
           : <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             {rows.map(a => (
               <DCard key={a.activity_id} hover={false} style={{ padding:'10px 14px' }}>
@@ -7927,7 +7962,7 @@ function AdminUsers() {
               </tbody>
             </table>
           </div>
-          {filtered.length===0 && <EmptyState icon="◈" message="No users match your search" />}
+          {filtered.length===0 && <EmptyState icon="sparkles" message="No users match your search" />}
         </DCard>
       )}
       <ConfirmModal open={!!banModal} onClose={() => setBanModal(null)} loading={busy}
@@ -8042,7 +8077,7 @@ function AdminLocations() {
         </div>
       </DCard>
       {loading ? <div style={{ padding:40, textAlign:'center' }}><Spinner /></div> :
-       campuses.length===0 ? <EmptyState icon="◇" message="No locations yet — add your first campus." /> :
+       campuses.length===0 ? <EmptyState icon="inbox" message="No locations yet — add your first campus." /> :
        campuses.map(c => (
         <DCard key={c.location_id} hover={false} style={{ marginBottom:12 }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' }}>
@@ -8128,7 +8163,7 @@ function AdminFlags() {
     <div className="page-enter">
       <PageTitle sub="Toggle features without a deploy">Feature Flags</PageTitle>
       {loading ? <div style={{ padding:40, textAlign:'center' }}><Spinner /></div> :
-       flags.length===0 ? <EmptyState icon="⚑" message="No feature flags defined." /> : (
+       flags.length===0 ? <EmptyState icon="alert" message="No feature flags defined." /> : (
         <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
           {flags.map(f => (
             <DCard key={f.flag_key} hover={false}>
