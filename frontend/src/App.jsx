@@ -160,6 +160,7 @@ input, textarea, select { font-family: var(--font-body); font-size: inherit; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
 
 @keyframes slideUp  { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+@keyframes sheetUp  { from{transform:translateY(100%)} to{transform:translateY(0)} }
 @keyframes fadeUp   { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
 @keyframes fadeIn   { from{opacity:0} to{opacity:1} }
 @keyframes slideL   { from{opacity:0;transform:translateX(32px)} to{opacity:1;transform:translateX(0)} }
@@ -678,6 +679,7 @@ function StatCard({ label, value, accent=false }) {
 function Modal({ open, onClose, title, children, maxWidth=480 }) {
   const dialogRef = useRef(null)
   const titleId = useId()
+  const isMobile = useIsMobile()
   useEffect(() => { if (open) document.body.style.overflow='hidden'; else document.body.style.overflow=''; return () => { document.body.style.overflow='' } }, [open])
   // a11y: close on Escape, and move focus into the dialog when it opens.
   useEffect(() => {
@@ -689,15 +691,23 @@ function Modal({ open, onClose, title, children, maxWidth=480 }) {
     return () => { document.removeEventListener('keydown', onKey); prev?.focus?.() }
   }, [open, onClose])
   if (!open) return null
+  // On phones the dialog becomes a native-feeling bottom sheet: full-width, slides
+  // up from the bottom, rounded top, drag-handle, and scrolls if it's tall.
+  const overlayStyle = { position:'fixed', inset:0, background:'rgba(19,17,24,.45)', display:'flex', zIndex:1000, backdropFilter:'blur(4px)', animation:'fadeIn 0.2s ease',
+    ...(isMobile ? { alignItems:'flex-end' } : { alignItems:'center', justifyContent:'center', padding:20 }) }
+  const dialogStyle = isMobile
+    ? { background:'var(--bg-surface)', borderTop:'1px solid var(--border-strong)', borderTopLeftRadius:'var(--radius-xl)', borderTopRightRadius:'var(--radius-xl)', width:'100%', maxHeight:'92vh', display:'flex', flexDirection:'column', animation:'sheetUp 0.28s cubic-bezier(.32,.72,0,1) both', overflow:'hidden', outline:'none' }
+    : { background:'var(--bg-surface)', border:'1px solid var(--border-strong)', borderRadius:'var(--radius-lg)', width:'100%', maxWidth, animation:'slideUp 0.2s ease both', overflow:'hidden', outline:'none' }
   return (
-    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(19,17,24,.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:20, backdropFilter:'blur(4px)', animation:'fadeIn 0.2s ease' }}>
+    <div onClick={onClose} style={overlayStyle}>
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
-        onClick={e => e.stopPropagation()} style={{ background:'var(--bg-surface)', border:'1px solid var(--border-strong)', borderRadius:'var(--radius-lg)', width:'100%', maxWidth, animation:'slideUp 0.2s ease both', overflow:'hidden', outline:'none' }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'16px 20px', borderBottom:'1px solid var(--border)' }}>
+        onClick={e => e.stopPropagation()} style={dialogStyle}>
+        {isMobile && <div style={{ display:'flex', justifyContent:'center', padding:'8px 0 2px', flexShrink:0 }}><span style={{ width:38, height:4, borderRadius:2, background:'var(--border-strong)' }} /></div>}
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'14px 20px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
           <span id={titleId} style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:'1.1rem', letterSpacing:'-0.01em' }}>{title}</span>
           <button onClick={onClose} aria-label="Close dialog" style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'1.2rem', cursor:'pointer', lineHeight:1, padding:'2px 6px', borderRadius:'var(--radius-sm)' }}>✕</button>
         </div>
-        <div style={{ padding:24 }}>{children}</div>
+        <div style={{ padding:24, ...(isMobile ? { overflowY:'auto', WebkitOverflowScrolling:'touch', paddingBottom:'calc(24px + env(safe-area-inset-bottom))' } : {}) }}>{children}</div>
       </div>
     </div>
   )
@@ -2548,6 +2558,7 @@ const NAV = {
 function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch }) {
   const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
+  const isMobile = useIsMobile()
   const [searchText, setSearchText] = useState('')
   const isCreator = user.role === 'creator'
   // Desktop nav links — role-aware. These render in the top bar on every screen
@@ -2629,6 +2640,12 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch 
                     { label:'My Profile', go:'profile' },
                     { label:'My Tasks', go:'tasks-mine' },
                     { label:'My Bids',  go:'my-bids' },
+                    // On mobile these have no bottom-tab, so surface them here too.
+                    ...(isMobile && !isAdmin ? [
+                      { label:'Local', go:'local-browse' },
+                      { label:'Following', go:'following' },
+                      { label:'Schedule', go:'schedule' },
+                    ] : []),
                     { label:'Stats & Activity', go:'dashboard' },
                   ].map(item => (
                     <button key={item.go} onClick={() => { setPage(item.go); setMenuOpen(false) }}
