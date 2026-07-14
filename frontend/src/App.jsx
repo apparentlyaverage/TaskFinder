@@ -28,6 +28,17 @@ import {
 // In development Vite proxies relative paths so this evaluates to ''.
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
+// QR / shareable deep-link (/local?b=<business_id>): capture the target at module
+// load — BEFORE the logged-out auth redirect can strip the query — so an in-store
+// scanner who then signs in still lands on the business they scanned.
+try { const _b = new URLSearchParams(window.location.search).get('b'); if (_b) sessionStorage.setItem('rl_pending_biz', _b) } catch { /* noop */ }
+
+// After sign-in, send a pending QR-scanner to Local (the business opens itself).
+function homeAfterAuth(role, fallback) {
+  try { if (role !== 'admin' && sessionStorage.getItem('rl_pending_biz')) return 'local-browse' } catch { /* noop */ }
+  return fallback
+}
+
 export const LAUNCH_AT = '2026-07-07T00:00:00'
 const launchMs = () => new Date(LAUNCH_AT).getTime()
 const hasLaunched = () => Date.now() >= launchMs()
@@ -4925,9 +4936,13 @@ function LocalBrowse({ setPage }) {
   }, [cat])
 
   // Deep-link (E2 QR / shareable link): /local?b=<business_id> opens that profile.
+  // Falls back to the module-captured id in sessionStorage so a scan that bounced
+  // through login still resolves; the id is consumed once.
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get('b')
+    let id = new URLSearchParams(window.location.search).get('b')
+    if (!id) { try { id = sessionStorage.getItem('rl_pending_biz') } catch { /* noop */ } }
     if (!id) return
+    try { sessionStorage.removeItem('rl_pending_biz') } catch { /* noop */ }
     const tok = localStorage.getItem('rl_token')
     fetch(`${API_BASE}/businesses/${id}`, tok ? { headers: { Authorization: `Bearer ${tok}` } } : undefined)
       .then(r => r.ok ? r.json() : null).then(d => { if (d?.business) { setSelected(d.business); trackBizEvent(id, 'view') } }).catch(() => {})
@@ -8673,11 +8688,12 @@ export default function App() {
           if (u.intent) { try { localStorage.setItem('rl_intent', u.intent) } catch { /* ignore */ } }
           if (u.google_id && !u.onboarded_at && u.role !== 'admin' && u.role !== 'business') setPendingOnboarding(true)
           // Logged-in users must not see the landing page — redirect to app.
+          // A pending QR-scan deep-link (rl_pending_biz) sends them to Local instead.
           const loc = parseLocation()
           if (loc.view === 'landing') {
             const home = u.role === 'admin' ? 'dashboard' : 'tasks-browse'
             setView('dashboard')
-            setDashPage(home)
+            setDashPage(homeAfterAuth(u.role, home))
           }
         } else if (res.status === 401 || res.status === 403) {
           // Token genuinely rejected (expired/revoked) — clear and go to landing.
@@ -8744,7 +8760,7 @@ export default function App() {
     localStorage.setItem('rl_token', rawUser.token || '')
     saveUser(u)
     setView('dashboard')
-    setDashPage(u.role === 'admin' ? 'dashboard' : 'tasks-browse')
+    setDashPage(homeAfterAuth(u.role, u.role === 'admin' ? 'dashboard' : 'tasks-browse'))
     setAuthModal(null)
   }
 
@@ -8769,7 +8785,7 @@ export default function App() {
       // the modal handles POPIA consent too, so it covers needsConsent as well.
       if (needsOnboarding || needsConsent) setPendingOnboarding(true)
       setView('dashboard')
-      setDashPage(role === 'admin' ? 'dashboard' : 'tasks-browse')
+      setDashPage(homeAfterAuth(role, role === 'admin' ? 'dashboard' : 'tasks-browse'))
       setAuthModal(null)
       return true
     } catch {
