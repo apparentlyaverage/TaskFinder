@@ -555,10 +555,13 @@ function Textarea({ label, error, hint, style={}, ...p }) {
 }
 
 function SelectField({ label, value, onChange, children, style={} }) {
+  // Caller `style` (widths/flex) goes on the WRAPPER: it's the row's flex item.
+  // Spreading it on the <select> put flex-basis on the column axis and blew the
+  // dropdowns up to ~130px tall on phones.
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+    <div style={{ display:'flex', flexDirection:'column', gap:5, ...style }}>
       {label && <label style={{ fontSize:'0.7rem', fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:'var(--text-secondary)' }}>{label}</label>}
-      <select value={value} onChange={onChange} style={{ background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', color:'var(--text-primary)', padding:'9px 13px', fontSize:'0.88rem', outline:'none', cursor:'pointer', ...style }}>{children}</select>
+      <select value={value} onChange={onChange} style={{ width:'100%', background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', color:'var(--text-primary)', padding:'9px 13px', fontSize:'0.88rem', outline:'none', cursor:'pointer' }}>{children}</select>
     </div>
   )
 }
