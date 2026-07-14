@@ -248,7 +248,7 @@ label { font-family:var(--fm); font-size:.62rem; color:var(--text-muted); text-t
   section { padding-left:20px !important; padding-right:20px !important; }
   /* Dashboard mobile bottom nav */
   .dash-shell   { grid-template-columns:1fr !important; }
-  .dash-main    { padding:20px 16px 80px 16px !important; }
+  .dash-main    { padding:16px 14px 84px 14px !important; }
   .dash-sidebar { position:fixed !important; bottom:0 !important; left:0 !important; right:0 !important; top:auto !important; width:100% !important; height:64px !important; flex-direction:row !important; padding:0 8px !important; border-right:none !important; border-top:1px solid var(--border) !important; z-index:100 !important; overflow:hidden !important; }
   .sidebar-logo, .sidebar-status, .sidebar-user { display:none !important; }
   .dash-nav     { flex-direction:row !important; width:100% !important; justify-content:space-around !important; gap:0 !important; align-items:center !important; }
@@ -648,7 +648,7 @@ function Divider({ style={} }) { return <div style={{ height:1, background:'var(
 function PageTitle({ children, sub }) {
   return (
     <div style={{ marginBottom:28 }}>
-      <h1 style={{ fontFamily:'var(--font-display)', fontSize:'2.4rem', fontWeight:700, letterSpacing:'-0.01em', lineHeight:1 }}>{children}</h1>
+      <h1 style={{ fontFamily:'var(--font-display)', fontSize:'clamp(1.55rem, 4.5vw, 2.4rem)', fontWeight:700, letterSpacing:'-0.01em', lineHeight:1.05 }}>{children}</h1>
       {sub && <Mono style={{ marginTop:6, display:'block' }}>{sub}</Mono>}
     </div>
   )
@@ -2558,6 +2558,7 @@ const NAV = {
 function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch }) {
   const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const isMobile = useIsMobile()
   const [searchText, setSearchText] = useState('')
   const isCreator = user.role === 'creator'
@@ -2576,6 +2577,97 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch 
         { id:'tasks-mine',   label:'My Tasks' },
         { id:'my-bids',      label:'My Bids' },
       ]
+
+  // ── Mobile chrome: compact header + full-width search + hamburger nav drawer ──
+  if (isMobile) {
+    const memberNav = [
+      { id:'tasks-browse', label:'Home',       icon:'home' },
+      { id:'tasks-new',    label:'Post a task', icon:'plus' },
+      { id:'local-browse', label:'Local',      icon:'store' },
+      { id:'deals',        label:'Deals',      icon:'tag' },
+      { id:'following',    label:'Following',  icon:'heart' },
+      { id:'schedule',     label:'Schedule',   icon:'calendar' },
+      { id:'tasks-mine',   label:'My Tasks',   icon:'inbox' },
+      { id:'my-bids',      label:'My Bids',    icon:'briefcase' },
+      { id:'messages',     label:'Messages',   icon:'message' },
+      { id:'notifications',label:'Notifications', icon:'bell' },
+      { id:'profile',      label:'My Profile', icon:'user' },
+      { id:'dashboard',    label:'Stats & Activity', icon:'chart' },
+    ]
+    const adminNav = [
+      { id:'dashboard',       label:'Dashboard',  icon:'chart' },
+      { id:'admin-disputes',  label:'Disputes',   icon:'scale' },
+      { id:'admin-users',     label:'Users',      icon:'users' },
+      { id:'admin-businesses',label:'Businesses', icon:'store' },
+      { id:'admin-deals',     label:'Deals',      icon:'tag' },
+      { id:'admin-tasks',     label:'All Tasks',  icon:'inbox' },
+      { id:'admin-locations', label:'Locations',  icon:'pin' },
+      { id:'admin-flags',     label:'Flags',      icon:'target' },
+      { id:'notifications',   label:'Notifications', icon:'bell' },
+      { id:'profile',         label:'My Profile', icon:'user' },
+    ]
+    const nav = isAdmin ? adminNav : memberNav
+    const go = (id) => { setPage(id); setDrawerOpen(false) }
+    const iconBtn = { width:40, height:40, borderRadius:'50%', border:'none', background:'transparent', color:'var(--text-secondary)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }
+    const drawerRow = (active) => ({ display:'flex', alignItems:'center', gap:14, width:'100%', padding:'12px 20px', background:active?'var(--accent-glow)':'none', border:'none', borderLeft:`3px solid ${active?'var(--accent)':'transparent'}`, color:active?'var(--accent)':'var(--text-secondary)', fontSize:'.95rem', fontWeight:active?700:500, cursor:'pointer', textAlign:'left', fontFamily:'var(--font-body)' })
+    const footRow = { display:'flex', alignItems:'center', gap:14, width:'100%', padding:'12px 20px', background:'none', border:'none', fontSize:'.9rem', color:'var(--text-secondary)', cursor:'pointer', textAlign:'left', fontFamily:'var(--font-body)' }
+    return (
+      <>
+        <header style={{ position:'sticky', top:0, zIndex:90, background:'var(--bg-surface)', borderBottom:'1px solid var(--border)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:6, height:54, padding:'0 8px 0 6px' }}>
+            <button onClick={() => setDrawerOpen(true)} aria-label="Open menu" style={iconBtn}><Icon name="menu" size={22} color="var(--text-primary)" /></button>
+            <Logo onClick={onGoHome} />
+            <button onClick={() => setPage('notifications')} aria-label={unreadCount>0?`Alerts, ${unreadCount} unread`:'Alerts'}
+              style={{ ...iconBtn, marginLeft:'auto', position:'relative', color:page==='notifications'?'var(--accent)':'var(--text-secondary)' }}>
+              <Icon name="bell" size={21} />
+              {unreadCount>0 && <span style={{ position:'absolute', top:5, right:5, background:'var(--danger)', color:'#fff', fontFamily:'var(--font-mono)', fontSize:'.52rem', fontWeight:700, minWidth:15, height:15, lineHeight:'15px', borderRadius:8, textAlign:'center', padding:'0 3px', boxShadow:'0 0 0 2px var(--bg-surface)' }}>{unreadCount>99?'99+':unreadCount}</span>}
+            </button>
+          </div>
+          {/* Full-width search row — no longer squeezed */}
+          <form role="search" style={{ padding:'0 12px 10px' }}
+            onSubmit={e => { e.preventDefault(); const q = searchText.trim(); if (q) onSearch?.(q) }}>
+            <div style={{ position:'relative' }}>
+              <span style={{ position:'absolute', left:13, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', display:'flex', pointerEvents:'none' }}><Icon name="search" size={17} /></span>
+              <input value={searchText} onChange={e => setSearchText(e.target.value)} aria-label="Search people, businesses, and tasks"
+                placeholder="Search people, businesses, tasks…"
+                style={{ width:'100%', padding:'11px 16px 11px 38px', borderRadius:12, border:'1px solid var(--border)', background:'var(--bg-elevated)', color:'var(--text-primary)', fontSize:'16px' }} />
+            </div>
+          </form>
+        </header>
+
+        {/* Slide-in nav drawer — transform driven inline so it can't be overridden */}
+        <div className="doverlay" onClick={() => setDrawerOpen(false)} style={{ opacity:drawerOpen?1:0, pointerEvents:drawerOpen?'all':'none' }} />
+        <aside className="drawer" style={{ padding:0, width:290, transform:drawerOpen?'translateX(0)':'translateX(100%)' }} aria-hidden={!drawerOpen}>
+          <div style={{ padding:'20px 20px 16px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:12 }}>
+            {user.avatarUrl
+              ? <img src={user.avatarUrl} alt="" style={{ width:44, height:44, borderRadius:'50%', objectFit:'cover' }} />
+              : <span style={{ width:44, height:44, borderRadius:'50%', background:'var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:800, color:'var(--accent)', flexShrink:0 }}>{(user.displayName||user.email||'?').charAt(0).toUpperCase()}</span>}
+            <div style={{ minWidth:0 }}>
+              <div style={{ fontWeight:700, fontSize:'.95rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{user.displayName || user.email?.split('@')[0]}</div>
+              <div style={{ fontSize:'.72rem', color:'var(--text-muted)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{user.email}</div>
+            </div>
+          </div>
+          <nav style={{ padding:'6px 0' }}>
+            {nav.map(item => {
+              const active = page === item.id
+              return (
+                <button key={item.id} onClick={() => go(item.id)} style={drawerRow(active)}>
+                  <Icon name={item.icon} size={19} color={active?'var(--accent)':'var(--text-muted)'} />
+                  <span style={{ flex:1 }}>{item.label}</span>
+                  {item.id==='notifications' && unreadCount>0 && <span style={{ background:'var(--danger)', color:'#fff', fontFamily:'var(--font-mono)', fontSize:'.6rem', fontWeight:700, padding:'1px 7px', borderRadius:10 }}>{unreadCount>99?'99+':unreadCount}</span>}
+                </button>
+              )
+            })}
+          </nav>
+          <div style={{ borderTop:'1px solid var(--border)', padding:'6px 0', marginTop:2 }}>
+            <button onClick={() => { window.dispatchEvent(new Event('relivr:show-walkthrough')); setDrawerOpen(false) }} style={footRow}><Icon name="target" size={17} color="var(--text-muted)" />How ReLivR works</button>
+            {onViewLanding && <button onClick={() => { onViewLanding(); setDrawerOpen(false) }} style={footRow}><Icon name="home" size={17} color="var(--text-muted)" />View public site</button>}
+            <button onClick={() => { setDrawerOpen(false); logout() }} style={{ ...footRow, color:'var(--danger)' }}><Icon name="arrow" size={17} color="var(--danger)" style={{ transform:'rotate(180deg)' }} />Sign out</button>
+          </div>
+        </aside>
+      </>
+    )
+  }
 
   return (
     <header style={{ position:'sticky', top:0, zIndex:90, background:'var(--bg-surface)', borderBottom:'1px solid var(--border)' }}>
