@@ -322,6 +322,22 @@ function useAuth()  { return useContext(AuthCtx) }
 function useStore() { return useContext(StoreCtx) }
 function useToast() { return useContext(ToastCtx) }
 
+// True on phone-sized viewports — drives the dedicated mobile design (a separate
+// layout, not just responsive tweaks). Reacts to rotation/resize. A coarse-pointer
+// UA hint nudges edge cases, but width is the decider so it's predictable + testable.
+function useIsMobile(bp = 768) {
+  const get = () => { try { return window.innerWidth <= bp } catch { return false } }
+  const [mobile, setMobile] = useState(get)
+  useEffect(() => {
+    const on = () => setMobile(get())
+    on() // sync in case width changed between initial render and mount
+    window.addEventListener('resize', on)
+    window.addEventListener('orientationchange', on)
+    return () => { window.removeEventListener('resize', on); window.removeEventListener('orientationchange', on) }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  return mobile
+}
+
 // Shows a one-off toast stashed in sessionStorage by a pre-render flow (e.g. the
 // /verify-student email link handled in App before the toast context exists).
 function PendingToast() {
@@ -8580,6 +8596,137 @@ function CookieConsent() {
   )
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MOBILE LANDING — a purpose-built phone design (not the desktop page reflowed).
+// App-store cadence: sticky compact header, thumb-first CTAs, a live-feed glimpse,
+// a segmented "How it works", single-column feature list, and a sticky bottom CTA.
+// Rendered by App only when useIsMobile() is true.
+// ─────────────────────────────────────────────────────────────────────────────
+function MobileLanding({ onOpenAuth, onNav }) {
+  const [track, setTrack] = useState('you') // 'you' | 'biz'
+  const steps = track === 'you' ? STEPS_DATA : BIZ_STEPS_DATA
+
+  const primaryBtn = { width:'100%', padding:'15px', borderRadius:14, border:'none', background:'var(--accent)', color:'#fff', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'1rem', cursor:'pointer', display:'inline-flex', alignItems:'center', justifyContent:'center', gap:8, boxShadow:'0 6px 18px var(--accent-glow)' }
+  const ghostBtn   = { width:'100%', padding:'15px', borderRadius:14, background:'var(--bg-surface)', color:'var(--text-primary)', border:'1px solid var(--border-strong)', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'1rem', cursor:'pointer' }
+
+  return (
+    <div style={{ minHeight:'100vh', background:'var(--bg-base)', paddingBottom:'calc(84px + env(safe-area-inset-bottom))' }}>
+      {/* Sticky header */}
+      <header style={{ position:'sticky', top:0, zIndex:50, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 18px', background:'color-mix(in srgb, var(--bg-base) 88%, transparent)', backdropFilter:'blur(10px)', borderBottom:'1px solid var(--border)' }}>
+        <span style={{ display:'inline-flex', alignItems:'center', gap:8 }}>
+          <LogoMark size={26} /><span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.15rem', letterSpacing:'-.01em' }}>ReLivR</span>
+        </span>
+        <button onClick={() => onOpenAuth('login')} style={{ background:'none', border:'none', color:'var(--text-secondary)', fontWeight:600, fontSize:'.9rem', cursor:'pointer' }}>Sign in</button>
+      </header>
+
+      {/* Hero */}
+      <section style={{ padding:'26px 20px 8px' }}>
+        <div style={{ display:'inline-flex', alignItems:'center', gap:7, background:'var(--bg-surface)', border:'1px solid var(--border-strong)', borderRadius:100, padding:'5px 12px', marginBottom:18, boxShadow:'var(--shadow-xs)' }}>
+          <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--verified)' }} />
+          <span style={{ fontFamily:'var(--font-mono)', fontSize:'.6rem', color:'var(--text-secondary)', letterSpacing:'.1em', textTransform:'uppercase' }}>Proudly South African · Beta</span>
+        </div>
+        <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'clamp(2.3rem,11vw,3rem)', lineHeight:1.02, letterSpacing:'-.03em', margin:'0 0 14px' }}>
+          Live more.<br /><span style={{ background:'var(--highlight)', padding:'0 .12em', borderRadius:7, WebkitBoxDecorationBreak:'clone', boxDecorationBreak:'clone' }}>stress less.</span>
+        </h1>
+        <p style={{ fontSize:'1.02rem', color:'var(--text-secondary)', lineHeight:1.6, margin:'0 0 22px' }}>
+          Post a task, earn money, or get things done — with verified, trust-scored people near you.
+        </p>
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          <button style={primaryBtn} onClick={() => onOpenAuth('register')}>Post a task — it’s free <Icon name="arrow" size={17} /></button>
+          <button style={ghostBtn} onClick={() => onOpenAuth('register')}>Start earning</button>
+        </div>
+        {/* Proof stats */}
+        <div style={{ display:'flex', justifyContent:'space-between', gap:8, marginTop:24, padding:'16px 4px', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)' }}>
+          {STATS_DATA.map((s,i) => (
+            <div key={i} style={{ textAlign:'center', flex:1 }}>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.15rem', letterSpacing:'-.01em' }}>{s.v}</div>
+              <div style={{ fontFamily:'var(--font-mono)', fontSize:'.52rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.06em', marginTop:4, lineHeight:1.3 }}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Live-feed glimpse */}
+      <section style={{ padding:'22px 20px 8px' }}>
+        <div className="slabel" style={{ color:'var(--text-secondary)', marginBottom:10 }}>Open near you</div>
+        <div style={{ background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:'var(--radius-lg)', boxShadow:'var(--shadow-sm)', overflow:'hidden' }}>
+          {TASK_EXAMPLES.slice(0,3).map((t,i) => (
+            <div key={i} style={{ padding:'14px 16px', borderBottom:i<2?'1px solid var(--border)':'none', display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
+              <div style={{ minWidth:0 }}>
+                <div style={{ fontWeight:600, fontSize:'.92rem', marginBottom:5 }}>{t.title}</div>
+                <div style={{ display:'flex', gap:5 }}>{t.tags.slice(0,2).map(tag => <span key={tag} style={{ background:'var(--bg-elevated)', color:'var(--text-secondary)', fontFamily:'var(--font-mono)', fontSize:'.56rem', padding:'2px 7px', borderRadius:'var(--radius-sm)', textTransform:'uppercase', letterSpacing:'.05em' }}>{tag}</span>)}</div>
+              </div>
+              <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1rem', flexShrink:0 }}>{t.budget}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* How it works — segmented */}
+      <section style={{ padding:'30px 20px 8px' }}>
+        <h2 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.4rem', letterSpacing:'-.01em', margin:'0 0 16px' }}>How ReLivR works</h2>
+        <div style={{ display:'flex', gap:4, background:'var(--bg-elevated)', borderRadius:12, padding:4, marginBottom:20 }}>
+          {[['you','For you'],['biz','For business']].map(([k,label]) => (
+            <button key={k} onClick={() => setTrack(k)}
+              style={{ flex:1, padding:'10px', borderRadius:9, border:'none', cursor:'pointer', fontWeight:700, fontSize:'.88rem', fontFamily:'var(--font-display)', background:track===k?'var(--bg-surface)':'transparent', color:track===k?'var(--accent)':'var(--text-muted)', boxShadow:track===k?'var(--shadow-xs)':'none', transition:'all 150ms ease' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          {steps.map((s,i) => (
+            <div key={i} style={{ display:'flex', gap:14, alignItems:'flex-start' }}>
+              <span style={{ flexShrink:0, width:32, height:32, borderRadius:'50%', background:'var(--accent-glow)', color:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:800, fontSize:'.9rem' }}>{s.n.replace(/^0/,'')}</span>
+              <div style={{ paddingTop:2 }}>
+                <div style={{ fontWeight:700, fontSize:'1rem', marginBottom:3 }}>{s.title}</div>
+                <div style={{ fontSize:'.88rem', color:'var(--text-secondary)', lineHeight:1.55 }}>{s.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Feature list */}
+      <section style={{ padding:'30px 20px 8px' }}>
+        <h2 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.4rem', letterSpacing:'-.01em', margin:'0 0 16px' }}>Everything you need</h2>
+        <div style={{ display:'flex', flexDirection:'column', gap:2, border:'1px solid var(--border)', borderRadius:'var(--radius-lg)', overflow:'hidden', background:'var(--border)' }}>
+          {FEATURES_DATA.map((f,i) => (
+            <div key={i} style={{ display:'flex', gap:14, alignItems:'center', padding:'15px 16px', background:'var(--bg-surface)' }}>
+              <span style={{ flexShrink:0, width:40, height:40, borderRadius:11, background:'var(--accent-glow)', display:'flex', alignItems:'center', justifyContent:'center' }}><Icon name={f.icon} size={20} color="var(--accent)" /></span>
+              <div>
+                <div style={{ fontWeight:700, fontSize:'.95rem', marginBottom:2 }}>{f.title}</div>
+                <div style={{ fontSize:'.82rem', color:'var(--text-muted)', lineHeight:1.5 }}>{f.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Final CTA */}
+      <section style={{ padding:'34px 20px 20px', textAlign:'center' }}>
+        <h2 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.6rem', letterSpacing:'-.02em', margin:'0 0 10px' }}>Ready to join your<br />local economy?</h2>
+        <p style={{ fontSize:'.92rem', color:'var(--text-secondary)', margin:'0 0 20px' }}>Free to start · No credit card · Free while in beta</p>
+        <button style={primaryBtn} onClick={() => onOpenAuth('register')}>Get started free</button>
+      </section>
+
+      {/* Minimal footer */}
+      <footer style={{ padding:'22px 20px 30px', borderTop:'1px solid var(--border)', textAlign:'center' }}>
+        <div style={{ display:'flex', justifyContent:'center', flexWrap:'wrap', gap:'10px 18px', marginBottom:14 }}>
+          {[['how-it-works-page','How it works'],['pricing-page','Pricing'],['terms','Terms'],['privacy','Privacy'],['help-centre','Help']].map(([v,l]) => (
+            <button key={v} onClick={() => onNav(v)} style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'.8rem', cursor:'pointer' }}>{l}</button>
+          ))}
+        </div>
+        <div style={{ fontFamily:'var(--font-mono)', fontSize:'.66rem', color:'var(--text-muted)', letterSpacing:'.04em' }}>© 2026 ReLivR · Proudly South African</div>
+      </footer>
+
+      {/* Sticky bottom CTA bar */}
+      <div style={{ position:'fixed', left:0, right:0, bottom:0, zIndex:60, padding:'12px 16px calc(12px + env(safe-area-inset-bottom))', background:'color-mix(in srgb, var(--bg-surface) 92%, transparent)', backdropFilter:'blur(12px)', borderTop:'1px solid var(--border)' }}>
+        <button style={primaryBtn} onClick={() => onOpenAuth('register')}>Get started — it’s free</button>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [user, setUser]         = useState(null)
   // Google signups still owe us the onboarding questions (set from the OAuth
@@ -8588,6 +8735,7 @@ export default function App() {
   const [userLoading, setUserLoading] = useState(true) // true while restoring session
   const initialLoc = parseLocation()
   const [view, setView] = useState(initialLoc.view)
+  const isMobile = useIsMobile()
   const [authModal, setAuthModal] = useState(null)
   const [dashPage, setDashPage]   = useState(initialLoc.dashPage || 'tasks-browse')
   const [selectedTask,    setSelectedTask]    = useState(initialLoc.taskId || null)
@@ -8979,7 +9127,11 @@ export default function App() {
           {view === 'oauth-callback' && <OAuthCallback />}
 
           {/* ── LANDING PAGE ─────────────────────────────────── */}
-          {view==='landing' && (
+          {view==='landing' && isMobile && (
+            <MobileLanding onOpenAuth={openAuth} onNav={navigate} />
+          )}
+
+          {view==='landing' && !isMobile && (
             <div>
               <LandingNavbar onOpenAuth={openAuth} onNav={navigate} user={user} onEnterApp={goAppHome} />
               <RevealObserver />
