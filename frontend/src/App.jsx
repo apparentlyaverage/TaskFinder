@@ -141,7 +141,7 @@ _style.textContent = `
   --shadow-xl:     0 30px 70px rgba(19,17,24,.14), 0 10px 24px rgba(19,17,24,.06);
   --ring:          0 0 0 3px rgba(126,34,206,.16);
 }
-html { scroll-behavior: smooth; font-size: 16px; }
+html { scroll-behavior: smooth; font-size: 16px; overflow-x: hidden; }
 body {
   background: var(--bg-base); color: var(--text-primary);
   font-family: var(--font-body); font-size: 15px; line-height: 1.6;
@@ -251,7 +251,8 @@ label { font-family:var(--fm); font-size:.62rem; color:var(--text-muted); text-t
   .dash-sidebar { position:fixed !important; bottom:0 !important; left:0 !important; right:0 !important; top:auto !important; width:100% !important; height:64px !important; flex-direction:row !important; padding:0 8px !important; border-right:none !important; border-top:1px solid var(--border) !important; z-index:100 !important; overflow:hidden !important; }
   .sidebar-logo, .sidebar-status, .sidebar-user { display:none !important; }
   .dash-nav     { flex-direction:row !important; width:100% !important; justify-content:space-around !important; gap:0 !important; align-items:center !important; }
-  .dash-nav-btn { flex-direction:column !important; gap:2px !important; padding:6px 8px !important; font-size:.55rem !important; min-height:52px !important; justify-content:center !important; align-items:center !important; border-left:none !important; border-top:2px solid transparent !important; }
+  .dash-nav-btn { flex:1 1 0 !important; min-width:0 !important; flex-direction:column !important; gap:2px !important; padding:6px 4px !important; font-size:.55rem !important; min-height:52px !important; justify-content:center !important; align-items:center !important; border-left:none !important; border-top:2px solid transparent !important; overflow:hidden !important; }
+  .dash-nav-btn > span { min-width:0 !important; max-width:100% !important; overflow:hidden !important; text-overflow:ellipsis !important; white-space:nowrap !important; }
   .dash-nav-btn.active { border-top-color:var(--accent) !important; border-left-color:transparent !important; }
 }
 @media (min-width:769px) {
@@ -3018,15 +3019,15 @@ function TaskBrowse({ setPage, setSelectedTask, openProfile }) {
 
       <div style={{ display:'flex', gap:10, marginBottom:18, flexWrap:'wrap', alignItems:'center', justifyContent:'space-between' }}>
         <Mono>{filtered.length} open task{filtered.length!==1?'s':''} near you</Mono>
-        <div style={{ display:'flex', gap:8, alignItems:'flex-end' }}>
-        <SelectField value={status} onChange={e => setStatus(e.target.value)} style={{ minWidth:150 }}>
+        <div style={{ display:'flex', gap:8, alignItems:'flex-end', flexWrap:'wrap', flex:'1 1 auto', justifyContent:'flex-end' }}>
+        <SelectField value={status} onChange={e => setStatus(e.target.value)} style={{ flex:'1 1 130px', minWidth:120 }}>
           <option value="all">All Statuses</option>
           <option value="open">Open</option>
           <option value="in_progress">In Progress</option>
           <option value="completed">Completed</option>
           <option value="disputed">Disputed</option>
         </SelectField>
-        <SelectField value={sort} onChange={e => setSort(e.target.value)} style={{ minWidth:160 }}>
+        <SelectField value={sort} onChange={e => setSort(e.target.value)} style={{ flex:'1 1 140px', minWidth:130 }}>
           <option value="newest">Newest First</option>
           {myLoc && <option value="distance">Nearest First</option>}
           <option value="budget-hi">Budget: High → Low</option>
