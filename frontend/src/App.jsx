@@ -2874,6 +2874,47 @@ function AvailableNowRail({ openProfile }) {
   )
 }
 
+// Promoted businesses on the tasks feed — the payoff of a business's "Boost".
+// Only shows genuinely-boosted, active businesses; clearly labelled "Promoted";
+// clicking reuses the QR deep-link plumbing to open the business in Local.
+function FeaturedBusinessStrip({ setPage }) {
+  const [biz, setBiz] = useState([])
+  useEffect(() => {
+    let cancelled = false
+    fetch(API_BASE + '/businesses/featured')
+      .then(r => r.ok ? r.json() : { businesses: [] })
+      .then(d => { if (!cancelled) setBiz(Array.isArray(d.businesses) ? d.businesses : []) })
+      .catch(() => { /* offline — hide */ })
+    return () => { cancelled = true }
+  }, [])
+  if (biz.length === 0) return null
+  const open = (id) => { try { sessionStorage.setItem('rl_pending_biz', id) } catch { /* noop */ } ; setPage('local-browse') }
+  return (
+    <div style={{ marginBottom:18 }}>
+      <div className="slabel" style={{ color:'var(--text-secondary)', marginBottom:8, display:'flex', alignItems:'center', gap:8 }}>
+        <Icon name="store" size={13} color="var(--highlight)" /> Promoted locally
+      </div>
+      <div className="feed-scroll" style={{ display:'flex', gap:10, overflowX:'auto', paddingBottom:4 }}>
+        {biz.map(b => (
+          <button key={b.business_id} onClick={() => open(b.business_id)}
+            style={{ position:'relative', flex:'0 0 auto', width:230, textAlign:'left', display:'flex', gap:11, alignItems:'center', padding:'11px 13px', borderRadius:'var(--radius-md)', cursor:'pointer', border:'1px solid var(--border)', background:'var(--bg-surface)', transition:'border-color 150ms ease, transform 150ms ease' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.transform='translateY(-1px)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.transform='none' }}>
+            <span style={{ position:'absolute', top:7, right:9, fontFamily:'var(--font-mono)', fontSize:'.52rem', fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color:'var(--text-muted)' }}>Ad</span>
+            {b.logo_url
+              ? <img src={b.logo_url} alt="" style={{ width:40, height:40, borderRadius:10, objectFit:'cover', flexShrink:0 }} />
+              : <span style={{ width:40, height:40, borderRadius:10, background:'var(--bg-elevated)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}><Icon name="store" size={19} color="var(--accent)" /></span>}
+            <span style={{ minWidth:0 }}>
+              <span style={{ display:'block', fontWeight:700, fontSize:'.85rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{b.name}</span>
+              <span style={{ display:'block', fontFamily:'var(--font-mono)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.04em', marginTop:2 }}>{b.category || 'Local business'}{b.avg_rating > 0 ? ` · ★ ${Number(b.avg_rating).toFixed(1)}` : ''}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function TaskBrowse({ setPage, setSelectedTask, openProfile }) {
   const { state } = useStore()
   const [skill, setSkill]   = useState('')
@@ -2973,6 +3014,7 @@ function TaskBrowse({ setPage, setSelectedTask, openProfile }) {
       </div>
 
       <AvailableNowRail openProfile={openProfile} />
+      <FeaturedBusinessStrip setPage={setPage} />
 
       <div style={{ display:'flex', gap:10, marginBottom:18, flexWrap:'wrap', alignItems:'center', justifyContent:'space-between' }}>
         <Mono>{filtered.length} open task{filtered.length!==1?'s':''} near you</Mono>

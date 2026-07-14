@@ -492,6 +492,28 @@ router.post('/mine/boost', requireAuth, async (req, res) => {
   }
 })
 
+// ── PUBLIC: currently-boosted businesses to feature on the tasks feed ──
+// GET /businesses/featured  → up to 6 active businesses with a live boost window.
+// Declared before /:id so "featured" is never parsed as a business id.
+router.get('/featured', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT businesses.business_id, businesses.name, category, tagline, logo_url,
+              cover_image_url, image_urls, link_url,
+              (SELECT ROUND(AVG(rating)::numeric,1) FROM business_reviews br WHERE br.business_id = businesses.business_id) AS avg_rating,
+              l.name AS campus_zone
+         FROM businesses
+         LEFT JOIN locations l ON l.location_id = businesses.location_id
+        WHERE status = 'active' AND boosted_until IS NOT NULL AND boosted_until > NOW()
+        ORDER BY boosted_until DESC
+        LIMIT 6`)
+    return res.status(200).json({ businesses: rows })
+  } catch (err) {
+    log.error('GET /businesses/featured', { reqId: req.id, msg: err.message })
+    return res.status(500).json({ message: 'Internal server error.' })
+  }
+})
+
 // ══ PRODUCT CATALOG (Batch 5) ══════════════════════════════════════════════
 // A business owner lists products/services; the public sees the available ones on
 // the profile. Writes are owner-scoped. NB: the /mine/products routes are declared
