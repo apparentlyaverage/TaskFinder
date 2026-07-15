@@ -246,15 +246,9 @@ label { font-family:var(--fm); font-size:.62rem; color:var(--text-muted); text-t
   .page-layout { flex-direction:column !important; }
   .page-sidebar { width:100% !important; border-right:none !important; border-bottom:1px solid var(--border-strong) !important; }
   section { padding-left:20px !important; padding-right:20px !important; }
-  /* Dashboard mobile bottom nav */
+  /* Dashboard on phones: nav lives in the TopBar hamburger drawer (no bottom bar) */
   .dash-shell   { grid-template-columns:1fr !important; }
-  .dash-main    { padding:16px 14px 84px 14px !important; }
-  .dash-sidebar { position:fixed !important; bottom:0 !important; left:0 !important; right:0 !important; top:auto !important; width:100% !important; height:64px !important; flex-direction:row !important; padding:0 8px !important; border-right:none !important; border-top:1px solid var(--border) !important; z-index:100 !important; overflow:hidden !important; }
-  .sidebar-logo, .sidebar-status, .sidebar-user { display:none !important; }
-  .dash-nav     { flex-direction:row !important; width:100% !important; justify-content:space-around !important; gap:0 !important; align-items:center !important; }
-  .dash-nav-btn { flex:1 1 0 !important; min-width:0 !important; flex-direction:column !important; gap:2px !important; padding:6px 4px !important; font-size:.55rem !important; min-height:52px !important; justify-content:center !important; align-items:center !important; border-left:none !important; border-top:2px solid transparent !important; overflow:hidden !important; }
-  .dash-nav-btn > span { min-width:0 !important; max-width:100% !important; overflow:hidden !important; text-overflow:ellipsis !important; white-space:nowrap !important; }
-  .dash-nav-btn.active { border-top-color:var(--accent) !important; border-left-color:transparent !important; }
+  .dash-main    { padding:16px 14px 32px 14px !important; }
 }
 @media (min-width:769px) {
   .show-m { display:none !important; }
@@ -262,22 +256,17 @@ label { font-family:var(--fm); font-size:.62rem; color:var(--text-muted); text-t
 
 /* ── Native PWA feel ── */
 html, body { overscroll-behavior-y: contain; }
-button, nav, .dash-nav-btn { -webkit-tap-highlight-color: transparent; }
+button, nav { -webkit-tap-highlight-color: transparent; }
 button { touch-action: manipulation; user-select: none; }
 button:active { transform: scale(.97); }
 .feed-scroll { scrollbar-width: none; -ms-overflow-style: none; }
 .feed-scroll::-webkit-scrollbar { display: none; }
 @media (max-width:768px) {
   input, textarea, select { font-size: 16px !important; } /* stops iOS auto-zoom */
-  .dash-sidebar { height: calc(64px + env(safe-area-inset-bottom)) !important; padding-bottom: env(safe-area-inset-bottom) !important; }
-  .dash-nav-btn:nth-child(n+6) { display: none !important; } /* native 5-tab bar */
-  .msg-shell { height: calc(100dvh - 200px) !important; }
-}
-@media (min-width:769px) {
-  .dash-sidebar { display:none !important; }
+  .msg-shell { height: calc(100dvh - 150px) !important; }
 }
 
-/* Top-bar nav: links + search are desktop-only; bottom bar handles mobile nav */
+/* Top-bar nav links are desktop-only; the hamburger drawer handles mobile nav */
 /* Top-bar nav links are desktop-only; the search bar shows on every size
    (on phones the hidden nav links free up the room for it). */
 .topbar-nav { display: none; }
@@ -2532,32 +2521,6 @@ function ChatIcon({ size = 18 }) {
   )
 }
 
-const NAV = {
-  // First 5 = native bottom-tab bar on mobile; the rest stay desktop-only.
-  // Roles merged: every member can both post tasks and bid on them.
-  member: [
-    { id:'tasks-browse',  label:'Home',      icon:'home' },
-    { id:'tasks-new',     label:'Post',      icon:'plus' },
-    { id:'tasks-mine',    label:'My Tasks',  icon:'inbox' },
-    { id:'messages',      label:'Messages',  icon:'message' },
-    { id:'profile',       label:'Profile',   icon:'user' },
-    { id:'local-browse',  label:'Local',     icon:'store' },
-    { id:'following',     label:'Following', icon:'heart' },
-    { id:'schedule',      label:'Schedule',  icon:'calendar' },
-    { id:'my-bids',       label:'My Bids',   icon:'tag' },
-    { id:'dashboard',     label:'Stats',     icon:'chart' },
-    { id:'notifications', label:'Alerts',    icon:'bell' },
-  ],
-  admin: [
-    { id:'dashboard',       label:'Dashboard',  icon:'chart' },
-    { id:'admin-disputes',  label:'Disputes',   icon:'scale' },
-    { id:'admin-users',     label:'Users',      icon:'users' },
-    { id:'admin-businesses',label:'Businesses', icon:'store' },
-    { id:'tasks-browse',    label:'All Tasks',  icon:'inbox' },
-    { id:'notifications',   label:'Alerts',     icon:'bell' },
-  ],
-}
-
 function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch }) {
   const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -2770,75 +2733,8 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch 
   )
 }
 
-function DashSidebar({ page, setPage, unreadCount, onGoHome }) {
-  const { user, logout } = useAuth()
-  const [signHov, setSignHov] = useState(false)
-  const items = NAV[user.role === 'admin' ? 'admin' : 'member'] || []
-
-  return (
-    <aside className="dash-sidebar" style={{ background:'var(--bg-surface)', borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', padding:'20px 14px', position:'sticky', top:0, height:'100vh', overflowY:'auto', width:220, flexShrink:0 }}>
-      <div className="sidebar-logo" style={{ display:'flex', alignItems:'center', gap:10, marginBottom:24 }}>
-        <div onClick={onGoHome} style={{ display:'flex', alignItems:'center', gap:7, cursor:'pointer' }}>
-          <LogoMark size={28} />
-          <span style={{ fontFamily:'var(--font-display)', fontSize:'1.05rem', fontWeight:700, letterSpacing:'-0.01em' }}>ReLivR</span>
-        </div>
-      </div>
-      <div className="sidebar-status" style={{ display:'flex', alignItems:'center', gap:6, fontFamily:'var(--font-mono)', fontSize:'0.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:20 }}>
-        <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--success)', boxShadow:'0 0 6px var(--success)', flexShrink:0, animation:'pulse 2s infinite' }} />
-        Demo Mode
-      </div>
-      <nav className="dash-nav" style={{ display:'flex', flexDirection:'column', gap:2, flex:1 }}>
-        {items.map(item => {
-          const active = page === item.id
-          return (
-            <button key={item.id} onClick={() => setPage(item.id)}
-              className={`dash-nav-btn ${active?'active':''}`}
-              style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'9px 12px', borderRadius:'var(--radius-sm)', fontSize:'0.875rem', fontWeight:500, fontFamily:'var(--font-body)', cursor:'pointer', textAlign:'left', transition:'all 150ms ease', border:'none', color:active?'var(--accent)':'var(--text-secondary)', background:active?'var(--accent-glow)':'transparent', borderLeft:active?'2px solid var(--accent)':'2px solid transparent' }}
-              onMouseEnter={e => { if (!active) { e.currentTarget.style.background='var(--bg-hover)'; e.currentTarget.style.color='var(--text-primary)' } }}
-              onMouseLeave={e => { if (!active) { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='var(--text-secondary)' } }}>
-              <span style={{ display:'flex', alignItems:'center', gap:10 }}><span style={{ width:20, display:'flex', justifyContent:'center' }}>{hasIcon(item.icon) ? <Icon name={item.icon} size={18} color={active?'var(--accent)':'currentColor'} /> : item.icon}</span><span>{item.label}</span></span>
-              {item.id==='notifications' && unreadCount>0 && (
-                <span style={{ background:'var(--accent)', color:'#fff', fontFamily:'var(--font-mono)', fontSize:'0.6rem', fontWeight:700, padding:'1px 6px', borderRadius:10, minWidth:18, textAlign:'center' }}>{unreadCount}</span>
-              )}
-            </button>
-          )
-        })}
-      </nav>
-      <div className="sidebar-user" style={{ borderTop:'1px solid var(--border)', paddingTop:14, marginTop:14 }}>
-        {/* Avatar + user info */}
-        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
-          {user.avatarUrl ? (
-            <img src={user.avatarUrl} alt={user.displayName}
-              style={{ width:34, height:34, borderRadius:'50%', objectFit:'cover', border:'1px solid var(--border-strong)', flexShrink:0 }} />
-          ) : (
-            <div style={{ width:34, height:34, borderRadius:'50%', background:'var(--accent-glow)', border:'1px solid var(--accent-dim)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'0.85rem', color:'var(--accent)', flexShrink:0 }}>
-              {(user.displayName || user.email || '?').charAt(0).toUpperCase()}
-            </div>
-          )}
-          <div style={{ flex:1, overflow:'hidden' }}>
-            <div style={{ fontSize:'0.78rem', fontWeight:600, color:'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-              {user.displayName || user.email?.split('@')[0] || 'User'}
-            </div>
-            <div style={{ fontSize:'0.68rem', color:'var(--text-muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-              {user.email}
-            </div>
-          </div>
-        </div>
-        <Badge variant={user.role} style={{ marginBottom:10 }}>{user.role}</Badge>
-        {user.provider === 'google' && (
-          <div style={{ fontFamily:'var(--font-mono)', fontSize:'0.58rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>
-            via Google
-          </div>
-        )}
-        <button onClick={logout}
-          onMouseEnter={() => setSignHov(true)} onMouseLeave={() => setSignHov(false)}
-          style={{ background:'transparent', padding:'6px 12px', width:'100%', border:`1px solid ${signHov?'var(--danger)':'var(--border)'}`, color:signHov?'var(--danger)':'var(--text-muted)', borderRadius:'var(--radius-sm)', fontSize:'0.7rem', fontFamily:'var(--font-display)', textTransform:'uppercase', letterSpacing:'0.06em', cursor:'pointer', transition:'all 150ms ease' }}>
-          Sign Out
-        </button>
-      </div>
-    </aside>
-  )
-}
+// DashSidebar (the mobile bottom tab bar) was removed — the hamburger drawer in
+// TopBar is the sole mobile navigation now; desktop always used the TopBar links.
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DASHBOARD PAGES
@@ -9302,8 +9198,6 @@ export default function App() {
           {view==='dashboard' && user && !isAppLocked(user) && user.role!=='business' && (
             <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column', background:'var(--bg-base)' }}>
               <TopBar page={dashPage} setPage={setDashPage} unreadCount={unreadCount} onGoHome={goAppHome} onViewLanding={() => navigate('landing')} onSearch={(q) => { setSearchQuery(q); setDashPage('search') }} />
-              {/* DashSidebar is mobile-only now — CSS turns it into the bottom tab bar */}
-              <DashSidebar page={dashPage} setPage={setDashPage} unreadCount={unreadCount} onGoHome={goAppHome} />
               <main className="dash-main" style={{ flex:1, width:'100%', maxWidth:1280, margin:'0 auto', padding:'28px 24px 60px' }}>
                 {renderDashPage()}
               </main>
