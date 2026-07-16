@@ -11,10 +11,6 @@ import React, {
 import { createPortal } from 'react-dom'
 import QRCode from 'qrcode'
 import Icon, { hasIcon } from './Icon.jsx'
-import {
-  MOCK_TASKS, MOCK_BIDS, MOCK_NOTIFICATIONS,
-  MOCK_MESSAGES, MOCK_DISPUTES, MOCK_SUGGESTIONS,
-} from './api/mock'
 
 // ─── LAUNCH GATE ─────────────────────────────────────────────────────────────
 // The full app is locked to the public until the launch timer ends. Until then
@@ -141,6 +137,45 @@ _style.textContent = `
   --shadow-xl:     0 30px 70px rgba(19,17,24,.14), 0 10px 24px rgba(19,17,24,.06);
   --ring:          0 0 0 3px rgba(126,34,206,.16);
 }
+/* Dark mode — token-level overrides. The accent family lightens so purple text
+   keeps contrast on dark grounds; --highlight flips to a deep plum so the hero
+   swash reads with light text on it. Toggled via data-theme (persisted). */
+:root[data-theme="dark"] {
+  --amber:         #a855f7;
+  --amber2:        #9333ea;
+  --orchid:        #c084fc;
+  --highlight:     #5b21b6;
+  --bg-base:       #141019;
+  --bg-surface:    #1d1726;
+  --bg-elevated:   #262031;
+  --bg-hover:      #2f2740;
+  --border:        #332b42;
+  --border-strong: #473b5c;
+  --text-primary:  #f2eef8;
+  --text-secondary:#bdb4cc;
+  --text-muted:    #8c8299;
+  --accent:        #a855f7;
+  --accent-dim:    #3b2a55;
+  --accent-glow:   rgba(168,85,247,0.16);
+  --success:       #34d399;
+  --danger:        #f87171;
+  --info:          #60a5fa;
+  --warning:       #fbbf24;
+  --verified:      #34d399;
+  --verified-dim:  #12312a;
+  --live:          #38bdf8;
+  --live-dim:      #10293b;
+  --surface:       #1d1726;
+  --surface2:      #262031;
+  --muted:         #8c8299;
+  --shadow-xs:     0 1px 2px rgba(0,0,0,.4);
+  --shadow-sm:     0 1px 3px rgba(0,0,0,.45), 0 1px 2px rgba(0,0,0,.3);
+  --shadow-md:     0 6px 16px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.3);
+  --shadow-lg:     0 16px 40px rgba(0,0,0,.55), 0 4px 12px rgba(0,0,0,.35);
+  --shadow-xl:     0 30px 70px rgba(0,0,0,.6), 0 10px 24px rgba(0,0,0,.4);
+  --ring:          0 0 0 3px rgba(168,85,247,.3);
+}
+:root[data-theme="dark"] .prose h3, :root[data-theme="dark"] .prose .highlight p { color:var(--text-primary); }
 html { scroll-behavior: smooth; font-size: 16px; overflow-x: hidden; }
 body {
   background: var(--bg-base); color: var(--text-primary);
@@ -209,16 +244,16 @@ label { font-family:var(--fm); font-size:.62rem; color:var(--text-muted); text-t
 
 /* Prose */
 .prose h2 { font-family:var(--fd); font-size:1.3rem; font-weight:800; margin:32px 0 12px; color:var(--text-primary); }
-.prose h3 { font-family:var(--fd); font-size:1.05rem; font-weight:700; margin:24px 0 8px; color:#3b3548; }
-.prose p  { color:#5f5970; line-height:1.8; margin-bottom:16px; font-size:.925rem; }
-.prose ul { color:#5f5970; line-height:1.8; margin-bottom:16px; padding-left:20px; font-size:.925rem; }
+.prose h3 { font-family:var(--fd); font-size:1.05rem; font-weight:700; margin:24px 0 8px; color:var(--text-primary); }
+.prose p  { color:var(--text-secondary); line-height:1.8; margin-bottom:16px; font-size:.925rem; }
+.prose ul { color:var(--text-secondary); line-height:1.8; margin-bottom:16px; padding-left:20px; font-size:.925rem; }
 .prose li { margin-bottom:6px; }
 .prose a  { color:var(--amber); }
 .prose .highlight { background:rgba(126,34,206,.08); border:1px solid rgba(126,34,206,.2); border-radius:6px; padding:16px 20px; margin:20px 0; }
-.prose .highlight p { color:#3b3548; margin:0; }
+.prose .highlight p { color:var(--text-primary); margin:0; }
 .prose table { width:100%; border-collapse:collapse; font-size:.875rem; margin-bottom:16px; }
 .prose th { text-align:left; padding:8px 12px; font-family:var(--fm); font-size:.62rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.1em; font-weight:400; border-bottom:1px solid var(--border-strong); }
-.prose td { padding:10px 12px; color:#5f5970; border-bottom:1px solid var(--border); }
+.prose td { padding:10px 12px; color:var(--text-secondary); border-bottom:1px solid var(--border); }
 
 /* Drawer */
 .drawer { position:fixed; top:0; right:0; bottom:0; width:280px; background:var(--bg-surface); border-left:1px solid var(--border-strong); z-index:200; padding:24px; transform:translateX(100%); transition:transform 300ms ease; overflow-y:auto; }
@@ -346,14 +381,18 @@ function PendingToast() {
   return null
 }
 
+// Data isolation: the store starts EMPTY. It's an optimistic in-memory layer on
+// top of the API, never a source of content — seeding it with mock users' data
+// meant a failed fetch could show fictional "other people's" tasks/notifications
+// to a real signed-in user.
 const initialState = {
-  tasks:         MOCK_TASKS.map(t => ({ ...t })),
-  bids:          MOCK_BIDS.map(b => ({ ...b })),
-  notifications: MOCK_NOTIFICATIONS.map(n => ({ ...n })),
-  messages:      MOCK_MESSAGES.map(m => ({ ...m })),
-  disputes:      MOCK_DISPUTES.map(d => ({ ...d })),
+  tasks:         [],
+  bids:          [],
+  notifications: [],
+  messages:      [],
+  disputes:      [],
   reviews:       [],
-  escrows:       { '1': { status: 'pending' } },
+  escrows:       {},
 }
 
 function appReducer(state, action) {
@@ -555,6 +594,16 @@ function SelectField({ label, value, onChange, children, style={} }) {
   )
 }
 
+// A task that's still 'open' but whose bidding window has passed reads as
+// "Closed for bidding" everywhere its status shows (the backend already rejects
+// late bids with a 409 — this makes that state visible).
+function taskState(t) {
+  if (t?.status === 'open' && t.bids_close_at && new Date(t.bids_close_at) <= new Date()) {
+    return { variant: 'bids_closed', label: 'Closed for bidding' }
+  }
+  return { variant: t?.status, label: (t?.status || '').replace('_', ' ') }
+}
+
 // Capitalize the first letter of each word (underscores → spaces first), for
 // filter options and status text — e.g. "in_progress" → "In Progress".
 function titleCase(s) {
@@ -577,11 +626,25 @@ function saIdCheck(raw) {
   return { ok: true, reason: '' }
 }
 
+// One obvious back control everywhere — replaces the old ghost-text "← Back"
+// links that were easy to miss and hard to tap.
+function BackButton({ onClick, label='Back', style={} }) {
+  return (
+    <button onClick={onClick} aria-label={label}
+      style={{ display:'inline-flex', alignItems:'center', gap:7, padding:'9px 16px 9px 12px', borderRadius:100, border:'1px solid var(--border-strong)', background:'var(--bg-surface)', color:'var(--text-primary)', fontWeight:600, fontSize:'.85rem', fontFamily:'var(--font-body)', cursor:'pointer', boxShadow:'var(--shadow-xs)', transition:'border-color 150ms ease, color 150ms ease', marginBottom:18, ...style }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.color='var(--accent)' }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border-strong)'; e.currentTarget.style.color='var(--text-primary)' }}>
+      <Icon name="arrow-left" size={16} />{label}
+    </button>
+  )
+}
+
 function Badge({ children, variant='default' }) {
   const map = {
     default:     { background:'var(--bg-elevated)',            color:'var(--text-secondary)' },
     draft:       { background:'rgba(180,83,9,0.12)',           color:'var(--warning)' },
     open:        { background:'rgba(16,185,129,0.15)',         color:'var(--success)' },
+    bids_closed: { background:'rgba(180,83,9,0.12)',           color:'var(--warning)' },
     in_progress: { background:'rgba(59,130,246,0.15)',         color:'var(--info)' },
     disputed:    { background:'rgba(239,68,68,0.15)',          color:'var(--danger)' },
     completed:   { background:'rgba(126,34,206,0.15)',         color:'var(--accent)' },
@@ -859,7 +922,7 @@ function LandingFooter({ onNav }) {
         <div className="footer-grid" style={{ display:'grid', gridTemplateColumns:'2fr repeat(4,1fr)', gap:44, marginBottom:44 }}>
           <div>
             <Logo onClick={() => onNav('home')} />
-            <p style={{ fontSize:'.875rem', color:'#7c7585', lineHeight:1.75, maxWidth:220, margin:'14px 0 16px' }}>The peer-to-peer service marketplace for your local community.</p>
+            <p style={{ fontSize:'.875rem', color:'var(--text-muted)', lineHeight:1.75, maxWidth:220, margin:'14px 0 16px' }}>The peer-to-peer service marketplace for your local community.</p>
             <div style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em' }}>Proudly South African</div>
           </div>
           {Object.entries(links).map(([cat, items]) => (
@@ -1187,7 +1250,7 @@ function AuthModal({ mode, onClose, onSwitch, onLogin }) {
                 Skip for now
               </button>
             )}
-            <div style={{ textAlign:'center', fontSize:'.85rem', color:'#6d6678' }}>
+            <div style={{ textAlign:'center', fontSize:'.85rem', color:'var(--text-secondary)' }}>
               {mode==='login'?'No account? ':'Have an account? '}
               <button type="button" onClick={onSwitch} style={{ background:'none', border:'none', color:'var(--amber)', cursor:'pointer', fontSize:'inherit' }}>
                 {mode==='login'?'Sign up free':'Sign in'}
@@ -1587,7 +1650,7 @@ function HowItWorks() {
                 <span style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:s.color, textTransform:'uppercase', letterSpacing:'.1em' }}>{s.role}</span>
               </div>
               <h4 style={{ fontFamily:'var(--fd)', fontSize:'1.1rem', fontWeight:700, marginBottom:9 }}>{s.title}</h4>
-              <p style={{ fontSize:'.86rem', color:'#665f72', lineHeight:1.65 }}>{s.desc}</p>
+              <p style={{ fontSize:'.86rem', color:'var(--text-secondary)', lineHeight:1.65 }}>{s.desc}</p>
             </div>
           ))}
         </div>
@@ -1605,7 +1668,7 @@ function HowItWorks() {
                 <span style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--highlight)', textTransform:'uppercase', letterSpacing:'.1em' }}>Business</span>
               </div>
               <h4 style={{ fontFamily:'var(--fd)', fontSize:'1.1rem', fontWeight:700, marginBottom:9 }}>{s.title}</h4>
-              <p style={{ fontSize:'.86rem', color:'#665f72', lineHeight:1.65 }}>{s.desc}</p>
+              <p style={{ fontSize:'.86rem', color:'var(--text-secondary)', lineHeight:1.65 }}>{s.desc}</p>
             </div>
           ))}
         </div>
@@ -1623,7 +1686,7 @@ function Features() {
             <div className="slabel" style={{ marginBottom:14 }}>Features</div>
             <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.8rem)', fontWeight:800, lineHeight:1.1 }}>Everything you need.<br />Nothing you don't.</h2>
           </div>
-          <p style={{ maxWidth:320, color:'#665f72', fontSize:'.9rem', lineHeight:1.7 }}>Built for the way people actually get things done locally. Lightweight, fast, and designed to earn trust.</p>
+          <p style={{ maxWidth:320, color:'var(--text-secondary)', fontSize:'.9rem', lineHeight:1.7 }}>Built for the way people actually get things done locally. Lightweight, fast, and designed to earn trust.</p>
         </div>
         <div className="feat-grid" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:1, border:'1px solid var(--border)', borderRadius:14, overflow:'hidden' }}>
           {FEATURES_DATA.map((f,i) => (
@@ -1632,7 +1695,7 @@ function Features() {
               onMouseLeave={e => e.currentTarget.style.background='var(--bg-base)'}>
               <div style={{ width:44, height:44, borderRadius:'var(--radius-md)', background:'var(--accent-glow)', display:'flex', alignItems:'center', justifyContent:'center', marginBottom:16 }}><Icon name={f.icon} size={22} color="var(--accent)" /></div>
               <h3 style={{ fontFamily:'var(--fd)', fontSize:'1.1rem', fontWeight:700, marginBottom:9 }}>{f.title}</h3>
-              <p style={{ fontSize:'.875rem', color:'#6d6678', lineHeight:1.7 }}>{f.desc}</p>
+              <p style={{ fontSize:'.875rem', color:'var(--text-secondary)', lineHeight:1.7 }}>{f.desc}</p>
             </div>
           ))}
         </div>
@@ -1661,7 +1724,7 @@ function LiveTasks({ onOpenAuth }) {
               </div>
               <h3 style={{ fontFamily:'var(--fd)', fontSize:'.98rem', fontWeight:700, marginBottom:10, lineHeight:1.3 }}>{t.title}</h3>
               <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginBottom:12 }}>
-                {t.tags.map(tag => <span key={tag} style={{ background:'var(--bg-elevated)', border:'1px solid var(--border-strong)', color:'#7c7585', fontFamily:'var(--fm)', fontSize:'.58rem', padding:'2px 7px', borderRadius:3, textTransform:'uppercase', letterSpacing:'.06em' }}>{tag}</span>)}
+                {t.tags.map(tag => <span key={tag} style={{ background:'var(--bg-elevated)', border:'1px solid var(--border-strong)', color:'var(--text-muted)', fontFamily:'var(--fm)', fontSize:'.58rem', padding:'2px 7px', borderRadius:3, textTransform:'uppercase', letterSpacing:'.06em' }}>{tag}</span>)}
               </div>
               <div style={{ display:'flex', justifyContent:'space-between', paddingTop:10, borderTop:'1px solid var(--border)' }}>
                 <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)' }}>📍 Your area</span>
@@ -1682,13 +1745,13 @@ function Pricing({ onOpenAuth }) {
         <div style={{ marginBottom:38, textAlign:'center' }}>
           <div className="slabel" style={{ justifyContent:'center', marginBottom:14 }}>Pricing</div>
           <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.8rem)', fontWeight:800, lineHeight:1.1, marginBottom:14 }}>Simple. Fair. Transparent.</h2>
-          <p style={{ color:'#665f72', maxWidth:420, margin:'0 auto', lineHeight:1.7, fontSize:'.9rem' }}>No subscriptions. No hidden fees. We only make money when you do.</p>
+          <p style={{ color:'var(--text-secondary)', maxWidth:420, margin:'0 auto', lineHeight:1.7, fontSize:'.9rem' }}>No subscriptions. No hidden fees. We only make money when you do.</p>
         </div>
         <div className="price-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:18, maxWidth:760, margin:'0 auto' }}>
           <div style={{ background:'var(--bg-base)', border:'1px solid var(--border)', borderRadius:14, padding:'32px 28px' }}>
             <div style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:16 }}>For Creators</div>
             <div style={{ fontFamily:'var(--fd)', fontSize:'3rem', fontWeight:800, lineHeight:1, marginBottom:5 }}>Free</div>
-            <p style={{ color:'#6d6678', fontSize:'.875rem', marginBottom:24 }}>to post a task</p>
+            <p style={{ color:'var(--text-secondary)', fontSize:'.875rem', marginBottom:24 }}>to post a task</p>
             <Divider style={{ marginBottom:20 }} />
             {['Post unlimited tasks','Receive unlimited bids','Built-in messaging','Escrow payments — coming soon','Dispute resolution support'].map(item => (
               <div key={item} style={{ display:'flex', gap:9, alignItems:'center', marginBottom:10 }}>
@@ -1703,9 +1766,9 @@ function Pricing({ onOpenAuth }) {
             <div style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:16 }}>For Earners</div>
             <div style={{ display:'flex', alignItems:'baseline', gap:5, marginBottom:5 }}>
               <span style={{ fontFamily:'var(--fd)', fontSize:'3rem', fontWeight:800, lineHeight:1 }}>Free</span>
-              <span style={{ color:'#6d6678', fontSize:'.875rem' }}>during beta</span>
+              <span style={{ color:'var(--text-secondary)', fontSize:'.875rem' }}>during beta</span>
             </div>
-            <p style={{ color:'#6d6678', fontSize:'.875rem', marginBottom:24 }}>secure payouts coming soon</p>
+            <p style={{ color:'var(--text-secondary)', fontSize:'.875rem', marginBottom:24 }}>secure payouts coming soon</p>
             <Divider style={{ marginBottom:20 }} />
             {['Bid on any open task','Verified trust score','Instant escrow payouts — coming soon','Build a local reputation','Zero upfront cost'].map(item => (
               <div key={item} style={{ display:'flex', gap:9, alignItems:'center', marginBottom:10 }}>
@@ -1757,10 +1820,10 @@ function LandingAbout() {
           <div>
             <div className="slabel" style={{ marginBottom:18 }}>About ReLivR</div>
             <h2 style={{ fontFamily:'var(--fd)', fontSize:'clamp(1.8rem,3.5vw,2.6rem)', fontWeight:800, lineHeight:1.1, marginBottom:22 }}>Built for your<br />community.</h2>
-            <p style={{ color:'#665f72', lineHeight:1.8, marginBottom:18, fontSize:'.9rem' }}>ReLivR started with a simple observation: every community has thousands of talented people who need extra income, and thousands more who need help getting things done. We built the infrastructure to connect them safely.</p>
-            <p style={{ color:'#665f72', lineHeight:1.8, fontSize:'.9rem' }}>Every feature — from the escrow payment system to the trust score engine — was designed for real, local trust. No bloat. Just a fast, safe marketplace that works.</p>
+            <p style={{ color:'var(--text-secondary)', lineHeight:1.8, marginBottom:18, fontSize:'.9rem' }}>ReLivR started with a simple observation: every community has thousands of talented people who need extra income, and thousands more who need help getting things done. We built the infrastructure to connect them safely.</p>
+            <p style={{ color:'var(--text-secondary)', lineHeight:1.8, fontSize:'.9rem' }}>Every feature — from the escrow payment system to the trust score engine — was designed for real, local trust. No bloat. Just a fast, safe marketplace that works.</p>
           </div>
-          <div style={{ background:'var(--bg-base)', border:'1px solid var(--border)', borderRadius:14, padding:26, fontFamily:'var(--fm)', fontSize:'.78rem', lineHeight:2, color:'#7c7585' }}>
+          <div style={{ background:'var(--bg-base)', border:'1px solid var(--border)', borderRadius:14, padding:26, fontFamily:'var(--fm)', fontSize:'.78rem', lineHeight:2, color:'var(--text-muted)' }}>
             <div style={{ color:'var(--text-muted)', marginBottom:8, fontSize:'.6rem', textTransform:'uppercase', letterSpacing:'.1em' }}>// Task lifecycle</div>
             {[
               { k:'task.status',       v:"'open'",        c:'var(--amber)' },
@@ -1863,7 +1926,7 @@ function LaunchSection() {
         <div className="slabel" style={{ justifyContent:'center', marginBottom:14 }}>Full launch · 7 July 2026</div>
         <h2 style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(1.6rem,4vw,2.4rem)', marginBottom:22 }}>The countdown is on</h2>
         <div style={{ marginBottom:26 }}><Countdown target={LAUNCH_AT} /></div>
-        <p style={{ color:'#5f5970', marginBottom:20, lineHeight:1.7 }}>
+        <p style={{ color:'var(--text-secondary)', marginBottom:20, lineHeight:1.7 }}>
           We're in <strong>beta</strong> now — sign up to use ReLivR today as a founding member, or drop your email and we'll remind you the moment we fully launch.
         </p>
         {done ? (
@@ -1903,7 +1966,7 @@ function FeedbackSection() {
       <div style={{ maxWidth:560, margin:'0 auto', textAlign:'center' }}>
         <div className="slabel" style={{ justifyContent:'center', marginBottom:14 }}>Beta feedback</div>
         <h2 style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(1.6rem,4vw,2.4rem)', marginBottom:12 }}>Help us shape ReLivR</h2>
-        <p style={{ color:'#5f5970', marginBottom:24, lineHeight:1.7 }}>
+        <p style={{ color:'var(--text-secondary)', marginBottom:24, lineHeight:1.7 }}>
           We're building in the open during our beta, and <strong>any and all feedback is greatly appreciated</strong>. Found a bug, have an idea, or just want to say hi? Tell us.
         </p>
         {done ? (
@@ -1937,7 +2000,7 @@ function LaunchGate({ user, onLogout, onViewLanding }) {
         <h1 style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(2rem,5vw,3.2rem)', lineHeight:1.05, letterSpacing:'-.02em', marginBottom:16 }}>
           You're in, {user.displayName?.split(' ')[0] || 'friend'}.
         </h1>
-        <p style={{ color:'#5f5970', fontSize:'1.05rem', lineHeight:1.7, marginBottom:34, maxWidth:520, marginLeft:'auto', marginRight:'auto' }}>
+        <p style={{ color:'var(--text-secondary)', fontSize:'1.05rem', lineHeight:1.7, marginBottom:34, maxWidth:520, marginLeft:'auto', marginRight:'auto' }}>
           ReLivR opens to everyone on <strong>7 July 2026</strong>. Your account is reserved
           and you'll wear the <strong>★ Founding Member</strong> badge for being here from day one.
           We'll email you the moment the doors open — this page unlocks into the app automatically.
@@ -1986,7 +2049,7 @@ function PageWrapper({ title, subtitle, children, onNav }) {
     <div style={{ paddingTop:90 }}>
       <div style={{ borderBottom:'1px solid var(--border)', padding:'48px 24px 40px', background:'var(--bg-surface)' }}>
         <div style={{ maxWidth:900, margin:'0 auto' }}>
-          <button onClick={() => onNav('home')} style={{ background:'none', border:'none', color:'var(--text-muted)', fontFamily:'var(--fm)', fontSize:'.65rem', textTransform:'uppercase', letterSpacing:'.1em', cursor:'pointer', marginBottom:20, display:'flex', alignItems:'center', gap:6 }}>← Back to Home</button>
+          <BackButton onClick={() => onNav('home')} label="Back to Home" />
           <div style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', textTransform:'uppercase', letterSpacing:'.14em', marginBottom:12 }}>{subtitle}</div>
           <h1 style={{ fontFamily:'var(--fd)', fontSize:'clamp(2rem,4vw,3rem)', fontWeight:800, lineHeight:1.05 }}>{title}</h1>
         </div>
@@ -2002,7 +2065,7 @@ function SidebarPage({ title, subtitle, sections, children, onNav }) {
     <div style={{ paddingTop:90 }}>
       <div style={{ borderBottom:'1px solid var(--border)', padding:'48px 24px 40px', background:'var(--bg-surface)' }}>
         <div style={{ maxWidth:1100, margin:'0 auto' }}>
-          <button onClick={() => onNav('home')} style={{ background:'none', border:'none', color:'var(--text-muted)', fontFamily:'var(--fm)', fontSize:'.65rem', textTransform:'uppercase', letterSpacing:'.1em', cursor:'pointer', marginBottom:20, display:'flex', alignItems:'center', gap:6 }}>← Back to Home</button>
+          <BackButton onClick={() => onNav('home')} label="Back to Home" />
           <div style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--amber)', textTransform:'uppercase', letterSpacing:'.14em', marginBottom:12 }}>{subtitle}</div>
           <h1 style={{ fontFamily:'var(--fd)', fontSize:'clamp(2rem,4vw,3rem)', fontWeight:800, lineHeight:1.05 }}>{title}</h1>
         </div>
@@ -2031,7 +2094,7 @@ function ComingSoonPage({ title, subtitle, onNav }) {
       <div style={{ textAlign:'center', padding:'60px 20px' }}>
         <div style={{ fontSize:'3rem', marginBottom:16, opacity:.3 }}>🚧</div>
         <h2 style={{ fontFamily:'var(--fd)', fontSize:'1.4rem', fontWeight:800, marginBottom:12 }}>Coming Soon</h2>
-        <p style={{ color:'#5f5970', maxWidth:360, margin:'0 auto', lineHeight:1.7 }}>This page is being worked on and will be available shortly.</p>
+        <p style={{ color:'var(--text-secondary)', maxWidth:360, margin:'0 auto', lineHeight:1.7 }}>This page is being worked on and will be available shortly.</p>
         <button className="btn-s" style={{ marginTop:28 }} onClick={() => onNav('home')}>← Back to Home</button>
       </div>
     </PageWrapper>
@@ -2074,7 +2137,7 @@ function FeaturesPage({ onNav }) {
     <SidebarPage title="Platform Features" subtitle="Product" sections={sections} onNav={onNav}>
       <div id="overview"><h2>All Features</h2><p>ReLivR is built with a focused feature set designed around the realities of local, peer-to-peer work. Everything was chosen because it solves a real problem for real people.</p></div>
       <div id="matching"><h2>Smart Matching Engine</h2><p>When a task is posted, our matching engine automatically identifies earners whose skill profiles overlap with the task's skill tags using Jaccard similarity scoring. Earners are ranked by skill overlap score, average rating bonus (up to +20% for 5-star earners), and account longevity.</p></div>
-      <div id="trust"><h2>Trust Score System</h2><p>Every user has a trust score between 0 and 100, calculated from:</p><ul><li><strong style={{color:'#3b3548'}}>Identity (40pts)</strong> — verified Rhodes student email @ru.ac.za (30pts) + verified email or Google sign-in (10pts)</li><li><strong style={{color:'#3b3548'}}>Track record (40pts)</strong> — completed tasks (up to 20pts) + average rating (up to 20pts)</li><li><strong style={{color:'#3b3548'}}>Longevity (20pts)</strong> — 5 points per month, capped at 20</li><li><strong style={{color:'#3b3548'}}>Dispute penalty</strong> — -10pts per dispute raised against you</li></ul><div className="highlight"><p>Levels: Unverified (0–19) · New (20–49) · Established (50–79) · Verified (80–100)</p></div></div>
+      <div id="trust"><h2>Trust Score System</h2><p>Every user has a trust score between 0 and 100, calculated from:</p><ul><li><strong style={{color:'var(--text-primary)'}}>Identity (40pts)</strong> — verified Rhodes student email @ru.ac.za (30pts) + verified email or Google sign-in (10pts)</li><li><strong style={{color:'var(--text-primary)'}}>Track record (40pts)</strong> — completed tasks (up to 20pts) + average rating (up to 20pts)</li><li><strong style={{color:'var(--text-primary)'}}>Longevity (20pts)</strong> — 5 points per month, capped at 20</li><li><strong style={{color:'var(--text-primary)'}}>Dispute penalty</strong> — -10pts per dispute raised against you</li></ul><div className="highlight"><p>Levels: Unverified (0–19) · New (20–49) · Established (50–79) · Verified (80–100)</p></div></div>
       <div id="escrow"><h2>Escrow System</h2><p>Our escrow uses an authorise-then-capture model through our payment provider, Paystack. Funds are authorised when escrow is funded, but no actual charge occurs until the creator releases payment. The 10% platform fee is deducted from the earner's payout, not added to the creator's charge.</p></div>
       <div id="messaging"><h2>Messaging</h2><p>Built-in direct messaging with task-scoped threads, pre-bid inquiry messages, read receipts, and message history preserved for dispute evidence. New messages reach you by email (instantly or in a daily digest — your choice in Profile → Security).</p></div>
       <div id="admin"><h2>Admin Tools</h2><p>The admin dashboard provides a full dispute queue with FIFO ordering, complete message logs for any task, escrow state visibility, user management, audit timelines, and one-click refund or release from the dispute detail view.</p></div>
@@ -2122,7 +2185,7 @@ function TrustSafetyPage({ onNav }) {
       <div id="trust-scores"><h2>Trust Scores</h2><p>Every user has a visible trust score calculated from verifiable signals: verified identity, completed transactions, earned ratings, and account history. A high trust score is not a guarantee of quality, but it is a meaningful signal that a user has a real, verified identity and a track record on the platform.</p></div>
       <div id="verification"><h2>Identity Verification</h2><p>Verifying a South African university student email earns a verified-student badge and boosts your trust. Email verification and Google sign-in further confirm a real identity and help prevent anonymous bad-faith accounts from accumulating trust.</p></div>
       <div id="escrow"><h2>Payment Safety</h2><p>ReLivR never holds your money directly — payments are processed and held in escrow by our payment provider, Paystack, a PCI-DSS-compliant processor. Your card details are never stored by ReLivR.</p></div>
-      <div id="reporting"><h2>Reporting Issues</h2><p>If you encounter a problem:</p><ul><li><strong style={{color:'#3b3548'}}>Raise a dispute</strong> — for unresolved task delivery issues. Freezes escrow immediately.</li><li><strong style={{color:'#3b3548'}}>Report a user</strong> — for conduct violations, harassment, or fraud.</li><li><strong style={{color:'#3b3548'}}>Contact support</strong> — for account issues or technical problems.</li></ul></div>
+      <div id="reporting"><h2>Reporting Issues</h2><p>If you encounter a problem:</p><ul><li><strong style={{color:'var(--text-primary)'}}>Raise a dispute</strong> — for unresolved task delivery issues. Freezes escrow immediately.</li><li><strong style={{color:'var(--text-primary)'}}>Report a user</strong> — for conduct violations, harassment, or fraud.</li><li><strong style={{color:'var(--text-primary)'}}>Contact support</strong> — for account issues or technical problems.</li></ul></div>
       <div id="prohibited"><h2>Prohibited Conduct</h2><p>The following result in immediate account suspension:</p><ul><li>Off-platform payment requests or arrangements</li><li>Creating fake reviews or inflating trust scores</li><li>Harassment, threats, or discriminatory language</li><li>Posting tasks or services that are illegal under South African law</li><li>Academic dishonesty services</li></ul></div>
     </SidebarPage>
   )
@@ -2182,13 +2245,13 @@ function PrivacyPage({ onNav }) {
     <SidebarPage title="Privacy Policy" subtitle="Legal" sections={sections} onNav={onNav}>
       <p style={{ color:'var(--text-muted)', fontFamily:'var(--fm)', fontSize:'.62rem', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:24 }}>Last updated: 28 June 2026</p>
       <div id="intro"><h2>1. Introduction</h2><p>ReLivR is committed to protecting your personal information and processes it in accordance with the Protection of Personal Information Act 4 of 2013 (POPIA) and other applicable South African law. This policy explains what we collect, how we use it, who we share it with, and your rights.</p></div>
-      <div id="collect"><h2>2. What We Collect</h2><ul><li>Identity and profile information — your name, display name, profile photo, headline, skills, and any bio or services you add</li><li>Identity verification — your South African ID number, collected at sign-up to confirm you are a real person. It is <strong style={{color:'#3b3548'}}>encrypted at rest</strong>, never shown to other users, and used only for verification and fraud prevention.</li><li>Contact information — email address, phone number, and physical or campus address</li><li>Account information — login credentials and preferences</li><li>Payment and transaction information — once payments are enabled</li><li>Location — your campus or area (which you choose from a list) helps facilitate tasks. Separately, if you tap "Sort by distance" on Browse Tasks or Local, your browser asks your device for its current position and uses it — on your device only — to sort results by proximity. That coordinate is never sent to or stored on our servers; it exists only in your browser for that browsing session.</li><li>Communications — messages with other users and with support</li><li>Technical and device information — IP address, device/browser type, a hashed identifier derived from your browser (used to detect new sign-ins), cookies, local storage and usage data</li><li>Content you create — tasks, bids, reviews and ratings, and (for businesses) listings and deal posts</li><li>Social and activity information — the users and businesses you follow and the deals you redeem</li></ul><p>Some information (name, email, password) is required to use the Platform; other information is optional.</p></div>
+      <div id="collect"><h2>2. What We Collect</h2><ul><li>Identity and profile information — your name, display name, profile photo, headline, skills, and any bio or services you add</li><li>Identity verification — your South African ID number, collected at sign-up to confirm you are a real person. It is <strong style={{color:'var(--text-primary)'}}>encrypted at rest</strong>, never shown to other users, and used only for verification and fraud prevention.</li><li>Contact information — email address, phone number, and physical or campus address</li><li>Account information — login credentials and preferences</li><li>Payment and transaction information — once payments are enabled</li><li>Location — your campus or area (which you choose from a list) helps facilitate tasks. Separately, if you tap "Sort by distance" on Browse Tasks or Local, your browser asks your device for its current position and uses it — on your device only — to sort results by proximity. That coordinate is never sent to or stored on our servers; it exists only in your browser for that browsing session.</li><li>Communications — messages with other users and with support</li><li>Technical and device information — IP address, device/browser type, a hashed identifier derived from your browser (used to detect new sign-ins), cookies, local storage and usage data</li><li>Content you create — tasks, bids, reviews and ratings, and (for businesses) listings and deal posts</li><li>Social and activity information — the users and businesses you follow and the deals you redeem</li></ul><p>Some information (name, email, password) is required to use the Platform; other information is optional.</p></div>
       <div id="lawful"><h2>3. Lawful Basis for Processing</h2><p>We process personal information where you have consented, where it is necessary to perform our contract with you, to comply with a legal obligation, to protect a legitimate interest, or as otherwise permitted by law — consistent with POPIA's eight conditions for lawful processing.</p></div>
-      <div id="use"><h2>4. How We Use It</h2><p>We use your information to create and manage accounts, match users with taskers, process payments, facilitate communication, verify identity and prevent fraud, provide support, improve and secure the Platform, comply with legal obligations, and send service-related notifications. <strong style={{color:'#3b3548'}}>We do not sell your personal information.</strong></p></div>
+      <div id="use"><h2>4. How We Use It</h2><p>We use your information to create and manage accounts, match users with taskers, process payments, facilitate communication, verify identity and prevent fraud, provide support, improve and secure the Platform, comply with legal obligations, and send service-related notifications. <strong style={{color:'var(--text-primary)'}}>We do not sell your personal information.</strong></p></div>
       <div id="share"><h2>5. Who We Share With</h2><p>We share personal information only as needed to operate the Platform:</p><ul><li>Payment processors (e.g. Paystack), once payments are enabled</li><li>Cloud hosting and database providers (e.g. Railway, Vercel, Neon)</li><li>Image-hosting providers for photos you upload (e.g. Cloudinary)</li><li>Authentication and email providers (e.g. Google / Gmail, and email-delivery services)</li><li>Analytics providers that help us improve the Platform</li><li>Other users and businesses when you interact — for example, your display name is shared with the other party when you post a task, bid, message or leave a review; and when you redeem a business's deal, your name is shared with that business. Your public profile and reviews are visible to other users.</li><li>Law enforcement or regulators where required by law</li></ul></div>
       <div id="transfers"><h2>6. Cross-Border Transfers</h2><p>Some of our providers process or store information outside South Africa, including in the European Union and the United States. Where information is transferred across borders, we ensure an adequate level of protection consistent with section 72 of POPIA.</p></div>
       <div id="retention"><h2>7. Data Retention</h2><p>We keep personal information only as long as necessary, then delete or anonymise it. Account data is kept while your account is active (and anonymised when you delete it); payment records are kept for the period required by tax and financial-record laws (generally up to five years, once payments are enabled); support communications and security logs are kept for a limited period; and consent records are kept until you change them. We may retain information longer where required by law or to resolve disputes.</p></div>
-      <div id="rights"><h2>8. Your Rights Under POPIA</h2><p>You may access your information, correct it, request deletion (where permitted), object to certain processing (including direct marketing), withdraw consent, and request a copy of your data in a portable format. You can download your data and delete your account at any time from <strong style={{color:'#3b3548'}}>Profile → Security</strong>. You may also lodge a complaint with the Information Regulator.</p><div className="highlight"><p>Information Regulator: <a href="https://inforeg.org.za">inforeg.org.za</a> · complaints.IR@inforegulator.org.za</p></div></div>
+      <div id="rights"><h2>8. Your Rights Under POPIA</h2><p>You may access your information, correct it, request deletion (where permitted), object to certain processing (including direct marketing), withdraw consent, and request a copy of your data in a portable format. You can download your data and delete your account at any time from <strong style={{color:'var(--text-primary)'}}>Profile → Security</strong>. You may also lodge a complaint with the Information Regulator.</p><div className="highlight"><p>Information Regulator: <a href="https://inforeg.org.za">inforeg.org.za</a> · complaints.IR@inforegulator.org.za</p></div></div>
       <div id="automated"><h2>9. Automated Processing &amp; Profiling</h2><p>We use limited automated processing to operate the Platform — for example, matching tasks with taskers, calculating a reliability score from on-platform activity, and screening for fraud and abuse. These do not produce legal consequences for you without human involvement, and you may contact us to query a decision that significantly affects you.</p></div>
       <div id="children"><h2>10. Children &amp; Special Information</h2><p>ReLivR is intended for users aged 18 and older and is not directed at children. We do not knowingly collect personal information from children, and we do not seek to collect special personal information (such as health, race or biometric data). Please do not submit such information through the Platform.</p></div>
       <div id="marketing"><h2>11. Direct Marketing</h2><p>We send service-related messages (security, account and task notifications) as part of providing the Platform. We only send marketing communications where permitted by law, and you can opt out at any time using the unsubscribe option or your notification settings (Profile → Security), where you can choose instant, daily-digest, or no activity emails.</p></div>
@@ -2281,7 +2344,7 @@ function ContactPage({ onNav }) {
     <PageWrapper title="Contact Us" subtitle="Support" onNav={onNav}>
       <div className="about-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:48 }}>
         <div>
-          <p style={{ color:'#5f5970', lineHeight:1.8, marginBottom:28, fontSize:'.9rem' }}>Have a question, problem, or feedback? We read every message and respond within 24 hours on business days.</p>
+          <p style={{ color:'var(--text-secondary)', lineHeight:1.8, marginBottom:28, fontSize:'.9rem' }}>Have a question, problem, or feedback? We read every message and respond within 24 hours on business days.</p>
           <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
             {[
               { icon:'message', label:'General enquiries', value:'hello@reliv.co.za' },
@@ -2304,7 +2367,7 @@ function ContactPage({ onNav }) {
             <div style={{ textAlign:'center', padding:'40px 20px' }}>
               <div style={{ fontSize:'2.5rem', marginBottom:12 }}>✓</div>
               <div style={{ fontFamily:'var(--fd)', fontSize:'1.3rem', fontWeight:800, marginBottom:8 }}>Message sent!</div>
-              <p style={{ color:'#5f5970', fontSize:'.875rem' }}>We'll get back to you within 24 hours.</p>
+              <p style={{ color:'var(--text-secondary)', fontSize:'.875rem' }}>We'll get back to you within 24 hours.</p>
             </div>
           ) : (
             <form onSubmit={submit} style={{ display:'flex', flexDirection:'column', gap:14 }}>
@@ -2365,12 +2428,12 @@ function ReportPage({ onNav }) {
 
   return (
     <PageWrapper title="Report an Issue" subtitle="Support" onNav={onNav}>
-      <p style={{ color:'#5f5970', lineHeight:1.8, marginBottom:32, fontSize:'.9rem', maxWidth:560 }}>Use this form to report a user, task, or platform issue. All reports are reviewed within 24 hours and kept confidential.</p>
+      <p style={{ color:'var(--text-secondary)', lineHeight:1.8, marginBottom:32, fontSize:'.9rem', maxWidth:560 }}>Use this form to report a user, task, or platform issue. All reports are reviewed within 24 hours and kept confidential.</p>
       {sent ? (
         <div style={{ textAlign:'center', padding:'40px 20px', maxWidth:400 }}>
           <div style={{ fontSize:'2.5rem', marginBottom:12 }}>✓</div>
           <div style={{ fontFamily:'var(--fd)', fontSize:'1.3rem', fontWeight:800, marginBottom:8 }}>Report submitted</div>
-          <p style={{ color:'#5f5970', fontSize:'.875rem' }}>Our team will review your report and take appropriate action.</p>
+          <p style={{ color:'var(--text-secondary)', fontSize:'.875rem' }}>Our team will review your report and take appropriate action.</p>
         </div>
       ) : (
         <form onSubmit={submit} style={{ display:'flex', flexDirection:'column', gap:16, maxWidth:560 }}>
@@ -2521,7 +2584,7 @@ function ChatIcon({ size = 18 }) {
   )
 }
 
-function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch }) {
+function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch, theme, onToggleTheme }) {
   const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -2626,6 +2689,7 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch 
             })}
           </nav>
           <div style={{ borderTop:'1px solid var(--border)', padding:'6px 0', marginTop:2 }}>
+            {onToggleTheme && <button onClick={onToggleTheme} style={footRow}><Icon name={theme==='dark'?'sun':'moon'} size={17} color="var(--text-muted)" />{theme==='dark'?'Light mode':'Dark mode'}</button>}
             <button onClick={() => { window.dispatchEvent(new Event('relivr:show-walkthrough')); setDrawerOpen(false) }} style={footRow}><Icon name="target" size={17} color="var(--text-muted)" />How ReLivR works</button>
             {onViewLanding && <button onClick={() => { onViewLanding(); setDrawerOpen(false) }} style={footRow}><Icon name="home" size={17} color="var(--text-muted)" />View public site</button>}
             <button onClick={() => { setDrawerOpen(false); logout() }} style={{ ...footRow, color:'var(--danger)' }}><Icon name="arrow" size={17} color="var(--danger)" style={{ transform:'rotate(180deg)' }} />Sign out</button>
@@ -2711,6 +2775,10 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch 
                       onMouseEnter={e => e.currentTarget.style.background='var(--bg-hover)'}
                       onMouseLeave={e => e.currentTarget.style.background='none'}>{item.label}</button>
                   ))}
+                  {onToggleTheme && <button onClick={onToggleTheme}
+                    style={{ display:'block', width:'100%', textAlign:'left', padding:'11px 16px', background:'none', border:'none', borderTop:'1px solid var(--border)', fontSize:'.875rem', color:'var(--text-secondary)', cursor:'pointer' }}
+                    onMouseEnter={e => e.currentTarget.style.background='var(--bg-hover)'}
+                    onMouseLeave={e => e.currentTarget.style.background='none'}>{theme==='dark'?'Light mode':'Dark mode'}</button>}
                   <button onClick={() => { window.dispatchEvent(new Event('relivr:show-walkthrough')); setMenuOpen(false) }}
                     style={{ display:'block', width:'100%', textAlign:'left', padding:'11px 16px', background:'none', border:'none', borderTop:'1px solid var(--border)', fontSize:'.875rem', color:'var(--text-secondary)', cursor:'pointer' }}
                     onMouseEnter={e => e.currentTarget.style.background='var(--bg-hover)'}
@@ -2786,7 +2854,7 @@ function Dashboard({ setPage, setSelectedTask }) {
           <DCard key={task.task_id} onClick={() => { setSelectedTask(task.task_id); setPage('task-detail') }} style={{ display:'flex', alignItems:'center', gap:16, padding:'14px 18px' }}>
             <div style={{ flex:1 }}>
               <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:5 }}>
-                <Badge variant={task.status}>{task.status.replace('_',' ')}</Badge>
+                <Badge variant={taskState(task).variant}>{taskState(task).label}</Badge>
                 <span style={{ fontFamily:'var(--font-display)', fontWeight:600, fontSize:'0.95rem' }}>{task.title}</span>
               </div>
               <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>{task.skill_tags.slice(0,3).map(t => <Tag key={t}>{t}</Tag>)}</div>
@@ -3086,7 +3154,7 @@ function TaskBrowse({ setPage, setSelectedTask, openProfile }) {
               <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:12 }}>{task.skill_tags.slice(0,3).map(t => <Tag key={t}>{t}</Tag>)}</div>
               <Divider style={{ marginBottom:10 }} />
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
-                <Badge variant={task.status}>{task.status.replace('_',' ')}</Badge>
+                <Badge variant={taskState(task).variant}>{taskState(task).label}</Badge>
                 <Mono>{bidCount(task.task_id)} bid{bidCount(task.task_id)!==1?'s':''} · Due {new Date(task.deadline).toLocaleDateString()}</Mono>
               </div>
           </DCard>
@@ -3456,11 +3524,11 @@ function TaskDetail({ taskId, setPage, openChat }) {
 
   return (
     <div className="page-enter" style={{ maxWidth:920 }}>
-      <button onClick={() => { if (window.history.length > 1) window.history.back(); else setPage('tasks-browse') }} style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'0.78rem', fontFamily:'var(--font-mono)', textTransform:'uppercase', letterSpacing:'0.08em', cursor:'pointer', marginBottom:20 }}>← Back</button>
+      <BackButton onClick={() => { if (window.history.length > 1) window.history.back(); else setPage('tasks-browse') }} />
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:24, flexWrap:'wrap', gap:12 }}>
         <div>
           <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:8 }}>
-            <Badge variant={currentStatus}>{currentStatus?.replace('_',' ')}</Badge>
+            <Badge variant={taskState({ ...task, status: currentStatus }).variant}>{taskState({ ...task, status: currentStatus }).label}</Badge>
             <Mono>Task #{task.task_id}</Mono>
           </div>
           <h1 style={{ fontFamily:'var(--font-display)', fontSize:'1.9rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.03em', lineHeight:1.1, maxWidth:580 }}>{task.title}</h1>
@@ -3653,7 +3721,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
             <textarea value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description:e.target.value }))} style={{ minHeight:120 }} />
           </div>
           <Input label="Budget (R)" type="number" value={editForm.budget} onChange={e => setEditForm(f => ({ ...f, budget:e.target.value }))} />
-          <Input label="Deadline" type="date" value={editForm.deadline} onChange={e => setEditForm(f => ({ ...f, deadline:e.target.value }))} />
+          <Input label="Deadline" type="date" min={new Date().toISOString().slice(0,10)} value={editForm.deadline} onChange={e => setEditForm(f => ({ ...f, deadline:e.target.value }))} />
           <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
             <Btn variant="ghost" onClick={() => setEditOpen(false)} disabled={editSaving}>Cancel</Btn>
             <Btn variant="primary" loading={editSaving} onClick={saveEdit}>Save changes</Btn>
@@ -3882,12 +3950,12 @@ function TaskNew({ setPage, setSelectedTask }) {
         </div>}
         {step===1&&<div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:18 }}>
           <Input label="Budget (R)" type="number" min="1" placeholder="e.g. 500" value={budget} onChange={e=>{setBudget(e.target.value);setErrors(v=>({...v,budget:null}))}} error={errors.budget} />
-          <Input label="Deadline" type="date" value={deadline} onChange={e=>{setDead(e.target.value);setErrors(v=>({...v,deadline:null}))}} error={errors.deadline} />
+          <Input label="Deadline" type="date" min={new Date().toISOString().slice(0,10)} value={deadline} onChange={e=>{setDead(e.target.value);setErrors(v=>({...v,deadline:null}))}} error={errors.deadline} />
           <SelectField label="Expected duration" value={duration} onChange={e=>setDuration(e.target.value)}>
             <option value="">Not sure</option>
             {TASK_DURATIONS.map(d => <option key={d} value={d}>{d}</option>)}
           </SelectField>
-          <Input label="Bidding closes" type="date" value={bidsClose} onChange={e=>setBidsClose(e.target.value)} hint="Optional — no new bids after this date" />
+          <Input label="Bidding closes" type="date" min={new Date().toISOString().slice(0,10)} value={bidsClose} onChange={e=>setBidsClose(e.target.value)} hint="Optional — no new bids after this date" />
         </div>}
         {step===2&&<Input label="Skill Tags (comma separated)" placeholder="e.g. react, node.js, postgres" value={tags} onChange={e=>{setTags(e.target.value);setErrors(v=>({...v,tags:null}))}} hint="Used to automatically match and notify earners" error={errors.tags} />}
         {step===3&&<div style={{ display:'flex', flexDirection:'column', gap:16 }}>
@@ -4097,7 +4165,7 @@ function MyTasks({ setPage, setSelectedTask }) {
             <DCard key={task.task_id} onClick={() => { if (isDraft) { editDraft(task) } else { setSelectedTask(task.task_id); setPage('task-detail') } }} style={{ display:'flex', alignItems:'center', gap:20, padding:'16px 20px', flexWrap:'wrap', ...(isDraft?{ borderStyle:'dashed' }:{}) }}>
               <div style={{ flex:1, minWidth:180 }}>
                 <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:6 }}>
-                  <Badge variant={task.status}>{task.status.replace('_',' ')}</Badge>
+                  <Badge variant={taskState(task).variant}>{taskState(task).label}</Badge>
                   <span style={{ fontFamily:'var(--font-display)', fontWeight:600 }}>{task.title}</span>
                 </div>
                 <div style={{ display:'flex', gap:6 }}>{task.skill_tags.slice(0,3).map(t=><Tag key={t}>{t}</Tag>)}</div>
@@ -4212,7 +4280,9 @@ function Suggestions({ setPage, setSelectedTask }) {
   const { state } = useStore()
   const toast = useToast()
   const [dismissed, setDismissed] = useState(new Set())
-  const suggestions = MOCK_SUGGESTIONS.filter(s=>!dismissed.has(s.task_id)).map(s => { const live=state.tasks.find(t=>t.task_id===s.task_id); return live?{...s,status:live.status}:s })
+  // Data isolation: suggestions were fictional mock tasks shown to real users.
+  // Until a real matching endpoint exists this page honestly shows its empty state.
+  const suggestions = []
   return (
     <div className="page-enter">
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:28 }}>
@@ -5025,7 +5095,7 @@ function LocalBrowse({ setPage }) {
     const avatarSize = 'clamp(76px,20vw,150px)'
     return (
       <div className="page-enter" style={{ maxWidth:935, margin:'0 auto' }}>
-        <button onClick={() => { setSelected(null); setLightbox(null) }} style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'0.78rem', fontFamily:'var(--font-mono)', letterSpacing:'0.06em', cursor:'pointer', marginBottom:18 }}>← Back to Local</button>
+        <BackButton onClick={() => { setSelected(null); setLightbox(null) }} label="Back to Local" />
 
         {/* Profile header */}
         <div style={{ display:'flex', flexDirection:'column', gap:18, paddingBottom:24, borderBottom:'1px solid var(--border)' }}>
@@ -5407,7 +5477,7 @@ function BusinessForm({ business, onDone, onCancel }) {
 
   return (
     <div className="page-enter" style={{ maxWidth:680 }}>
-      <button onClick={onCancel} style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'0.78rem', fontFamily:'var(--font-mono)', letterSpacing:'0.06em', cursor:'pointer', marginBottom:16 }}>← Back to listings</button>
+      <BackButton onClick={onCancel} label="Back to listings" />
       <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.5rem', marginBottom:18 }}>{isNew ? 'Add a business' : 'Edit business'}</h1>
 
       <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
@@ -5659,10 +5729,9 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
   return (
     <div className="page-enter" style={{ maxWidth:840 }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
-        <button onClick={() => { if (window.history.length>1) window.history.back(); else setPage('tasks-browse') }}
-          style={{ background:'none', border:'none', color:'var(--text-muted)', fontSize:'0.78rem', fontFamily:'var(--font-mono)', letterSpacing:'0.06em', cursor:'pointer' }}>← Back</button>
+        <BackButton onClick={() => { if (window.history.length>1) window.history.back(); else setPage('tasks-browse') }} style={{ marginBottom:0 }} />
         <div style={{ display:'flex', gap:8 }}>
-          <Btn variant="ghost" size="sm" onClick={share}>🔗 Share</Btn>
+          <Btn variant="ghost" size="sm" onClick={share}><Icon name="link" size={14} /> Share</Btn>
           {isMe && <Btn variant="secondary" size="sm" onClick={() => setPage('profile')}>Edit profile</Btn>}
         </div>
       </div>
@@ -5799,7 +5868,7 @@ function PublicProfile({ userId, setPage, openChat, openProfile }) {
           <DCard key={t.task_id} hover={false} style={{ display:'flex', alignItems:'center', gap:16, padding:'14px 18px' }}>
             <div style={{ flex:1 }}>
               <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:6, flexWrap:'wrap' }}>
-                {tab==='posted' && <Badge variant={t.status}>{t.status?.replace('_',' ')}</Badge>}
+                {tab==='posted' && <Badge variant={taskState(t).variant}>{taskState(t).label}</Badge>}
                 {tab==='completed' && <Badge variant="completed">completed</Badge>}
                 <span style={{ fontFamily:'var(--font-display)', fontWeight:600 }}>{t.title}</span>
               </div>
@@ -6507,7 +6576,7 @@ const bizTaStyle = { width:'100%', padding:'9px 12px', borderRadius:10, border:'
 const bizGhostBtn = { padding:'7px 12px', borderRadius:9, border:'1px solid var(--border)', background:'transparent', color:'var(--text-secondary)', fontSize:'.82rem', fontWeight:600, fontFamily:'var(--font-body)', cursor:'pointer' }
 const bizTab = (active) => ({ padding:'10px 16px', border:'none', borderBottom:`2px solid ${active?'var(--accent)':'transparent'}`, borderTopLeftRadius:8, borderTopRightRadius:8, background:active?'var(--accent-glow)':'transparent', color:active?'var(--accent)':'var(--text-secondary)', fontSize:'.9rem', fontWeight:700, fontFamily:'var(--font-body)', cursor:'pointer', transition:'background 140ms var(--ease), color 140ms var(--ease)' })
 
-function BusinessDashboard({ onLogout, onViewLanding }) {
+function BusinessDashboard({ onLogout, onViewLanding, theme, onToggleTheme }) {
   const { user } = useAuth()
   const token = () => localStorage.getItem('rl_token')
   const [tab, setTab]         = useState('page')   // 'page' | 'analytics'
@@ -6553,6 +6622,7 @@ function BusinessDashboard({ onLogout, onViewLanding }) {
           <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
             <span style={{ fontFamily:'var(--font-mono)', fontSize:'.72rem', color:'var(--text-muted)' }}>{biz?.name || user?.email}</span>
             {biz?.follower_count > 0 && <span style={{ fontFamily:'var(--font-mono)', fontSize:'.68rem', fontWeight:600, color:'var(--accent)', background:'var(--accent-glow)', borderRadius:999, padding:'3px 10px', whiteSpace:'nowrap' }}>♡ {biz.follower_count} follower{biz.follower_count===1?'':'s'}</span>}
+            {onToggleTheme && <button onClick={onToggleTheme} style={bizGhostBtn} aria-label="Toggle dark mode"><Icon name={theme==='dark'?'sun':'moon'} size={15} /></button>}
             {onViewLanding && <button onClick={onViewLanding} style={bizGhostBtn}>Public site</button>}
             <button onClick={onLogout} style={{ ...bizGhostBtn, color:'var(--danger)' }}>Sign out</button>
           </div>
@@ -6736,7 +6806,7 @@ function DealForm({ biz, deal, onDone, onCancel }) {
 
   return (
     <div className="page-enter">
-      <button onClick={onCancel} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', cursor: 'pointer', marginBottom: 16 }}>← Back to deals</button>
+      <BackButton onClick={onCancel} label="Back to deals" />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 24, alignItems: 'start' }}>
         <DCard hover={false} style={{ padding: 22 }}>
           <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.25rem', marginBottom: 16 }}>{isNew ? 'New deal' : 'Edit deal'}</h2>
@@ -6852,7 +6922,7 @@ function BusinessCatalog({ biz }) {
 
   if (editing) return (
     <div className="page-enter" style={{ maxWidth: 560 }}>
-      <button onClick={() => setEditing(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '.78rem', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '.08em', cursor: 'pointer', marginBottom: 16 }}>← Back to catalog</button>
+      <BackButton onClick={() => setEditing(null)} label="Back to catalog" />
       <DCard hover={false}>
         <Mono size="0.68rem" color="var(--text-secondary)" style={{ display: 'block', marginBottom: 16 }}>{editing === 'new' ? 'New catalog item' : 'Edit item'}</Mono>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -7075,8 +7145,11 @@ function AvailabilityManager({ hostType }) {
   const load = () => fetch(`${API_BASE}/scheduling/slots/mine`, { headers: { Authorization: `Bearer ${token()}` } })
     .then(r => r.ok ? r.json() : { slots: [] }).then(d => setSlots((d.slots || []).filter(s => s.host_type === hostType))).catch(() => setSlots([]))
   useEffect(() => { load() }, []) // eslint-disable-line
+  const todayStr = new Date().toISOString().slice(0, 10)
   async function addSlot() {
     if (!form.date || !form.start || !form.end) { toast('Pick a date and start/end times', 'error'); return }
+    if (form.end <= form.start) { toast('End time must be after the start time', 'error'); return }
+    if (new Date(`${form.date}T${form.start}`) <= new Date()) { toast("That slot is in the past — pick a future date and time", 'error'); return }
     const startsAt = new Date(`${form.date}T${form.start}`).toISOString()
     const endsAt = new Date(`${form.date}T${form.end}`).toISOString()
     setSaving(true)
@@ -7096,9 +7169,9 @@ function AvailabilityManager({ hostType }) {
       <DCard hover={false} style={{ marginBottom: 16 }}>
         <Mono size="0.68rem" color="var(--accent)" style={{ display: 'block', marginBottom: 12 }}>Add availability</Mono>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12, alignItems: 'end' }}>
-          <Input label="Date" type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+          <Input label="Date" type="date" min={todayStr} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
           <Input label="From" type="time" value={form.start} onChange={e => setForm(f => ({ ...f, start: e.target.value }))} />
-          <Input label="To" type="time" value={form.end} onChange={e => setForm(f => ({ ...f, end: e.target.value }))} />
+          <Input label="To" type="time" min={form.start || undefined} value={form.end} onChange={e => setForm(f => ({ ...f, end: e.target.value }))} />
         </div>
         <Input label="Note (optional)" value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} placeholder={hostType === 'business' ? 'e.g. Walk-in haircut' : 'e.g. Tutoring session'} style={{ marginTop: 12 }} />
         <Btn size="sm" loading={saving} onClick={addSlot} style={{ marginTop: 12 }}>Add slot</Btn>
@@ -8756,6 +8829,15 @@ export default function App() {
   const initialLoc = parseLocation()
   const [view, setView] = useState(initialLoc.view)
   const isMobile = useIsMobile()
+  // Dark mode: device preference, persisted (rl_theme survives logout on purpose).
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem('rl_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') } catch { return 'light' }
+  })
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    try { localStorage.setItem('rl_theme', theme) } catch { /* ignore */ }
+  }, [theme])
+  const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark')
   const [authModal, setAuthModal] = useState(null)
   const [dashPage, setDashPage]   = useState(initialLoc.dashPage || 'tasks-browse')
   const [selectedTask,    setSelectedTask]    = useState(initialLoc.taskId || null)
@@ -9014,10 +9096,16 @@ export default function App() {
         headers: { Authorization: `Bearer ${token}` },
       }).catch(() => {})
     }
-    // Clear all stored state
+    // Clear all stored state — including per-user keys, so nothing from this
+    // account (intent, draft handoffs, pending deep-links) leaks to the next
+    // person who signs in on this browser.
     localStorage.removeItem('rl_token')
     localStorage.removeItem('rl_user')
+    localStorage.removeItem('rl_intent')
     sessionStorage.removeItem('rl_view')
+    sessionStorage.removeItem('rl_edit_draft')
+    sessionStorage.removeItem('rl_pending_biz')
+    sessionStorage.removeItem('rl_pending_toast')
     setUser(null)
     setPendingOnboarding(false)
     setView('landing')
@@ -9193,11 +9281,11 @@ export default function App() {
           )}
           {/* Business partners get their own self-contained dashboard surface. */}
           {view==='dashboard' && user && !isAppLocked(user) && user.role==='business' && (
-            <BusinessDashboard onLogout={logout} onViewLanding={() => navigate('landing')} />
+            <BusinessDashboard onLogout={logout} onViewLanding={() => navigate('landing')} theme={theme} onToggleTheme={toggleTheme} />
           )}
           {view==='dashboard' && user && !isAppLocked(user) && user.role!=='business' && (
             <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column', background:'var(--bg-base)' }}>
-              <TopBar page={dashPage} setPage={setDashPage} unreadCount={unreadCount} onGoHome={goAppHome} onViewLanding={() => navigate('landing')} onSearch={(q) => { setSearchQuery(q); setDashPage('search') }} />
+              <TopBar page={dashPage} setPage={setDashPage} unreadCount={unreadCount} onGoHome={goAppHome} onViewLanding={() => navigate('landing')} onSearch={(q) => { setSearchQuery(q); setDashPage('search') }} theme={theme} onToggleTheme={toggleTheme} />
               <main className="dash-main" style={{ flex:1, width:'100%', maxWidth:1280, margin:'0 auto', padding:'28px 24px 60px' }}>
                 {renderDashPage()}
               </main>
