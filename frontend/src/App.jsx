@@ -176,7 +176,10 @@ _style.textContent = `
   --ring:          0 0 0 3px rgba(168,85,247,.3);
 }
 :root[data-theme="dark"] .prose h3, :root[data-theme="dark"] .prose .highlight p { color:var(--text-primary); }
-html { scroll-behavior: smooth; font-size: 16px; overflow-x: hidden; }
+/* NB: no overflow-x on <html> — clipping the root element makes Chromium treat
+   <html> (not the viewport) as the scroller, which breaks precision-trackpad
+   scrolling. The horizontal clamp lives on <body> alone. */
+html { scroll-behavior: smooth; font-size: 16px; }
 body {
   background: var(--bg-base); color: var(--text-primary);
   font-family: var(--font-body); font-size: 15px; line-height: 1.6;
@@ -290,7 +293,7 @@ label { font-family:var(--fm); font-size:.62rem; color:var(--text-muted); text-t
 }
 
 /* ── Native PWA feel ── */
-html, body { overscroll-behavior-y: contain; }
+body { overscroll-behavior-y: contain; } /* body only — on <html> it interferes with trackpad wheel delta */
 button, nav { -webkit-tap-highlight-color: transparent; }
 button { touch-action: manipulation; user-select: none; }
 button:active { transform: scale(.97); }
