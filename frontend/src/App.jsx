@@ -141,6 +141,7 @@ _style.textContent = `
    keeps contrast on dark grounds; --highlight flips to a deep plum so the hero
    swash reads with light text on it. Toggled via data-theme (persisted). */
 :root[data-theme="dark"] {
+  --black:         #f2eef8; /* the logomark's ink — flips light so the logo stays visible */
   --amber:         #a855f7;
   --amber2:        #9333ea;
   --orchid:        #c084fc;
@@ -149,11 +150,11 @@ _style.textContent = `
   --bg-surface:    #1d1726;
   --bg-elevated:   #262031;
   --bg-hover:      #2f2740;
-  --border:        #332b42;
-  --border-strong: #473b5c;
+  --border:        #322a3d;
+  --border-strong: #463b55;
   --text-primary:  #f2eef8;
   --text-secondary:#bdb4cc;
-  --text-muted:    #8c8299;
+  --text-muted:    #968ca8;
   --accent:        #a855f7;
   --accent-dim:    #3b2a55;
   --accent-glow:   rgba(168,85,247,0.16);
@@ -167,7 +168,7 @@ _style.textContent = `
   --live-dim:      #10293b;
   --surface:       #1d1726;
   --surface2:      #262031;
-  --muted:         #8c8299;
+  --muted:         #968ca8;
   --shadow-xs:     0 1px 2px rgba(0,0,0,.4);
   --shadow-sm:     0 1px 3px rgba(0,0,0,.45), 0 1px 2px rgba(0,0,0,.3);
   --shadow-md:     0 6px 16px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.3);
@@ -691,10 +692,10 @@ function Stars({ rating, interactive=false, onRate }) {
   const r = Number(rating) || 0
   const display = hov || r
   return (
-    <span style={{ fontFamily:'var(--font-mono)', fontSize:'1rem', color:'#d97706', cursor:interactive?'pointer':'default', letterSpacing:2 }}>
+    <span style={{ fontFamily:'var(--font-mono)', fontSize:'1rem', color:'var(--warning)', cursor:interactive?'pointer':'default', letterSpacing:2 }}>
       {[1,2,3,4,5].map(i => (
         <span key={i} onMouseEnter={() => interactive&&setHov(i)} onMouseLeave={() => interactive&&setHov(0)} onClick={() => interactive&&onRate&&onRate(i)}
-          style={{ color:i<=display?'#d97706':'var(--border-strong)', transition:'color 100ms ease' }}>★</span>
+          style={{ color:i<=display?'var(--warning)':'var(--border-strong)', transition:'color 100ms ease' }}>★</span>
       ))}
       {!interactive && <span style={{ color:'var(--text-muted)', marginLeft:4, fontSize:'0.75rem' }}>{r.toFixed(1)}</span>}
     </span>
@@ -1759,7 +1760,7 @@ function Pricing({ onOpenAuth }) {
             {['Post unlimited tasks','Receive unlimited bids','Built-in messaging','Escrow payments — coming soon','Dispute resolution support'].map(item => (
               <div key={item} style={{ display:'flex', gap:9, alignItems:'center', marginBottom:10 }}>
                 <span style={{ color:'var(--green)', fontSize:'.875rem', flexShrink:0 }}>✓</span>
-                <span style={{ fontSize:'.875rem', color:'#454050' }}>{item}</span>
+                <span style={{ fontSize:'.875rem', color:'var(--text-secondary)' }}>{item}</span>
               </div>
             ))}
             <button className="btn-s" style={{ width:'100%', marginTop:24, justifyContent:'center', display:'flex' }} onClick={() => onOpenAuth('register')}>Post a Task Free</button>
@@ -1776,7 +1777,7 @@ function Pricing({ onOpenAuth }) {
             {['Bid on any open task','Verified trust score','Instant escrow payouts — coming soon','Build a local reputation','Zero upfront cost'].map(item => (
               <div key={item} style={{ display:'flex', gap:9, alignItems:'center', marginBottom:10 }}>
                 <span style={{ color:'var(--amber)', fontSize:'.875rem', flexShrink:0 }}>✓</span>
-                <span style={{ fontSize:'.875rem', color:'#454050' }}>{item}</span>
+                <span style={{ fontSize:'.875rem', color:'var(--text-secondary)' }}>{item}</span>
               </div>
             ))}
             <button className="btn-p" style={{ width:'100%', marginTop:24, justifyContent:'center', display:'flex' }} onClick={() => onOpenAuth('register')}>Start Earning →</button>
@@ -1803,7 +1804,7 @@ function Testimonials() {
             <div key={i} className="lcard">
               <div style={{ width:44, height:44, borderRadius:'var(--radius-md)', background:'var(--accent-glow)', display:'flex', alignItems:'center', justifyContent:'center', marginBottom:16 }}><Icon name={t.icon} size={22} color="var(--accent)" /></div>
               <h3 style={{ fontFamily:'var(--fd)', fontSize:'1.1rem', fontWeight:700, marginBottom:10 }}>{t.title}</h3>
-              <p style={{ fontSize:'.9rem', color:'#454050', lineHeight:1.8, marginBottom:22 }}>{t.text}</p>
+              <p style={{ fontSize:'.9rem', color:'var(--text-secondary)', lineHeight:1.8, marginBottom:22 }}>{t.text}</p>
               <div style={{ paddingTop:14, borderTop:'1px solid var(--border)' }}>
                 <span style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em' }}>{t.who}</span>
               </div>
@@ -5564,11 +5565,11 @@ function BusinessForm({ business, onDone, onCancel }) {
 
 // Trust/verification badge definitions — rendered on public profiles
 const BADGE_DEFS = {
-  ru_student:    { icon:'🎓', label:'Verified student', color:'#9333ea', desc:'Verified SA university email' },
-  email_verified:{ icon:'✓',  label:'Verified',        color:'#15803d', desc:'Email verified via Google' },
-  google_linked: { icon:'🔗', label:'Google-linked',   color:'#1d4ed8', desc:'Signed in with Google' },
-  top_rated:     { icon:'⭐', label:'Top rated',        color:'#d97706', desc:'4.5+ stars across 5+ reviews' },
-  established:   { icon:'🏅', label:'Established',      color:'#b45309', desc:'10+ tasks completed' },
+  ru_student:    { icon:'🎓', label:'Verified student', color:'var(--accent)', desc:'Verified SA university email' },
+  email_verified:{ icon:'✓',  label:'Verified',        color:'var(--success)', desc:'Email verified via Google' },
+  google_linked: { icon:'🔗', label:'Google-linked',   color:'var(--info)', desc:'Signed in with Google' },
+  top_rated:     { icon:'⭐', label:'Top rated',        color:'var(--warning)', desc:'4.5+ stars across 5+ reviews' },
+  established:   { icon:'🏅', label:'Established',      color:'var(--warning)', desc:'10+ tasks completed' },
 }
 
 function Badge2({ id }) {
@@ -6387,7 +6388,7 @@ function Profile({ openProfile }) {
           </div>
           <div style={{ marginLeft:'auto', display:'flex', gap:0, paddingBottom:2 }}>
             <div style={{ textAlign:'center', padding:'0 22px' }}>
-              <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.35rem', color:'#d97706', lineHeight:1 }}>{avgRating || '—'}</div>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.35rem', color:'var(--warning)', lineHeight:1 }}>{avgRating || '—'}</div>
               <Mono style={{ marginTop:5 }}>rating</Mono>
             </div>
             <div style={{ textAlign:'center', padding:'0 22px', borderLeft:'1px solid var(--border)' }}>
@@ -7418,7 +7419,7 @@ function BusinessClients() {
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
         <BizStatTile label="Redemptions" value={data.total_redemptions} />
         <BizStatTile label="Unique clients" value={data.unique_customers} />
-        <BizStatTile label="Repeat clients" value={data.repeat_customers} color="#15803d" />
+        <BizStatTile label="Repeat clients" value={data.repeat_customers} color="var(--success)" />
         <BizStatTile label="Total value" value={zar(data.total_value_cents) || 'R0'} />
         <BizStatTile label="Last 30 days" value={data.last_30d} />
       </div>
