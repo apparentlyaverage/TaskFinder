@@ -838,7 +838,7 @@ function LandingNavbar({ onOpenAuth, onNav, user, onEnterApp }) {
       <div style={{ background:'var(--amber)', color:'#fff', textAlign:'center', padding:'7px 16px', fontSize:'.8rem', fontFamily:'var(--fb)', fontWeight:600, lineHeight:1.45 }}>
         🚀 ReLivR is in <strong>beta</strong> — full launch 7 July 2026.<span className="hide-m"> Your feedback shapes what we build.</span> Secure escrow payments coming soon.
       </div>
-      <nav style={{ background:scrolled?'rgba(250,249,246,.92)':'rgba(250,249,246,.72)', borderBottom:scrolled?'1px solid var(--border-strong)':'1px solid transparent', backdropFilter:'blur(14px)', transition:'all 300ms ease', padding:'0 24px' }}>
+      <nav style={{ background:scrolled?'color-mix(in srgb, var(--bg-base) 92%, transparent)':'color-mix(in srgb, var(--bg-base) 72%, transparent)', borderBottom:scrolled?'1px solid var(--border-strong)':'1px solid transparent', backdropFilter:'blur(14px)', transition:'all 300ms ease', padding:'0 24px' }}>
         <div style={{ maxWidth:1200, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', height:64 }}>
           <Logo onClick={() => onNav('home')} />
           <div className="hide-m" style={{ display:'flex', alignItems:'center', gap:32 }}>
