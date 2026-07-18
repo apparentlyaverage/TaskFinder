@@ -227,7 +227,16 @@ export async function runRetainers(db = pool) {
 
 // Start the periodic scheduler. Called from index.js (never from app.js, so
 // tests don't spawn timers). Runs once on boot, then on intervals.
-export function startScheduler({ expiryMs = 5 * 60 * 1000, digestMs = 60 * 60 * 1000, recurringMs = 60 * 60 * 1000 } = {}) {
+//
+// COST NOTE: expiry used to tick every 5 minutes, which kept Neon's serverless
+// compute awake 24/7 (it autosuspends after ~5 idle minutes) and burned the
+// entire free-tier compute quota (~191h/mo) with zero traffic — taking the whole
+// platform down mid-month (XX000 quota-exceeded). All jobs now share one hourly
+// tick so the DB can actually sleep between runs; every job is idempotent and
+// catches up on everything due since the last run, so nothing is missed —
+// expiry/reminders are just up to an hour less prompt, which day-granular
+// deadlines don't notice.
+export function startScheduler({ expiryMs = 60 * 60 * 1000, digestMs = 60 * 60 * 1000, recurringMs = 60 * 60 * 1000 } = {}) {
   const runExpiry = async () => {
     await expireDueTasks().catch(err => log.error('jobs.expire_failed', { msg: err.message }))
     // expire first, then refresh — a just-expired recurring deal comes straight back.
