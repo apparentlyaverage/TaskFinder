@@ -39,5 +39,21 @@ export default defineConfig({
       '/health':        { target: 'http://localhost:3001', changeOrigin: true },
     },
   },
-  build: { outDir: 'dist', sourcemap: false },
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        // Split stable third-party code into its own long-cached chunk so a
+        // change to app code doesn't force browsers to re-download React etc.
+        // (Route-level splitting of App.jsx is a larger follow-up — it's one
+        // component today.) This trims the initial app chunk and improves the
+        // cache-hit rate on repeat visits, helping Core Web Vitals.
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+          'qrcode': ['qrcode'],
+        },
+      },
+    },
+  },
 })
