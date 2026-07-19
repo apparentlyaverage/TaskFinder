@@ -2901,6 +2901,68 @@ function categoryFor(task) {
   return CATEGORIES.find(c => c.kw.some(k => hay.includes(k))) || CATEGORIES[CATEGORIES.length - 1]
 }
 
+// ─── SKILL-TAG SUGGESTIONS ───────────────────────────────────────────────────
+// Reads a task's title + description and proposes skill tags to add — so a poster
+// who writes "laundry picked up from X and delivered to Y" is offered
+// "Errands · Delivery · Laundry · Pickup" instead of leaving tags empty. Good tags
+// feed the Jaccard matching engine, so this directly improves earner matching.
+// Rule-based on purpose: instant, free, and fully client-side (POPIA — the
+// description never leaves the browser). An optional AI tier can layer on later.
+//
+// Trigger phrase → canonical tag. Multi-word keys are checked as substrings, so
+// "drop off" matches before "off". Keep triggers lowercase.
+const TAG_KEYWORDS = {
+  // Errands & delivery
+  laundry:'Laundry', washing:'Laundry', ironing:'Ironing',
+  deliver:'Delivery', delivery:'Delivery', courier:'Delivery', 'drop off':'Delivery', dropoff:'Delivery', 'drop-off':'Delivery',
+  'pick up':'Pickup', pickup:'Pickup', 'pick-up':'Pickup', collect:'Pickup', fetch:'Pickup',
+  shopping:'Shopping', groceries:'Groceries', errand:'Errands',
+  // Tech & coding
+  python:'Python', react:'React', node:'Node.js', javascript:'JavaScript', typescript:'TypeScript',
+  debug:'Debugging', bug:'Debugging', api:'API', postgres:'PostgreSQL', sql:'SQL', database:'Database',
+  website:'Web Development', 'web app':'Web Development', mobile:'Mobile', firebase:'Firebase',
+  // Tutoring
+  tutor:'Tutoring', teach:'Tutoring', lesson:'Lessons', math:'Maths', maths:'Maths',
+  calculus:'Maths', physics:'Physics', chemistry:'Chemistry', exam:'Exam Prep', study:'Study Help',
+  // Writing
+  proofread:'Proofreading', 'proof read':'Proofreading', essay:'Essay', editing:'Editing', edit:'Editing',
+  writing:'Writing', 'copy writing':'Copywriting', copywriting:'Copywriting', translat:'Translation', transcrib:'Transcription',
+  // Design
+  design:'Design', figma:'Figma', logo:'Logo Design', poster:'Poster', 'ui/ux':'UI/UX', illustrat:'Illustration',
+  // Music & arts
+  guitar:'Guitar', piano:'Piano', music:'Music', 'photo':'Photography', video:'Videography', art:'Art',
+  // Moving & labour
+  moving:'Moving', furniture:'Furniture', clean:'Cleaning', garden:'Gardening', labour:'Labour', assembl:'Assembly',
+}
+
+// Suggest up to `limit` skill tags for a free-text description (+ optional title).
+// Returns matched category names first (broad, drive the feed filter), then the
+// specific tags above — de-duplicated and excluding anything already added.
+function suggestTags(text, existing = [], limit = 6) {
+  const hay = ' ' + String(text || '').toLowerCase().replace(/\s+/g, ' ') + ' '
+  const have = new Set(existing.map(t => String(t).toLowerCase().trim()))
+  const out = []
+  const seen = new Set()
+  const push = (tag) => {
+    const key = tag.toLowerCase()
+    if (!seen.has(key) && !have.has(key)) { seen.add(key); out.push(tag) }
+  }
+  // Match a keyword only at a word boundary, so short triggers like "ui" or "art"
+  // don't fire inside "req(ui)re" or "st(art)". Stems still work: "translat"
+  // matches "translation" because it's the start of that word.
+  const hit = (kw) => new RegExp('\\b' + kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(hay)
+  // 1) Matched categories first — these are the "Errands"-style broad tags.
+  for (const c of CATEGORIES) {
+    if (c.name === 'Other') continue
+    if (c.kw.some(hit)) push(c.name)
+  }
+  // 2) Specific skill tags from trigger phrases.
+  for (const [kw, tag] of Object.entries(TAG_KEYWORDS)) {
+    if (hit(kw)) push(tag)
+  }
+  return out.slice(0, limit)
+}
+
 // Data-driven category list for the filter rail — fetched from GET /categories
 // (so a new category is a DB insert, not a deploy), falling back to the constant.
 function useCategories() {
@@ -3961,7 +4023,31 @@ function TaskNew({ setPage, setSelectedTask }) {
           </SelectField>
           <Input label="Bidding closes" type="date" min={new Date().toISOString().slice(0,10)} value={bidsClose} onChange={e=>setBidsClose(e.target.value)} hint="Optional — no new bids after this date" />
         </div>}
-        {step===2&&<Input label="Skill Tags (comma separated)" placeholder="e.g. react, node.js, postgres" value={tags} onChange={e=>{setTags(e.target.value);setErrors(v=>({...v,tags:null}))}} hint="Used to automatically match and notify earners" error={errors.tags} />}
+        {step===2&&(() => {
+          const current = tags.split(',').map(s=>s.trim()).filter(Boolean)
+          const suggestions = suggestTags(title + ' ' + desc, current)
+          const addTag = (t) => { setTags(prev => { const arr = prev.split(',').map(s=>s.trim()).filter(Boolean); if (!arr.some(x=>x.toLowerCase()===t.toLowerCase())) arr.push(t); return arr.join(', ') }); setErrors(v=>({...v,tags:null})) }
+          return (
+            <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+              <Input label="Skill Tags (comma separated)" placeholder="e.g. react, node.js, postgres" value={tags} onChange={e=>{setTags(e.target.value);setErrors(v=>({...v,tags:null}))}} hint="Used to automatically match and notify earners" error={errors.tags} />
+              {suggestions.length>0 && (
+                <div>
+                  <Mono size="0.62rem" style={{ display:'flex', alignItems:'center', gap:6, marginBottom:9, color:'var(--text-muted)' }}>
+                    <Icon name="sparkles" size={12} color="var(--accent)" />Suggested from your description
+                  </Mono>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:7 }}>
+                    {suggestions.map(t => (
+                      <button key={t} type="button" onClick={() => addTag(t)} title={`Add “${t}” tag`}
+                        style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'6px 13px', borderRadius:100, cursor:'pointer', border:'1px dashed var(--border-strong)', background:'var(--accent-glow)', color:'var(--accent)', fontFamily:'var(--font-body)', fontWeight:600, fontSize:'.8rem', transition:'all 150ms ease' }}>
+                        <span style={{ fontSize:'.95rem', lineHeight:1, marginTop:-1 }}>+</span>{t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
         {step===3&&<div style={{ display:'flex', flexDirection:'column', gap:16 }}>
           <Mono style={{ display:'block', marginBottom:4 }}>Review your task</Mono>
           {[['Title',title],['Budget',`R${budget}`],['Deadline',deadline?new Date(deadline).toLocaleDateString():'—'],['Location',zone||'Not specified'],['Skills',tags||'—']].map(([k,v]) => (
@@ -8512,6 +8598,56 @@ function buildPath({ view, dashPage, taskId, disputeId }) {
   return '/'
 }
 
+// ─── PER-ROUTE SEO META ──────────────────────────────────────────────────────
+// The app is a client-rendered SPA, so every route ships the same index.html
+// shell. This updates <title>, description, canonical and OG/Twitter tags to
+// match the current view after render — so Google (which runs the JS) sees a
+// distinct, descriptive page per public route instead of one duplicated title.
+// Private/dashboard views are disallowed in robots.txt; they still get a clean
+// title here but no bespoke description.
+const SEO_HOST = 'https://www.relivr.co.za'
+const SEO_META = {
+  'landing':            { title:'ReLivR — Local Services Marketplace in Makhanda', description:'Post a task, get bids from verified locals, and get things done. ReLivR is the trusted local services marketplace for Makhanda and the Eastern Cape.' },
+  'how-it-works-page':  { title:'How ReLivR Works — Post, Bid, Get It Done', description:'Post a task in under a minute, compare bids from verified locals, and pick the right person. Here is how ReLivR works, step by step.' },
+  'features-page':      { title:'Features — ReLivR Local Services Marketplace', description:'Verified members, trust scores, in-app messaging, smart skill matching and secure payments. Everything ReLivR gives you to get things done locally.' },
+  'pricing-page':       { title:'Pricing — ReLivR', description:'Free to post and browse while in beta. See how pricing works on ReLivR, the local services marketplace for South African communities.' },
+  'trust-safety':       { title:'Trust & Safety — ReLivR', description:'ID-verified members, public track records and POPIA-compliant privacy. How ReLivR keeps the local services marketplace safe.' },
+  'about-page':         { title:'About ReLivR — Your Local Economy, Connected', description:'ReLivR connects neighbours in Makhanda and the Eastern Cape so anyone can post a task, earn money, or get things done with people they trust.' },
+  'help-centre':        { title:'Help Centre — ReLivR', description:'Answers to common questions about posting tasks, bidding, payments, trust and safety on ReLivR.' },
+  'contact':            { title:'Contact ReLivR', description:'Get in touch with the ReLivR team — support, business enquiries and feedback.' },
+  'blog':               { title:'ReLivR Blog — Local Services, Tips & Stories', description:'Guides, tips and stories from the ReLivR local services marketplace in Makhanda and the Eastern Cape.' },
+  'careers':            { title:'Careers at ReLivR', description:'Help build South Africa’s community services marketplace. See open roles at ReLivR.' },
+  'guidelines':         { title:'Community Guidelines — ReLivR', description:'The community rules that keep ReLivR safe, fair and useful for everyone.' },
+  'terms':              { title:'Terms of Service — ReLivR', description:'The terms governing your use of the ReLivR local services marketplace.' },
+  'privacy':            { title:'Privacy Policy (POPIA) — ReLivR', description:'How ReLivR collects, uses and protects your personal information under South Africa’s POPIA.' },
+  'cookies':            { title:'Cookie Policy — ReLivR', description:'How and why ReLivR uses cookies, and how to manage your preferences.' },
+  'popia':              { title:'POPIA Compliance — ReLivR', description:'ReLivR’s commitment to the Protection of Personal Information Act (POPIA).' },
+}
+const SEO_DEFAULT = { title:'ReLivR — Local Services Marketplace', description:'The local services marketplace for South African communities — post a task, earn money, or get things done with people you can trust.' }
+
+function seoSetTag(attr, key, content) {
+  let el = document.head.querySelector(`meta[${attr}="${key}"]`)
+  if (!el) { el = document.createElement('meta'); el.setAttribute(attr, key); document.head.appendChild(el) }
+  el.setAttribute('content', content)
+}
+function seoSetCanonical(href) {
+  let el = document.head.querySelector('link[rel="canonical"]')
+  if (!el) { el = document.createElement('link'); el.setAttribute('rel', 'canonical'); document.head.appendChild(el) }
+  el.setAttribute('href', href)
+}
+function applyRouteMeta(view) {
+  const m = SEO_META[view] || SEO_DEFAULT
+  const canonical = SEO_HOST + (window.location.pathname === '/' ? '/' : window.location.pathname)
+  document.title = m.title
+  seoSetTag('name', 'description', m.description)
+  seoSetTag('property', 'og:title', m.title)
+  seoSetTag('property', 'og:description', m.description)
+  seoSetTag('property', 'og:url', canonical)
+  seoSetTag('name', 'twitter:title', m.title)
+  seoSetTag('name', 'twitter:description', m.description)
+  seoSetCanonical(canonical)
+}
+
 // ─── COOKIE CONSENT (POPIA §4) ───────────────────────────────────────────────
 // First-visit banner: Accept all / Reject non-essential / Customise by category.
 // Choice is stored (versioned) so it isn't re-asked; re-openable from the footer
@@ -9021,6 +9157,8 @@ export default function App() {
     if (window.location.pathname !== target) {
       window.history.pushState({}, '', target)
     }
+    // Refresh SEO title/description/canonical to match the route we just rendered.
+    applyRouteMeta(view)
   }, [view, dashPage, selectedTask, selectedDispute])
 
   // Handle browser back/forward — re-derive state from the URL

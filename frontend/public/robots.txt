@@ -1,0 +1,21 @@
+# ReLivR — https://www.relivr.co.za
+# Public marketing, directory and info pages are crawlable.
+# Authenticated app areas carry no SEO value and are kept out of the index.
+
+User-agent: *
+Allow: /
+
+Disallow: /dashboard
+Disallow: /my-tasks
+Disallow: /my-bids
+Disallow: /messages
+Disallow: /notifications
+Disallow: /profile
+Disallow: /schedule
+Disallow: /following
+Disallow: /suggestions
+Disallow: /admin/
+Disallow: /oauth-callback
+Disallow: /verify-student
+
+Sitemap: https://www.relivr.co.za/sitemap.xml

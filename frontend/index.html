@@ -11,6 +11,46 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.json" />
     <title>ReLivR — Local Services Marketplace</title>
+
+    <!-- Canonical host (apex 308-redirects to www) -->
+    <link rel="canonical" href="https://www.relivr.co.za/" />
+
+    <!-- Open Graph (per-route values are refined client-side after render) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ReLivR" />
+    <meta property="og:title" content="ReLivR — Local Services Marketplace" />
+    <meta property="og:description" content="Post a task, get bids from verified locals, and get things done. ReLivR is the local services marketplace for Makhanda and the Eastern Cape." />
+    <meta property="og:url" content="https://www.relivr.co.za/" />
+    <meta property="og:image" content="https://www.relivr.co.za/icon-512.png" />
+    <meta property="og:locale" content="en_ZA" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="ReLivR — Local Services Marketplace" />
+    <meta name="twitter:description" content="Post a task, get bids from verified locals, and get things done. ReLivR is the local services marketplace for Makhanda and the Eastern Cape." />
+    <meta name="twitter:image" content="https://www.relivr.co.za/icon-512.png" />
+
+    <!-- Structured data: brand knowledge + site identity (static, crawler-visible) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "ReLivR",
+      "url": "https://www.relivr.co.za",
+      "logo": "https://www.relivr.co.za/icon-512.png",
+      "description": "The local services marketplace for South African communities — post a task, earn money, or get things done with people you can trust.",
+      "areaServed": { "@type": "City", "name": "Makhanda" },
+      "address": { "@type": "PostalAddress", "addressLocality": "Makhanda", "addressRegion": "Eastern Cape", "addressCountry": "ZA" }
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "ReLivR",
+      "url": "https://www.relivr.co.za"
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>
