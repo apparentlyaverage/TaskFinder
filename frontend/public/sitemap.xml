@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Static public routes. Dynamic entries (business directory, public tasks/
+     profiles) are added once those pages are server-rendered in Phase 2. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://www.relivr.co.za/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>
+  <url><loc>https://www.relivr.co.za/how-it-works</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.relivr.co.za/features</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.relivr.co.za/pricing</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.relivr.co.za/trust-safety</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.relivr.co.za/about</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://www.relivr.co.za/help</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://www.relivr.co.za/contact</loc><changefreq>yearly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://www.relivr.co.za/blog</loc><changefreq>weekly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://www.relivr.co.za/careers</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://www.relivr.co.za/guidelines</loc><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://www.relivr.co.za/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://www.relivr.co.za/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://www.relivr.co.za/cookies</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://www.relivr.co.za/popia</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+</urlset>
