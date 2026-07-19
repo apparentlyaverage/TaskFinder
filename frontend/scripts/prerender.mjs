@@ -55,8 +55,25 @@ async function main() {
   }
 
   let puppeteer
-  try { puppeteer = (await import('puppeteer')).default }
-  catch { console.warn('[prerender] puppeteer not installed — skipping (SPA fallback served).'); return }
+  try { puppeteer = (await import('puppeteer-core')).default }
+  catch { console.warn('[prerender] puppeteer-core not installed — skipping (SPA fallback served).'); return }
+
+  // Resolve a browser. Locally: PUPPETEER_EXECUTABLE_PATH (system Chrome).
+  // On Vercel/Lambda: @sparticuz/chromium, which bundles a Chromium built to run
+  // in that environment (correct shared libs, no separate download).
+  let launchOpts
+  const envPath = process.env.PUPPETEER_EXECUTABLE_PATH
+  if (envPath) {
+    launchOpts = { headless: true, executablePath: envPath, args: ['--no-sandbox', '--disable-setuid-sandbox'] }
+  } else {
+    try {
+      const chromium = (await import('@sparticuz/chromium')).default
+      launchOpts = { headless: true, executablePath: await chromium.executablePath(), args: chromium.args }
+    } catch (err) {
+      console.warn('[prerender] no browser available (@sparticuz/chromium unusable) — skipping (SPA fallback served):', err.message)
+      return
+    }
+  }
 
   const server = await serveDist()
   const port = server.address().port
@@ -64,10 +81,7 @@ async function main() {
 
   let browser
   try {
-    // Use PUPPETEER_EXECUTABLE_PATH when set (local dev pointing at system
-    // Chrome); otherwise puppeteer's bundled Chromium (downloaded in CI/Vercel).
-    const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined
-    browser = await puppeteer.launch({ headless: true, executablePath, args: ['--no-sandbox', '--disable-setuid-sandbox'] })
+    browser = await puppeteer.launch(launchOpts)
   } catch (err) {
     console.warn('[prerender] Chromium could not launch — skipping (SPA fallback served):', err.message)
     server.close(); return
