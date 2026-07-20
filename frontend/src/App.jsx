@@ -71,13 +71,14 @@ const _style = document.createElement('style')
 _style.textContent = `
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  /* Brand palette derived from the two-leaf logo: crisp white ground, near-black
-     ink, and the orchid leaf (#c084fc) as the accent family. The interactive
-     accent is the orchid's darker sibling (#9333ea) so text/buttons keep AA
-     contrast on white; the leaf orchid itself does the decorative work
-     (highlight sweep, glows, tints). "amber" stays the accent alias for
-     historical reasons — it IS the purple. */
-  --black:         #131118;
+  /* CORPORATE REDESIGN — the design grammar of the big service marketplaces
+     (Uber / Airbnb / Thumbtack / TaskRabbit / DoorDash): pure white ground,
+     near-black ink, neutral grays with NO brand tint, and purple kept as the
+     single accent so it still reads as ReLivR. Grotesque type set heavy and
+     tight; labels are sans (not mono); radii tighten to 8/12; shadows are
+     neutral black and reserved for hover lift. "amber" stays the accent alias
+     for historical reasons — it IS the purple. */
+  --black:         #111111;
   --white:         #ffffff;
   --amber:         #7e22ce;
   --amber2:        #6b21a8;
@@ -87,88 +88,88 @@ _style.textContent = `
   --purple:        #b45309;
   --orchid:        #c084fc;
   --highlight:     #d8b4fe;
-  --bg-base:       #faf8fe;
+  --bg-base:       #ffffff;
   --bg-surface:    #ffffff;
-  --bg-elevated:   #f3eefb;
-  --bg-hover:      #eae2f6;
-  --border:        #e7e0f0;
-  --border-strong: #d3cae3;
-  --text-primary:  #131118;
-  --text-secondary:#575163;
-  --text-muted:    #96909f;
+  --bg-elevated:   #f7f7f7;
+  --bg-hover:      #efefef;
+  --border:        #e8e8e8;
+  --border-strong: #dcdcdc;
+  --text-primary:  #111111;
+  --text-secondary:#5f5f5f;
+  --text-muted:    #8f8f8f;
   --accent:        #7e22ce;
-  --accent-dim:    #f3e8ff;
+  --accent-dim:    #f6effc;
   --accent-glow:   rgba(126,34,206,0.10);
-  --success:       #15803d;
+  --success:       #0e7a4a;
   --danger:        #b91c1c;
   --info:          #1d4ed8;
   --warning:       #b45309;
-  /* Redesign: two SEMANTIC accents so trust + presence stop borrowing brand-purple.
-     Verified (green) = ID/student verified, escrow-safe. Live (blue) = online now,
-     real-time. Each means exactly one thing, like --success/--danger. */
-  --verified:      #0d7a5f;
-  --verified-dim:  #e2f3ec;
+  /* Two SEMANTIC accents so trust + presence stop borrowing brand-purple.
+     Verified (green) = ID/student verified. Live (blue) = online now. */
+  --verified:      #0e7a4a;
+  --verified-dim:  #e7f4ed;
   --live:          #0369a1;
   --live-dim:      #e0f2fe;
-  /* Clean, industry-standard sans (Inter) for everything, with a native system
-     fallback stack; a native monospace stack for the small uppercase eyebrow
-     labels. No decorative/display face — reads as a real product, not a demo. */
-  --font-display:  'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-body:     'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-mono:     ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Roboto Mono', monospace;
-  --fd: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --fb: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --fm: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Roboto Mono', monospace;
+  /* Grotesque stack the reference sites degrade to: Helvetica Neue on macOS,
+     Inter (already loaded) on Windows, then the system chain. Labels/eyebrows
+     and prices are SANS now — the mono aliases point here on purpose so the
+     whole app sweeps to the corporate look without touching call sites. */
+  --font-display:  'Helvetica Neue', 'Inter', -apple-system, 'Segoe UI', Helvetica, Arial, system-ui, sans-serif;
+  --font-body:     'Helvetica Neue', 'Inter', -apple-system, 'Segoe UI', Helvetica, Arial, system-ui, sans-serif;
+  --font-mono:     'Helvetica Neue', 'Inter', -apple-system, 'Segoe UI', Helvetica, Arial, system-ui, sans-serif;
+  --fd: 'Helvetica Neue', 'Inter', -apple-system, 'Segoe UI', Helvetica, Arial, system-ui, sans-serif;
+  --fb: 'Helvetica Neue', 'Inter', -apple-system, 'Segoe UI', Helvetica, Arial, system-ui, sans-serif;
+  --fm: 'Helvetica Neue', 'Inter', -apple-system, 'Segoe UI', Helvetica, Arial, system-ui, sans-serif;
   --surface:       #ffffff;
-  --surface2:      #f6f3fa;
-  --muted:         #96909f;
-  --radius-sm:     10px;
-  --radius-md:     14px;
-  --radius-lg:     20px;
-  --radius-xl:     28px;
+  --surface2:      #f7f7f7;
+  --muted:         #8f8f8f;
+  --radius-sm:     8px;
+  --radius-md:     12px;
+  --radius-lg:     14px;
+  --radius-xl:     18px;
   --radius-pill:   999px;
   --transition:    150ms ease;
   --ease:          cubic-bezier(.4,0,.2,1);
-  /* Soft, layered elevation scale — the backbone of the premium/clean feel */
-  --shadow-xs:     0 1px 2px rgba(19,17,24,.05);
-  --shadow-sm:     0 1px 3px rgba(19,17,24,.06), 0 1px 2px rgba(19,17,24,.04);
-  --shadow-md:     0 6px 16px rgba(19,17,24,.07), 0 2px 6px rgba(19,17,24,.04);
-  --shadow-lg:     0 16px 40px rgba(19,17,24,.10), 0 4px 12px rgba(19,17,24,.05);
-  --shadow-xl:     0 30px 70px rgba(19,17,24,.14), 0 10px 24px rgba(19,17,24,.06);
+  /* Neutral elevation — flat at rest, lift on hover (Airbnb card behavior) */
+  --shadow-xs:     0 1px 2px rgba(0,0,0,.04);
+  --shadow-sm:     0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:     0 6px 20px rgba(0,0,0,.08), 0 2px 6px rgba(0,0,0,.04);
+  --shadow-lg:     0 16px 48px rgba(0,0,0,.12), 0 4px 12px rgba(0,0,0,.05);
+  --shadow-xl:     0 30px 70px rgba(0,0,0,.16), 0 10px 24px rgba(0,0,0,.06);
   --ring:          0 0 0 3px rgba(126,34,206,.16);
 }
-/* Dark mode — token-level overrides. The accent family lightens so purple text
-   keeps contrast on dark grounds; --highlight flips to a deep plum so the hero
-   swash reads with light text on it. Toggled via data-theme (persisted). */
+/* Dark mode — neutral near-black grays (no purple tint), purple accent kept.
+   The reference sites don't ship dark marketing pages, but the app keeps its
+   working theme toggle. Toggled via data-theme (persisted). */
 :root[data-theme="dark"] {
-  --black:         #f2eef8; /* the logomark's ink — flips light so the logo stays visible */
+  --black:         #f5f5f5; /* the logomark's ink — flips light so the logo stays visible */
   --amber:         #a855f7;
   --amber2:        #9333ea;
   --orchid:        #c084fc;
   --highlight:     #5b21b6;
-  --bg-base:       #141019;
-  --bg-surface:    #1d1726;
-  --bg-elevated:   #262031;
-  --bg-hover:      #2f2740;
-  --border:        #322a3d;
-  --border-strong: #463b55;
-  --text-primary:  #f2eef8;
-  --text-secondary:#bdb4cc;
-  --text-muted:    #968ca8;
+  --bg-base:       #101010;
+  --bg-surface:    #181818;
+  --bg-elevated:   #212121;
+  --bg-hover:      #2a2a2a;
+  --border:        #2a2a2a;
+  --border-strong: #3d3d3d;
+  --text-primary:  #f5f5f5;
+  --text-secondary:#c4c4c4;
+  --text-muted:    #9a9a9a;
   --accent:        #a855f7;
-  --accent-dim:    #3b2a55;
+  --accent-dim:    #33204d;
   --accent-glow:   rgba(168,85,247,0.16);
   --success:       #34d399;
   --danger:        #f87171;
   --info:          #60a5fa;
   --warning:       #fbbf24;
   --verified:      #34d399;
-  --verified-dim:  #12312a;
+  --verified-dim:  #143327;
   --live:          #38bdf8;
-  --live-dim:      #10293b;
-  --surface:       #1d1726;
-  --surface2:      #262031;
-  --muted:         #968ca8;
+  --live-dim:      #102a3b;
+  --surface:       #181818;
+  --surface2:      #212121;
+  --muted:         #9a9a9a;
   --shadow-xs:     0 1px 2px rgba(0,0,0,.4);
   --shadow-sm:     0 1px 3px rgba(0,0,0,.45), 0 1px 2px rgba(0,0,0,.3);
   --shadow-md:     0 6px 16px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.3);
@@ -212,25 +213,43 @@ input, textarea, select { font-family: var(--font-body); font-size: inherit; }
 /* Landing utilities */
 .nav-link { color:var(--text-muted); font-size:.875rem; font-weight:500; text-decoration:none; transition:color 150ms; cursor:pointer; }
 .nav-link:hover { color:var(--text-primary); }
-.slabel { font-family:var(--fm); font-size:.68rem; font-weight:500; letter-spacing:.14em; text-transform:uppercase; color:var(--amber); display:flex; align-items:center; gap:8px; }
-.slabel::before { content:''; display:block; width:18px; height:1px; background:var(--amber); }
+.slabel { font-family:var(--fd); font-size:.72rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--text-muted); display:flex; align-items:center; gap:8px; }
+.slabel::before { content:none; }
 /* Scroll-reveal — the landing's one signature motion. Sections start soft +
    12px low and settle in as they enter the viewport (IntersectionObserver adds
    .in). Mirrors the hero's fadeUp language; disabled under reduced motion. */
 .reveal { opacity:0; transform:translateY(14px); transition:opacity .55s var(--ease), transform .55s var(--ease); }
 .reveal.in { opacity:1; transform:none; }
-.lcard { background:var(--bg-surface); border:1px solid var(--border); border-radius:16px; padding:28px; box-shadow:var(--shadow-xs); transition:border-color 200ms var(--ease),transform 200ms var(--ease),box-shadow 200ms var(--ease); }
-.lcard:hover { border-color:var(--border-strong); transform:translateY(-4px); box-shadow:var(--shadow-lg); }
+.lcard { background:var(--bg-surface); border:1px solid var(--border); border-radius:12px; padding:28px; box-shadow:none; transition:border-color 200ms var(--ease),transform 200ms var(--ease),box-shadow 200ms var(--ease); }
+.lcard:hover { border-color:var(--border-strong); transform:translateY(-2px); box-shadow:var(--shadow-md); }
 .photo-card img { transition:transform .55s var(--ease); will-change:transform; }
 .photo-card:hover img { transform:scale(1.05); }
-.btn-p { background:var(--amber); color:#fff; border:none; padding:13px 28px; border-radius:12px; font-family:var(--fd); font-weight:700; font-size:.9rem; letter-spacing:.01em; cursor:pointer; box-shadow:var(--shadow-sm); transition:all 160ms var(--ease); display:inline-flex; align-items:center; gap:7px; }
-.btn-p:hover { background:var(--amber2); transform:translateY(-1px); box-shadow:0 10px 24px rgba(126,34,206,.26); }
-.btn-p:active { transform:translateY(0); box-shadow:var(--shadow-sm); }
+.btn-p { background:var(--amber); color:#fff; border:none; padding:13px 26px; border-radius:8px; font-family:var(--fd); font-weight:600; font-size:.95rem; letter-spacing:0; cursor:pointer; box-shadow:none; transition:background 160ms var(--ease); display:inline-flex; align-items:center; gap:7px; }
+.btn-p:hover { background:var(--amber2); }
+.btn-p:active { transform:translateY(0); }
 .btn-p:disabled { opacity:.5; cursor:not-allowed; transform:none; box-shadow:none; }
-.btn-s { background:var(--bg-surface); color:var(--text-primary); border:1px solid var(--border-strong); padding:13px 28px; border-radius:12px; font-family:var(--fd); font-weight:700; font-size:.9rem; letter-spacing:.01em; cursor:pointer; transition:all 160ms var(--ease); }
-.btn-s:hover { border-color:var(--text-primary); background:var(--bg-surface); box-shadow:var(--shadow-md); transform:translateY(-1px); }
+.btn-s { background:var(--bg-surface); color:var(--text-primary); border:1px solid var(--border-strong); padding:13px 26px; border-radius:8px; font-family:var(--fd); font-weight:600; font-size:.95rem; letter-spacing:0; cursor:pointer; transition:border-color 160ms var(--ease); }
+.btn-s:hover { border-color:var(--text-primary); background:var(--bg-surface); }
 .btn-g { background:transparent; color:var(--text-muted); border:none; padding:10px 18px; font-family:var(--font-body); font-size:.875rem; cursor:pointer; transition:color 150ms; }
 .btn-g:hover { color:var(--text-primary); }
+/* Corporate ink pill — the Uber-style nav CTA. Inverts with the theme. */
+.btn-dark { background:var(--text-primary); color:var(--bg-base); border:none; padding:11px 22px; border-radius:999px; font-family:var(--fd); font-weight:600; font-size:.9rem; cursor:pointer; display:inline-flex; align-items:center; gap:7px; transition:opacity 160ms var(--ease); }
+.btn-dark:hover { opacity:.85; }
+/* Black-footer link (footer is ink in BOTH themes, so links can't use theme text tokens) */
+.foot-link { color:#b9b9b9 !important; }
+.foot-link:hover { color:#ffffff !important; }
+
+/* Corporate task LIST rows (Thumbtack/TaskRabbit results grammar): gradient
+   category thumbnail · details · price/status column. Stacks on phones. */
+.task-row { display:flex; background:var(--bg-surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; cursor:pointer; transition:box-shadow 150ms var(--ease), transform 150ms var(--ease); }
+.task-row:hover { box-shadow:var(--shadow-md); transform:translateY(-1px); }
+.task-row-thumb { flex:0 0 148px; display:flex; align-items:center; justify-content:center; }
+.task-row-side { flex:0 0 168px; border-left:1px solid var(--border); padding:16px; display:flex; flex-direction:column; align-items:flex-end; justify-content:space-between; gap:8px; }
+@media (max-width:640px) {
+  .task-row { flex-direction:column; }
+  .task-row-thumb { flex-basis:92px; height:92px; }
+  .task-row-side { flex-basis:auto; border-left:none; border-top:1px solid var(--border); flex-direction:row; align-items:center; }
+}
 
 /* Top-bar icon buttons (messages, alerts) — hover/active feedback + transitions. */
 .icon-btn { transition: background 150ms var(--ease), color 150ms var(--ease), transform 120ms var(--ease); }
@@ -241,10 +260,10 @@ input, textarea, select { font-family: var(--font-body); font-size: inherit; }
 .notif-badge { animation: notifPulse 1.8s ease-in-out infinite; }
 
 /* Forms */
-input, textarea, select { background:var(--bg-elevated); border:1px solid var(--border-strong); border-radius:10px; color:var(--text-primary); padding:11px 14px; font-size:.9rem; width:100%; outline:none; transition:border-color 150ms,box-shadow 150ms; }
+input, textarea, select { background:var(--bg-surface); border:1px solid var(--border-strong); border-radius:8px; color:var(--text-primary); padding:11px 14px; font-size:.9rem; width:100%; outline:none; transition:border-color 150ms,box-shadow 150ms; }
 input:focus, textarea:focus, select:focus { border-color:var(--amber); box-shadow:var(--ring); }
-input::placeholder, textarea::placeholder { color:#b3aebc; }
-label { font-family:var(--fm); font-size:.62rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.1em; display:block; margin-bottom:6px; }
+input::placeholder, textarea::placeholder { color:#b3b3b3; }
+label { font-family:var(--fd); font-size:.7rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; display:block; margin-bottom:6px; }
 
 /* Prose */
 .prose h2 { font-family:var(--fd); font-size:1.3rem; font-weight:800; margin:32px 0 12px; color:var(--text-primary); }
@@ -267,7 +286,7 @@ label { font-family:var(--fm); font-size:.62rem; color:var(--text-muted); text-t
 
 /* Modal */
 .moverlay { position:fixed; inset:0; background:rgba(19,17,24,.45); display:flex; align-items:center; justify-content:center; z-index:300; padding:16px; animation:fadeIn .2s ease; backdrop-filter:blur(6px); }
-.modal { background:var(--bg-surface); border:1px solid var(--border-strong); border-radius:18px; width:100%; max-width:440px; animation:fadeUp .22s ease; overflow:hidden; max-height:92vh; overflow-y:auto; }
+.modal { background:var(--bg-surface); border:1px solid var(--border-strong); border-radius:14px; width:100%; max-width:440px; animation:fadeUp .22s ease; overflow:hidden; max-height:92vh; overflow-y:auto; }
 
 /* Responsive */
 @media (max-width:768px) {
@@ -479,9 +498,10 @@ function Spinner({ size = 14 }) {
 const LEAF_PATH = `M0,0 C-50,-34 -72,-84 -71,-124 C-70,-186 -38,-226 0,-246 C38,-226 70,-186 71,-124 C72,-84 50,-34 0,0 Z
   M-2,-26 C-14,-78 -12,-158 2,-214 L8,-206 C-3,-156 -4,-84 5,-26 Z`
 const TAIL_PATH = 'M264,316 C258,354 238,380 182,396 C224,368 246,344 252,312 Z'
-function LogoMark({ size = 30, animate = false }) {
+function LogoMark({ size = 30, animate = false, ink }) {
   const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
   const anim = animate && !reduced
+  const inkFill = ink || 'var(--black, #111111)'
   const leafAnim = (delayFrac) => (
     <animateTransform attributeName="transform" type="scale" additive="sum" dur="2.2s" repeatCount="indefinite"
       values="0.001;0.001;1.08;1;1;0.001"
@@ -496,9 +516,9 @@ function LogoMark({ size = 30, animate = false }) {
         <g>
           {anim && leafAnim(0.06)}
           <g transform="rotate(29)">
-            <path fill="var(--black, #131118)" fillRule="evenodd" d={LEAF_PATH} />
+            <path fill={inkFill} fillRule="evenodd" d={LEAF_PATH} />
           </g>
-          <g transform="translate(-262 -322)"><path fill="var(--black, #131118)" d={TAIL_PATH} /></g>
+          <g transform="translate(-262 -322)"><path fill={inkFill} d={TAIL_PATH} /></g>
         </g>
       </g>
       {/* orchid leaf springs from its own base, a beat later */}
@@ -525,11 +545,13 @@ function LogoLoader({ size = 72, label }) {
   )
 }
 
-function Logo({ onClick }) {
+function Logo({ onClick, light = false }) {
+  // `light` renders the ink leaf + wordmark in white for dark grounds (the
+  // corporate black footer is ink in both themes, so tokens can't carry it).
   return (
     <div onClick={onClick} style={{ display:'flex', alignItems:'center', gap:7, cursor:'pointer', flexShrink:0 }}>
-      <LogoMark size={32} />
-      <span style={{ fontFamily:'var(--fd)', fontSize:'1.15rem', fontWeight:800, letterSpacing:'.02em' }}>ReLivR</span>
+      <LogoMark size={32} ink={light ? '#f5f5f5' : undefined} />
+      <span style={{ fontFamily:'var(--fd)', fontSize:'1.15rem', fontWeight:800, letterSpacing:'-.02em', color:light ? '#ffffff' : undefined }}>ReLivR</span>
     </div>
   )
 }
@@ -835,22 +857,22 @@ function LandingNavbar({ onOpenAuth, onNav, user, onEnterApp }) {
   return (
     <>
       <div style={{ position:'fixed', top:0, left:0, right:0, zIndex:100 }}>
-      <div style={{ background:'var(--amber)', color:'#fff', textAlign:'center', padding:'7px 16px', fontSize:'.8rem', fontFamily:'var(--fb)', fontWeight:600, lineHeight:1.45 }}>
-        🚀 ReLivR is in <strong>beta</strong> — full launch 7 July 2026.<span className="hide-m"> Your feedback shapes what we build.</span> Secure escrow payments coming soon.
+      <div style={{ background:'var(--text-primary)', color:'var(--bg-base)', textAlign:'center', padding:'7px 16px', fontSize:'.8rem', fontFamily:'var(--fb)', fontWeight:600, lineHeight:1.45 }}>
+        ReLivR is in <strong>beta</strong> — full launch 7 July 2026.<span className="hide-m"> Your feedback shapes what we build.</span> Secure escrow payments coming soon.
       </div>
-      <nav style={{ background:scrolled?'color-mix(in srgb, var(--bg-base) 92%, transparent)':'color-mix(in srgb, var(--bg-base) 72%, transparent)', borderBottom:scrolled?'1px solid var(--border-strong)':'1px solid transparent', backdropFilter:'blur(14px)', transition:'all 300ms ease', padding:'0 24px' }}>
-        <div style={{ maxWidth:1200, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', height:64 }}>
+      <nav style={{ background:'var(--bg-base)', borderBottom:'1px solid var(--border)', boxShadow:scrolled?'var(--shadow-sm)':'none', transition:'box-shadow 300ms ease', padding:'0 24px' }}>
+        <div style={{ maxWidth:1200, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', height:68 }}>
           <Logo onClick={() => onNav('home')} />
-          <div className="hide-m" style={{ display:'flex', alignItems:'center', gap:32 }}>
-            {navItems.map(item => <a key={item.label} href={item.href} className="nav-link">{item.label}</a>)}
+          <div className="hide-m" style={{ display:'flex', alignItems:'center', gap:28 }}>
+            {navItems.map(item => <a key={item.label} href={item.href} className="nav-link" style={{ color:'var(--text-primary)' }}>{item.label}</a>)}
           </div>
           <div className="hide-m" style={{ display:'flex', alignItems:'center', gap:10 }}>
             {user ? (
-              <button className="btn-p" onClick={onEnterApp}>Open App →</button>
+              <button className="btn-dark" onClick={onEnterApp}>Open App →</button>
             ) : (
               <>
-                <button className="btn-g" onClick={() => onOpenAuth('login')}>Sign In</button>
-                <button className="btn-p" onClick={() => onOpenAuth('register')}>Get Started →</button>
+                <button className="btn-g" style={{ color:'var(--text-primary)', fontWeight:600 }} onClick={() => onOpenAuth('login')}>Log in</button>
+                <button className="btn-dark" onClick={() => onOpenAuth('register')}>Sign up</button>
               </>
             )}
           </div>
@@ -921,32 +943,36 @@ function LandingFooter({ onNav }) {
     ],
   }
   return (
-    <footer style={{ borderTop:'1px solid var(--border)', padding:'60px 24px 28px', background:'var(--bg-surface)' }}>
+    /* Corporate black footer (Uber grammar) — ink in BOTH themes, so colors are
+       literal here rather than theme tokens. Links use .foot-link. */
+    <footer style={{ padding:'64px 24px 32px', background:'#111111', color:'#b9b9b9' }}>
       <div style={{ maxWidth:1200, margin:'0 auto' }}>
-        <div className="footer-grid" style={{ display:'grid', gridTemplateColumns:'2fr repeat(4,1fr)', gap:44, marginBottom:44 }}>
+        <div className="footer-grid" style={{ display:'grid', gridTemplateColumns:'2fr repeat(4,1fr)', gap:44, marginBottom:48 }}>
           <div>
-            <Logo onClick={() => onNav('home')} />
-            <p style={{ fontSize:'.875rem', color:'var(--text-muted)', lineHeight:1.75, maxWidth:220, margin:'14px 0 16px' }}>The peer-to-peer service marketplace for your local community.</p>
-            <div style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em' }}>Proudly South African</div>
+            <Logo onClick={() => onNav('home')} light />
+            <p style={{ fontSize:'.875rem', color:'#b9b9b9', lineHeight:1.75, maxWidth:240, margin:'14px 0 16px' }}>The local services marketplace for South African communities.</p>
+            <div style={{ fontSize:'.72rem', fontWeight:700, color:'#8a8a8a', textTransform:'uppercase', letterSpacing:'.08em' }}>Proudly South African</div>
           </div>
           {Object.entries(links).map(([cat, items]) => (
             <div key={cat}>
-              <div style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.12em', marginBottom:14 }}>{cat}</div>
+              <div style={{ fontSize:'.74rem', fontWeight:700, color:'#ffffff', textTransform:'uppercase', letterSpacing:'.07em', marginBottom:16 }}>{cat}</div>
               {items.map(item => (
-                <div key={item.label} style={{ marginBottom:9 }}>
+                <div key={item.label} style={{ marginBottom:10 }}>
                   <button onClick={() => item.page ? onNav(item.page) : item.href && window.open(item.href,'_blank')}
-                    className="nav-link" style={{ background:'none', border:'none', fontSize:'.875rem', padding:0, textAlign:'left' }}>{item.label}</button>
+                    className="foot-link" style={{ background:'none', border:'none', fontSize:'.875rem', padding:0, textAlign:'left', cursor:'pointer', transition:'color 150ms' }}>{item.label}</button>
                 </div>
               ))}
             </div>
           ))}
         </div>
-        <Divider style={{ marginBottom:20 }} />
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10 }}>
-          <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em' }}>© 2026 ReLivR · All rights reserved</span>
-          <div style={{ display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
-            <button onClick={openCookiePrefs} className="nav-link" style={{ background:'none', border:'none', padding:0, fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em', cursor:'pointer' }}>Cookie preferences</button>
-            <span style={{ fontFamily:'var(--fm)', fontSize:'.62rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em' }}>POPIA Compliant</span>
+        <div style={{ borderTop:'1px solid #2c2c2c', paddingTop:24, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12 }}>
+          <span style={{ fontSize:'.8rem', color:'#8a8a8a' }}>© 2026 ReLivR (Pty) Ltd · Makhanda, Eastern Cape</span>
+          <div style={{ display:'flex', alignItems:'center', gap:18, flexWrap:'wrap' }}>
+            <button onClick={openCookiePrefs} className="foot-link" style={{ background:'none', border:'none', padding:0, fontSize:'.8rem', cursor:'pointer' }}>Cookie preferences</button>
+            <span style={{ fontSize:'.8rem', color:'#8a8a8a' }}>POPIA Compliant</span>
+            <span style={{ fontSize:'.8rem', color:'#8a8a8a', display:'inline-flex', alignItems:'center', gap:6 }}>
+              <Icon name="globe" size={13} color="#8a8a8a" />English (ZA) · R ZAR
+            </span>
           </div>
         </div>
       </div>
@@ -1554,32 +1580,60 @@ function InstallAppButton({ variant = 'primary', style }) {
 }
 
 function Hero({ onOpenAuth }) {
+  // Corporate hero (Thumbtack/TaskRabbit grammar): the centerpiece is a
+  // What + Where search form, not CTA buttons. Logged-out, so every entry
+  // point funnels into signup — the search intent is the hook, not a query.
   return (
-    <section className="hero-section" style={{ display:'flex', alignItems:'center', padding:'104px 24px 60px', position:'relative' }}>
+    <section className="hero-section" style={{ display:'flex', alignItems:'center', padding:'116px 24px 72px', position:'relative' }}>
       <div style={{ maxWidth:1200, margin:'0 auto', width:'100%' }}>
         <div className="hero-inner" style={{ display:'flex', alignItems:'center', gap:64 }}>
           <div style={{ flex:1, animation:'fadeUp .6s ease both' }}>
-            <div style={{ display:'inline-flex', alignItems:'center', gap:8, background:'var(--bg-surface)', border:'1px solid var(--border-strong)', borderRadius:100, padding:'5px 13px 5px 11px', marginBottom:26, boxShadow:'var(--shadow-xs)' }}>
-              <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--verified)', flexShrink:0 }} />
-              <span style={{ fontFamily:'var(--fm)', fontSize:'.63rem', color:'var(--text-secondary)', letterSpacing:'.1em', textTransform:'uppercase' }}>Proudly South African · Now in beta</span>
+            <div style={{ display:'inline-flex', alignItems:'center', gap:8, marginBottom:24 }}>
+              <span style={{ width:7, height:7, borderRadius:'50%', background:'var(--verified)', flexShrink:0 }} />
+              <span style={{ fontSize:'.78rem', fontWeight:700, color:'var(--text-secondary)', letterSpacing:'.06em', textTransform:'uppercase' }}>Proudly South African · Now in beta</span>
             </div>
-            <h1 style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(2.8rem,6.5vw,5rem)', lineHeight:1.0, letterSpacing:'-.025em', marginBottom:22, textWrap:'balance' }}>
-              Live more.<br /><span style={{ background:'var(--highlight)', padding:'0 .14em', borderRadius:8, WebkitBoxDecorationBreak:'clone', boxDecorationBreak:'clone' }}>stress less.</span>
+            <h1 style={{ fontFamily:'var(--fd)', fontWeight:800, fontSize:'clamp(2.8rem,6vw,4.4rem)', lineHeight:1.05, letterSpacing:'-.04em', marginBottom:20, textWrap:'balance' }}>
+              Help around<br />the corner.
             </h1>
-            <p style={{ fontSize:'clamp(.98rem,1.6vw,1.15rem)', color:'var(--text-secondary)', lineHeight:1.7, maxWidth:500, marginBottom:30 }}>
-              ReLivR connects your community. Post a task, earn money, or get things done — with verified, trust-scored members you can rely on. Secure escrow payments are coming soon.
+            <p style={{ fontSize:'clamp(1rem,1.6vw,1.15rem)', color:'var(--text-secondary)', lineHeight:1.6, maxWidth:480, marginBottom:30 }}>
+              Book trusted, ID-verified neighbours in Makhanda for anything on your list — from laundry runs to Python bugs.
             </p>
-            <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
-              <button className="btn-p" style={{ fontSize:'.95rem', padding:'14px 26px' }} onClick={() => onOpenAuth('register')}>Post a Task Free <Icon name="arrow" size={16} /></button>
-              <button className="btn-s" style={{ fontSize:'.95rem', padding:'14px 26px' }} onClick={() => onOpenAuth('register')}>Start Earning</button>
-              <InstallAppButton variant="secondary" style={{ fontSize:'.95rem', padding:'14px 26px' }} />
+            {/* Search-form centerpiece — submits into signup while logged out */}
+            <form onSubmit={e => { e.preventDefault(); onOpenAuth('register') }}
+              style={{ background:'var(--bg-surface)', border:'1px solid var(--border-strong)', borderRadius:14, boxShadow:'var(--shadow-md)', padding:8, display:'flex', gap:8, alignItems:'stretch', flexWrap:'wrap', maxWidth:620 }}>
+              <div style={{ flex:'1 1 200px', display:'flex', alignItems:'center', gap:10, padding:'4px 12px', minWidth:0 }}>
+                <Icon name="search" size={17} color="var(--text-muted)" />
+                <div style={{ minWidth:0, width:'100%' }}>
+                  <span style={{ display:'block', fontSize:'.62rem', fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color:'var(--text-muted)' }}>What do you need done?</span>
+                  <input placeholder="Try “laundry pickup”" aria-label="What do you need done"
+                    style={{ border:'none', background:'transparent', boxShadow:'none', padding:'2px 0', fontSize:'.95rem', fontWeight:500, borderRadius:0 }} />
+                </div>
+              </div>
+              <div style={{ flex:'0 1 170px', display:'flex', alignItems:'center', gap:10, padding:'4px 12px', borderLeft:'1px solid var(--border)', minWidth:0 }}>
+                <Icon name="pin" size={17} color="var(--text-muted)" />
+                <div style={{ minWidth:0, width:'100%' }}>
+                  <span style={{ display:'block', fontSize:'.62rem', fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color:'var(--text-muted)' }}>Where</span>
+                  <input defaultValue="Makhanda" aria-label="Location"
+                    style={{ border:'none', background:'transparent', boxShadow:'none', padding:'2px 0', fontSize:'.95rem', fontWeight:500, borderRadius:0 }} />
+                </div>
+              </div>
+              <button type="submit" className="btn-p" style={{ padding:'0 28px', borderRadius:8 }}>Search</button>
+            </form>
+            <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginTop:16 }}>
+              <span style={{ fontSize:'.82rem', color:'var(--text-muted)', fontWeight:500, marginRight:2 }}>Popular:</span>
+              {['Laundry pickup','Maths tutoring','Python help','Moving hands'].map(p => (
+                <button key={p} type="button" onClick={() => onOpenAuth('register')}
+                  style={{ background:'var(--bg-surface)', border:'1px solid var(--border-strong)', borderRadius:100, padding:'6px 14px', fontSize:'.82rem', fontWeight:500, color:'var(--text-primary)', cursor:'pointer', transition:'border-color 150ms' }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor='var(--text-primary)'} onMouseLeave={e => e.currentTarget.style.borderColor='var(--border-strong)'}>{p}</button>
+              ))}
+              <InstallAppButton variant="secondary" style={{ fontSize:'.82rem', padding:'6px 14px', borderRadius:100, fontWeight:500, border:'1px solid var(--border-strong)' }} />
             </div>
-            {/* Proof strip — real numbers pulled up under the CTA (Thumbtack/Serv pattern) */}
-            <div style={{ display:'flex', gap:'clamp(20px,3vw,40px)', marginTop:34, flexWrap:'wrap' }}>
+            {/* Proof strip — real numbers pulled up under the search (Thumbtack pattern) */}
+            <div style={{ display:'flex', gap:'clamp(20px,3vw,40px)', marginTop:36, flexWrap:'wrap' }}>
               {STATS_DATA.map((s,i) => (
                 <div key={i}>
-                  <div style={{ fontFamily:'var(--fd)', fontSize:'1.5rem', fontWeight:800, color:'var(--text-primary)', lineHeight:1, letterSpacing:'-.01em' }}>{s.v}</div>
-                  <div style={{ fontFamily:'var(--fm)', fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em', marginTop:5 }}>{s.l}</div>
+                  <div style={{ fontFamily:'var(--fd)', fontSize:'1.5rem', fontWeight:800, color:'var(--text-primary)', lineHeight:1, letterSpacing:'-.02em' }}>{s.v}</div>
+                  <div style={{ fontSize:'.72rem', fontWeight:600, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.05em', marginTop:5 }}>{s.l}</div>
                 </div>
               ))}
             </div>
@@ -1622,8 +1676,8 @@ function StatsBar() {
       <div className="stats-grid" style={{ maxWidth:1200, margin:'0 auto', display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:24 }}>
         {STATS_DATA.map((s,i) => (
           <div key={i} style={{ textAlign:'center' }}>
-            <div style={{ fontFamily:'var(--fd)', fontSize:'clamp(2rem,3vw,2.6rem)', fontWeight:800, color:'var(--amber)', lineHeight:1, marginBottom:5 }}>{s.v}</div>
-            <div style={{ fontFamily:'var(--fm)', fontSize:'.65rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.1em' }}>{s.l}</div>
+            <div style={{ fontFamily:'var(--fd)', fontSize:'clamp(2rem,3vw,2.6rem)', fontWeight:800, color:'var(--text-primary)', letterSpacing:'-.02em', lineHeight:1, marginBottom:6 }}>{s.v}</div>
+            <div style={{ fontSize:'.78rem', fontWeight:600, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.05em' }}>{s.l}</div>
           </div>
         ))}
       </div>
@@ -3164,9 +3218,9 @@ function TaskBrowse({ setPage, setSelectedTask, openProfile }) {
           const active = cat === c.name
           return (
             <button key={c.name} onClick={() => setCat(active ? null : c.name)}
-              style={{ display:'flex', alignItems:'center', gap:7, padding:'8px 14px', borderRadius:100, whiteSpace:'nowrap', cursor:'pointer', transition:'all 150ms ease', border:`1.5px solid ${active?'var(--accent)':'var(--border)'}`, background:active?'var(--accent-glow)':'var(--bg-surface)', color:active?'var(--accent)':'var(--text-secondary)', fontWeight:600, fontSize:'.85rem', fontFamily:'var(--font-body)' }}>
-              <Icon name={categoryIcon(c.name)} size={15} color={active?'var(--accent)':'var(--text-muted)'} />{titleCase(c.name)}
-              {catCounts[c.name] > 0 && <span style={{ fontFamily:'var(--font-mono)', fontSize:'.7rem', fontWeight:600, color:active?'var(--accent)':'var(--text-muted)', opacity:.85 }}>{catCounts[c.name]}</span>}
+              style={{ display:'flex', alignItems:'center', gap:7, padding:'9px 16px', borderRadius:100, whiteSpace:'nowrap', cursor:'pointer', transition:'all 150ms ease', border:`1px solid ${active?'var(--text-primary)':'var(--border-strong)'}`, background:active?'var(--text-primary)':'var(--bg-surface)', color:active?'var(--bg-base)':'var(--text-primary)', fontWeight:600, fontSize:'.85rem', fontFamily:'var(--font-body)' }}>
+              <Icon name={categoryIcon(c.name)} size={15} color={active?'var(--bg-base)':'var(--text-muted)'} />{titleCase(c.name)}
+              {catCounts[c.name] > 0 && <span style={{ fontSize:'.75rem', fontWeight:500, color:active?'var(--bg-base)':'var(--text-muted)', opacity:.75 }}>{catCounts[c.name]}</span>}
             </button>
           )
         })}
@@ -3199,34 +3253,41 @@ function TaskBrowse({ setPage, setSelectedTask, openProfile }) {
         </div>
       </div>
       {loading && <div style={{ padding:40, textAlign:'center' }}><Spinner /></div>}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(310px,1fr))', gap:14 }}>
+      {/* Corporate LIST rows (Thumbtack/TaskRabbit results grammar) — the
+          category's gradient art becomes the row thumbnail. */}
+      <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
         {!loading && filtered.map(task => {
-          const c = categoryFor(task)   // category drives the card's colour + label (no cover image)
+          const c = categoryFor(task)
           const dist = taskDistance(task)
+          const state = taskState(task)
           return (
-          <DCard key={task.task_id} onClick={() => { setSelectedTask(task.task_id); setPage('task-detail') }} style={{ padding:'15px 16px 16px' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, marginBottom:11 }}>
-                <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontFamily:'var(--font-mono)', fontSize:'.66rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'.05em', color:'var(--text-secondary)', background:'var(--bg-elevated)', borderRadius:100, padding:'4px 11px 4px 9px' }}>
-                  <Icon name={categoryIcon(c.name)} size={13} color={c.g[1]} />{c.name}
-                </span>
-                <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.1rem', fontVariantNumeric:'tabular-nums' }}>R{task.budget}</span>
-              </div>
-              <h2 style={{ fontFamily:'var(--font-display)', fontSize:'1.05rem', fontWeight:700, marginBottom:8, lineHeight:1.3, textWrap:'balance' }}>{task.title}</h2>
-              <div style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'wrap', marginBottom:11, fontFamily:'var(--font-mono)', fontSize:'.68rem', letterSpacing:'.04em', textTransform:'uppercase', color:'var(--text-muted)' }}>
+          <div key={task.task_id} className="task-row" onClick={() => { setSelectedTask(task.task_id); setPage('task-detail') }}
+            role="button" tabIndex={0} onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); setSelectedTask(task.task_id); setPage('task-detail') } }}>
+            <div className="task-row-thumb" style={{ background:`linear-gradient(135deg, ${c.g[0]}, ${c.g[1]})` }}>
+              <Icon name={categoryIcon(c.name)} size={38} color="rgba(0,0,0,.45)" />
+            </div>
+            <div style={{ flex:1, minWidth:0, padding:'15px 18px', display:'flex', flexDirection:'column', gap:6 }}>
+              <span style={{ fontSize:'.68rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'.06em', color:'var(--text-muted)' }}>{c.name}</span>
+              <h2 style={{ fontFamily:'var(--font-display)', fontSize:'1.06rem', fontWeight:700, lineHeight:1.3, letterSpacing:'-.01em', margin:0 }}>{task.title}</h2>
+              <div style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'wrap', fontSize:'.8rem', color:'var(--text-muted)' }}>
                 <Icon name="pin" size={12} /><span>{task.campus_zone || 'Your area'}{dist!=null?` · ${dist<1?Math.round(dist*1000)+'m':dist.toFixed(1)+'km'} away`:''}</span>
                 <span>· {timeAgo(task.created_at)}</span>
-                {task.expected_duration && <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}>· <Icon name="clock" size={11} />{task.expected_duration}</span>}
+                {task.expected_duration && <span>· {task.expected_duration}</span>}
               </div>
-              <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:12 }}>{task.skill_tags.slice(0,3).map(t => <Tag key={t}>{t}</Tag>)}</div>
-              <Divider style={{ marginBottom:10 }} />
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
-                <Badge variant={taskState(task).variant}>{taskState(task).label}</Badge>
-                <Mono>{bidCount(task.task_id)} bid{bidCount(task.task_id)!==1?'s':''} · Due {new Date(task.deadline).toLocaleDateString()}</Mono>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginTop:2 }}>{task.skill_tags.slice(0,3).map(t => <Tag key={t}>{t}</Tag>)}</div>
+            </div>
+            <div className="task-row-side">
+              <div style={{ textAlign:'right' }}>
+                <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.25rem', letterSpacing:'-.02em', lineHeight:1, fontVariantNumeric:'tabular-nums' }}>R{task.budget}</div>
+                <div style={{ fontSize:'.7rem', color:'var(--text-muted)', marginTop:3 }}>budget</div>
               </div>
-          </DCard>
+              <Badge variant={state.variant}>{state.label}</Badge>
+              <span style={{ fontSize:'.74rem', color:'var(--text-muted)', whiteSpace:'nowrap' }}>{bidCount(task.task_id)} bid{bidCount(task.task_id)!==1?'s':''} · Due {new Date(task.deadline).toLocaleDateString()}</span>
+            </div>
+          </div>
           )
         })}
-        {filtered.length===0 && <div style={{ gridColumn:'1/-1' }}><EmptyState icon="inbox" message="No tasks match your filter" action={filtersActive?<Btn variant="secondary" size="sm" onClick={() => { setSkill(''); setCat(null); setStatus('all'); setSort('newest') }}>Clear Filters</Btn>:null} /></div>}
+        {filtered.length===0 && <div><EmptyState icon="inbox" message="No tasks match your filter" action={filtersActive?<Btn variant="secondary" size="sm" onClick={() => { setSkill(''); setCat(null); setStatus('all'); setSort('newest') }}>Clear Filters</Btn>:null} /></div>}
       </div>
     </div>
   )
@@ -8843,19 +8904,18 @@ function MobileLanding({ onOpenAuth, onNav }) {
         <button onClick={() => onOpenAuth('login')} style={{ background:'var(--bg-surface)', border:'1px solid var(--border-strong)', borderRadius:100, padding:'7px 16px', color:'var(--text-primary)', fontWeight:600, fontSize:'.86rem', cursor:'pointer' }}>Sign in</button>
       </header>
 
-      {/* Hero — soft accent glow for presence */}
+      {/* Hero — corporate: flat white ground, ink type, no decorative glow */}
       <section style={{ position:'relative', padding:'34px 22px 30px', overflow:'hidden' }}>
-        <div aria-hidden="true" style={{ position:'absolute', inset:0, background:'radial-gradient(115% 75% at 50% -12%, var(--accent-glow) 0%, transparent 58%)', pointerEvents:'none' }} />
         <div style={{ position:'relative' }}>
-          <div style={{ display:'inline-flex', alignItems:'center', gap:7, background:'var(--bg-surface)', border:'1px solid var(--border-strong)', borderRadius:100, padding:'6px 13px', marginBottom:22, boxShadow:'var(--shadow-xs)' }}>
+          <div style={{ display:'inline-flex', alignItems:'center', gap:7, marginBottom:20 }}>
             <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--verified)' }} />
-            <span style={{ fontFamily:'var(--font-mono)', fontSize:'.6rem', color:'var(--text-secondary)', letterSpacing:'.1em', textTransform:'uppercase' }}>Proudly South African · Beta</span>
+            <span style={{ fontSize:'.72rem', fontWeight:700, color:'var(--text-secondary)', letterSpacing:'.06em', textTransform:'uppercase' }}>Proudly South African · Beta</span>
           </div>
-          <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'clamp(2.5rem,12vw,3.15rem)', lineHeight:1.0, letterSpacing:'-.035em', margin:'0 0 16px' }}>
-            Live more.<br /><span style={{ background:'var(--highlight)', padding:'0 .12em', borderRadius:8, WebkitBoxDecorationBreak:'clone', boxDecorationBreak:'clone' }}>stress less.</span>
+          <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'clamp(2.5rem,12vw,3.15rem)', lineHeight:1.04, letterSpacing:'-.04em', margin:'0 0 16px' }}>
+            Help around<br />the corner.
           </h1>
           <p style={{ fontSize:'1.06rem', color:'var(--text-secondary)', lineHeight:1.58, margin:'0 0 26px', maxWidth:'19rem' }}>
-            Post a task, earn money, or get things done — with verified, trust-scored people near you.
+            Book trusted, ID-verified neighbours in Makhanda for anything on your list.
           </p>
           <div style={{ display:'flex', flexDirection:'column', gap:11 }}>
             <button style={primaryBtn} onClick={() => onOpenAuth('register')}>Post a task — it’s free <Icon name="arrow" size={18} /></button>

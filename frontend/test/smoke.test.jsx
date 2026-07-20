@@ -13,7 +13,7 @@ describe('App smoke test', () => {
 
   it('renders the landing hero for a logged-out visitor', () => {
     render(<App />)
-    expect(screen.getByText(/stress less/i)).toBeInTheDocument()
-    expect(screen.getByText(/Live more/i)).toBeInTheDocument()
+    expect(screen.getByText(/help around/i)).toBeInTheDocument()
+    expect(screen.getByText(/id-verified neighbours/i)).toBeInTheDocument()
   })
 })

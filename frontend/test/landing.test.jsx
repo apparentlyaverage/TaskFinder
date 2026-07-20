@@ -9,15 +9,17 @@ describe('Landing page', () => {
     window.history.pushState({}, '', '/')
   })
 
-  it('shows the hero and primary CTAs', () => {
+  it('shows the corporate hero with the search-form centerpiece', () => {
     render(<App />)
-    expect(screen.getByText(/stress less/i)).toBeInTheDocument()
-    expect(screen.getAllByText(/Post a Task Free/i).length).toBeGreaterThan(0)
+    expect(screen.getByText(/help around/i)).toBeInTheDocument()
+    // The hero's centerpiece is the What + Where search form (Thumbtack grammar)
+    expect(screen.getByPlaceholderText(/laundry pickup/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^search$/i })).toBeInTheDocument()
   })
 
-  it('opens an accessible auth modal from a Get Started button', () => {
+  it('opens an accessible auth modal from a sign-up button', () => {
     render(<App />)
-    const cta = screen.getAllByRole('button', { name: /get started/i })[0]
+    const cta = screen.getAllByRole('button', { name: /sign up|get started/i })[0]
     fireEvent.click(cta)
     // Modal mounts with the Google option (no network needed)
     expect(screen.getByText(/with Google/i)).toBeInTheDocument()
