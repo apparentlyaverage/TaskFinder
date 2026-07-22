@@ -43,10 +43,13 @@ router.post('/',
     body('campus_zone').optional({ nullable: true }).trim().custom(validateLocationName),
     body('expected_duration').optional({ nullable: true }).trim().isLength({ max: 40 }),
     body('bids_close_at').optional({ nullable: true }).isISO8601(),
+    // FCFS: 'bid' (default, negotiated bids) or 'fcfs' (first earner to claim wins).
+    body('assignment_mode').optional().isIn(['bid', 'fcfs']),
   ],
   check,
   async (req, res) => {
     const { title, skill_tags = [], campus_zone = null, expected_duration = null, bids_close_at = null } = req.body
+    const assignmentMode = req.body.assignment_mode === 'fcfs' ? 'fcfs' : 'bid'
     const isDraft = req.body.status === 'draft'
     const description = req.body.description?.trim() || null
     const budget = req.body.budget ?? null
@@ -61,11 +64,13 @@ router.post('/',
       return res.status(400).json({ message: 'Deadline must be in the future.' })
     }
     if (rejectIfProfane(res, title, description || '')) return
+    // FCFS is a fixed-price claim model — bidding cut-offs don't apply.
+    const bidsCloseAt = assignmentMode === 'fcfs' ? null : bids_close_at
     try {
       const { rows } = await pool.query(
-        `INSERT INTO tasks (creator_id, title, description, budget, deadline, skill_tags, campus_zone, expected_duration, bids_close_at, status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-        [req.userId, title, description, budget, deadline, skill_tags, campus_zone, expected_duration, bids_close_at, isDraft ? 'draft' : 'open']
+        `INSERT INTO tasks (creator_id, title, description, budget, deadline, skill_tags, campus_zone, expected_duration, bids_close_at, assignment_mode, status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+        [req.userId, title, description, budget, deadline, skill_tags, campus_zone, expected_duration, bidsCloseAt, assignmentMode, isDraft ? 'draft' : 'open']
       )
       return res.status(201).json({ task: rows[0] })
     } catch (err) {
@@ -221,9 +226,10 @@ router.post('/:taskId/bids',
     if (rejectIfProfane(res, pitch)) return
     try {
       const taskResult = await pool.query(
-        'SELECT task_id, creator_id, status, title, bids_close_at FROM tasks WHERE task_id = $1', [taskId])
+        'SELECT task_id, creator_id, status, title, bids_close_at, assignment_mode FROM tasks WHERE task_id = $1', [taskId])
       if (taskResult.rows.length === 0) return res.status(404).json({ message: 'Task not found.' })
       const task = taskResult.rows[0]
+      if (task.assignment_mode === 'fcfs') return res.status(409).json({ message: 'This is a first-come-first-serve task — claim it instead of bidding.' })
       if (task.status !== 'open') return res.status(409).json({ message: 'Task is no longer accepting bids.' })
       if (task.bids_close_at && new Date(task.bids_close_at) <= new Date()) return res.status(409).json({ message: 'Bidding has closed for this task.' })
       if (task.creator_id === req.userId) return res.status(403).json({ message: 'You cannot bid on your own task.' })
@@ -297,6 +303,55 @@ router.patch('/:taskId/bids/:bidId/accept',
       return res.status(500).json({ message: 'Internal server error.' })
     } finally {
       client.release()
+    }
+  }
+)
+
+// POST /tasks/:taskId/claim — first-come-first-serve claim (fcfs tasks only).
+// The FIRST earner to claim wins; the task is assigned immediately at its fixed
+// budget. Race-safe: the guarded UPDATE only touches a still-open, unassigned
+// fcfs task, so two simultaneous claims can never both succeed — the loser's
+// UPDATE matches no row and gets a 409.
+router.post('/:taskId/claim',
+  requireAuth,
+  [param('taskId').isUUID()],
+  check,
+  async (req, res) => {
+    const { taskId } = req.params
+    try {
+      // Read for validation messaging (mode / ownership / already-claimed).
+      const pre = await pool.query(
+        'SELECT creator_id, status, assignment_mode, title FROM tasks WHERE task_id = $1 AND archived_at IS NULL',
+        [taskId])
+      if (pre.rows.length === 0) return res.status(404).json({ message: 'Task not found.' })
+      const t = pre.rows[0]
+      if (t.assignment_mode !== 'fcfs') return res.status(409).json({ message: 'This task uses bidding — place a bid instead.' })
+      if (t.creator_id === req.userId) return res.status(403).json({ message: 'You cannot claim your own task.' })
+      if (t.status !== 'open') return res.status(409).json({ message: 'This task has already been claimed.' })
+
+      // Atomic claim — the WHERE clause is the concurrency guard. agreed_amount
+      // is fixed to the creator's budget (no negotiation in fcfs).
+      const { rows } = await pool.query(
+        `UPDATE tasks
+            SET status = 'in_progress', assigned_to = $1, agreed_amount = budget
+          WHERE task_id = $2 AND status = 'open' AND assignment_mode = 'fcfs' AND assigned_to IS NULL
+          RETURNING task_id, title, agreed_amount, creator_id`,
+        [req.userId, taskId])
+      if (rows.length === 0) return res.status(409).json({ message: 'This task has already been claimed.' })
+      const claimed = rows[0]
+
+      createNotification({
+        userId: claimed.creator_id,
+        type: 'task.claimed',
+        title: 'Your task was claimed',
+        body: `Someone claimed "${claimed.title}" and can start work now.`,
+        referenceId: taskId,
+      })
+
+      return res.status(200).json({ message: 'Task claimed.', task_id: claimed.task_id, agreed_amount: claimed.agreed_amount })
+    } catch (err) {
+      log.error('POST /tasks/:taskId/claim', { reqId: req.id, msg: err.message })
+      return res.status(500).json({ message: 'Internal server error.' })
     }
   }
 )
