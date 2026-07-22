@@ -189,7 +189,7 @@ body {
 }
 ::selection { background: var(--amber); color: #fff; }
 a { color: inherit; text-decoration: none; }
-button { cursor: pointer; font-family: var(--font-body); border: none; }
+button { cursor: pointer; font-family: var(--font-body); border: none; color: inherit; }
 /* Visible keyboard focus for a11y (mouse clicks don't trigger :focus-visible) */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 a:focus-visible, button:focus-visible, [role="button"]:focus-visible,
@@ -2663,6 +2663,7 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch,
         { id:'schedule',     label:'Schedule' },
         { id:'tasks-mine',   label:'My Tasks' },
         { id:'my-bids',      label:'My Bids' },
+        { id:'my-orders',    label:'My Orders' },
       ]
 
   // ── Mobile chrome: compact header + full-width search + hamburger nav drawer ──
@@ -2676,6 +2677,7 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch,
       { id:'schedule',     label:'Schedule',   icon:'calendar' },
       { id:'tasks-mine',   label:'My Tasks',   icon:'inbox' },
       { id:'my-bids',      label:'My Bids',    icon:'briefcase' },
+      { id:'my-orders',    label:'My Orders',  icon:'store' },
       { id:'messages',     label:'Messages',   icon:'message' },
       { id:'notifications',label:'Notifications', icon:'bell' },
       { id:'profile',      label:'My Profile', icon:'user' },
@@ -2820,6 +2822,7 @@ function TopBar({ page, setPage, unreadCount, onGoHome, onViewLanding, onSearch,
                     { label:'My Profile', go:'profile' },
                     { label:'My Tasks', go:'tasks-mine' },
                     { label:'My Bids',  go:'my-bids' },
+                    { label:'My Orders', go:'my-orders' },
                     // On mobile these have no bottom-tab, so surface them here too.
                     ...(isMobile && !isAdmin ? [
                       { label:'Local', go:'local-browse' },
@@ -3110,7 +3113,7 @@ function FeaturedBusinessStrip({ setPage }) {
       <div className="feed-scroll" style={{ display:'flex', gap:10, overflowX:'auto', paddingBottom:4 }}>
         {biz.map(b => (
           <button key={b.business_id} onClick={() => open(b.business_id)}
-            style={{ position:'relative', flex:'0 0 auto', width:230, textAlign:'left', display:'flex', gap:11, alignItems:'center', padding:'11px 13px', borderRadius:'var(--radius-md)', cursor:'pointer', border:'1px solid var(--border)', background:'var(--bg-surface)', transition:'border-color 150ms ease, transform 150ms ease' }}
+            style={{ position:'relative', flex:'0 0 auto', width:230, textAlign:'left', display:'flex', gap:11, alignItems:'center', padding:'11px 13px', borderRadius:'var(--radius-md)', cursor:'pointer', border:'1px solid var(--border)', background:'var(--bg-surface)', color:'var(--text-primary)', transition:'border-color 150ms ease, transform 150ms ease' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.transform='translateY(-1px)' }}
             onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.transform='none' }}>
             <span style={{ position:'absolute', top:7, right:9, fontFamily:'var(--font-mono)', fontSize:'.52rem', fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color:'var(--text-muted)' }}>Ad</span>
@@ -3268,7 +3271,7 @@ function TaskBrowse({ setPage, setSelectedTask, openProfile }) {
             </div>
             <div style={{ flex:1, minWidth:0, padding:'15px 18px', display:'flex', flexDirection:'column', gap:6 }}>
               <span style={{ fontSize:'.68rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'.06em', color:'var(--text-muted)' }}>{c.name}</span>
-              <h2 style={{ fontFamily:'var(--font-display)', fontSize:'1.06rem', fontWeight:700, lineHeight:1.3, letterSpacing:'-.01em', margin:0 }}>{task.title}</h2>
+              <h2 style={{ fontFamily:'var(--font-display)', fontSize:'1.06rem', fontWeight:700, lineHeight:1.3, letterSpacing:'-.01em', margin:0 }}>{task.title}{task.assignment_mode==='fcfs' && <span style={{ marginLeft:8, verticalAlign:'middle', display:'inline-block', fontSize:'.6rem', fontWeight:800, textTransform:'uppercase', letterSpacing:'.06em', padding:'2px 7px', borderRadius:999, background:'var(--text-primary)', color:'var(--bg-base)' }}>Claim now</span>}</h2>
               <div style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'wrap', fontSize:'.8rem', color:'var(--text-muted)' }}>
                 <Icon name="pin" size={12} /><span>{task.campus_zone || 'Your area'}{dist!=null?` · ${dist<1?Math.round(dist*1000)+'m':dist.toFixed(1)+'km'} away`:''}</span>
                 <span>· {timeAgo(task.created_at)}</span>
@@ -3279,10 +3282,10 @@ function TaskBrowse({ setPage, setSelectedTask, openProfile }) {
             <div className="task-row-side">
               <div style={{ textAlign:'right' }}>
                 <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.25rem', letterSpacing:'-.02em', lineHeight:1, fontVariantNumeric:'tabular-nums' }}>R{task.budget}</div>
-                <div style={{ fontSize:'.7rem', color:'var(--text-muted)', marginTop:3 }}>budget</div>
+                <div style={{ fontSize:'.7rem', color:'var(--text-muted)', marginTop:3 }}>{task.assignment_mode==='fcfs'?'fixed price':'budget'}</div>
               </div>
               <Badge variant={state.variant}>{state.label}</Badge>
-              <span style={{ fontSize:'.74rem', color:'var(--text-muted)', whiteSpace:'nowrap' }}>{bidCount(task.task_id)} bid{bidCount(task.task_id)!==1?'s':''} · Due {new Date(task.deadline).toLocaleDateString()}</span>
+              <span style={{ fontSize:'.74rem', color:'var(--text-muted)', whiteSpace:'nowrap' }}>{task.assignment_mode==='fcfs' ? 'First come, first serve' : `${bidCount(task.task_id)} bid${bidCount(task.task_id)!==1?'s':''}`} · Due {new Date(task.deadline).toLocaleDateString()}</span>
             </div>
           </div>
           )
@@ -3499,6 +3502,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
   const [bidPitch, setBidPitch]     = useState('')
   const [bidErrors, setBidErrors]   = useState({})
   const [bidLoading, setBidLoading] = useState(false)
+  const [claimLoading, setClaimLoading] = useState(false)
   const [acceptModal, setAcceptModal] = useState(null)
   const [acceptLoading, setAcceptLoading] = useState(false)
   const [releaseModal, setReleaseModal]   = useState(false)
@@ -3519,6 +3523,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
   const isOwner    = task && task.creator_id === user.userId
   const isCreator  = isOwner                       // can manage this task
   const isEarner   = task && !isOwner              // can bid on it
+  const isFcfs     = task?.assignment_mode === 'fcfs'   // fixed-price, claim-to-win
   const bidsClosed = !!(task && task.bids_close_at && new Date(task.bids_close_at) <= new Date())
   const acceptedBid = bids.find(b=>b.status==='accepted')
   const currentStatus = task?.status
@@ -3547,6 +3552,25 @@ function TaskDetail({ taskId, setPage, openChat }) {
       toast(err.message, 'error')
     } finally {
       setBidLoading(false)
+    }
+  }
+
+  // FCFS: claim the fixed-price task outright. A 409 means someone beat us to it.
+  async function submitClaim() {
+    setClaimLoading(true)
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}/claim`, {
+        method:'POST',
+        headers:{ Authorization:`Bearer ${token()}` },
+      })
+      const data = await res.json().catch(()=>({}))
+      if (!res.ok) throw new Error(data.message || 'Could not claim this task')
+      toast('Task claimed — it\'s yours. Message the poster to coordinate.', 'success')
+      await loadTask({ silent:true })   // flips to in_progress, assigned to me
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setClaimLoading(false)
     }
   }
 
@@ -3699,6 +3723,14 @@ function TaskDetail({ taskId, setPage, openChat }) {
           <DCard hover={false}><Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:10 }}>Description</Mono><p style={{ color:'var(--text-secondary)', lineHeight:1.75 }}>{task.description}</p></DCard>
           <DCard hover={false}><Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:10 }}>Required Skills</Mono><div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>{task.skill_tags.map(t => <Tag key={t}>{t}</Tag>)}</div></DCard>
 
+          {isFcfs ? (
+            <DCard hover={false}>
+              <Mono size="0.68rem" color="var(--accent)" style={{ display:'block', marginBottom:10 }}>First come, first serve</Mono>
+              {currentStatus==='open'
+                ? <p style={{ fontSize:'0.85rem', color:'var(--text-secondary)', lineHeight:1.6 }}>{isOwner ? `Fixed price of R${task.budget}. The first earner to claim it is assigned automatically — no bids to review.` : `Fixed price of R${task.budget}. No bidding — claim it to start.`}</p>
+                : <p style={{ fontSize:'0.85rem', color:'var(--text-secondary)', lineHeight:1.6 }}>This task was claimed{acceptedBid?'':''} at its fixed price of R{task.agreed_amount ?? task.budget}.</p>}
+            </DCard>
+          ) : (
           <DCard hover={false}>
             <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:16 }}>Bids ({bids.length})</Mono>
             {bids.length===0 ? <EmptyState icon="inbox" message="No bids yet" /> : (
@@ -3728,6 +3760,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
               </div>
             )}
           </DCard>
+          )}
 
           {/* C3: progress timeline once work is under way */}
           {currentStatus!=='open' && currentStatus!=='cancelled' && currentStatus!=='expired' && <StatusTimeline status={currentStatus} />}
@@ -3790,12 +3823,20 @@ function TaskDetail({ taskId, setPage, openChat }) {
         </div>
 
         <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-          {isEarner&&currentStatus==='open'&&!alreadyBid&&bidsClosed&&(
+          {isEarner&&isFcfs&&currentStatus==='open'&&(
+            <DCard hover={false} style={{ border:'1px solid var(--text-primary)' }}>
+              <Mono size="0.68rem" color="var(--accent)" style={{ display:'block', marginBottom:10 }}>First come, first serve</Mono>
+              <div style={{ fontSize:'1.5rem', fontWeight:800, color:'var(--text-primary)', marginBottom:4 }}>R{task.budget}</div>
+              <p style={{ fontSize:'0.82rem', color:'var(--text-secondary)', marginBottom:14, lineHeight:1.5 }}>Fixed price — no bidding. Claim it now and it's yours to start. First to claim wins.</p>
+              <Btn fullWidth loading={claimLoading} onClick={submitClaim}>Claim this task</Btn>
+            </DCard>
+          )}
+          {isEarner&&!isFcfs&&currentStatus==='open'&&!alreadyBid&&bidsClosed&&(
             <DCard hover={false} style={{ border:'1px solid var(--border)', textAlign:'center', padding:20 }}>
               <Mono color="var(--text-muted)" size="0.8rem">Bidding has closed for this task.</Mono>
             </DCard>
           )}
-          {isEarner&&currentStatus==='open'&&!alreadyBid&&!bidsClosed&&(
+          {isEarner&&!isFcfs&&currentStatus==='open'&&!alreadyBid&&!bidsClosed&&(
             <DCard hover={false}>
               <Mono size="0.68rem" color="var(--accent)" style={{ display:'block', marginBottom:14 }}>Submit Your Bid</Mono>
               <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
@@ -3822,7 +3863,7 @@ function TaskDetail({ taskId, setPage, openChat }) {
           )}
           <DCard hover={false}>
             <Mono size="0.68rem" color="var(--text-secondary)" style={{ display:'block', marginBottom:14 }}>Task Details</Mono>
-            {[['Budget',`R${task.budget}`],['Deadline',new Date(task.deadline).toLocaleDateString()],...(task.expected_duration?[['Duration',task.expected_duration]]:[]),['Status',currentStatus?.replace('_',' ')],['Posted',new Date(task.created_at).toLocaleDateString()],['Bids',`${bids.length} bid${bids.length!==1?'s':''}`],...(task.bids_close_at?[['Bids close',new Date(task.bids_close_at).toLocaleDateString()]]:[]),['Task ID',`#${task.task_id}`]].map(([k,v]) => (
+            {[['Budget',`R${task.budget}`],['Deadline',new Date(task.deadline).toLocaleDateString()],...(task.expected_duration?[['Duration',task.expected_duration]]:[]),['Status',currentStatus?.replace('_',' ')],['Posted',new Date(task.created_at).toLocaleDateString()],...(isFcfs?[['Type','First come, first serve']]:[['Bids',`${bids.length} bid${bids.length!==1?'s':''}`],...(task.bids_close_at?[['Bids close',new Date(task.bids_close_at).toLocaleDateString()]]:[])]),['Task ID',`#${task.task_id}`]].map(([k,v]) => (
               <div key={k} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 0', borderBottom:'1px solid var(--border)' }}>
                 <Mono>{k}</Mono><span style={{ fontSize:'0.85rem', color:'var(--text-primary)', fontWeight:500 }}>{v}</span>
               </div>
@@ -3911,6 +3952,8 @@ function TaskNew({ setPage, setSelectedTask }) {
   const [deadline, setDead] = useState('')
   const [duration, setDuration]   = useState('')
   const [bidsClose, setBidsClose] = useState('')
+  // 'bid' = earners bid, you pick a winner. 'fcfs' = fixed price, first to claim wins.
+  const [assignmentMode, setAssignmentMode] = useState('bid')
   const [tags, setTags]     = useState('')
   const [zone, setZone]     = useState('') // A5: lets Browse Tasks sort this by proximity
   const [errors, setErrors] = useState({})
@@ -3940,6 +3983,7 @@ function TaskNew({ setPage, setSelectedTask }) {
         setDead(t.deadline ? new Date(t.deadline).toISOString().slice(0, 10) : '')
         setDuration(t.expected_duration || '')
         setBidsClose(t.bids_close_at ? new Date(t.bids_close_at).toISOString().slice(0, 10) : '')
+        setAssignmentMode(t.assignment_mode === 'fcfs' ? 'fcfs' : 'bid')
         setTags((t.skill_tags || []).join(', '))
         setZone(t.campus_zone || '')
       })
@@ -3963,6 +4007,7 @@ function TaskNew({ setPage, setSelectedTask }) {
       skill_tags: skillTags,
       expected_duration: duration || null,
       bids_close_at: bidsClose ? new Date(bidsClose).toISOString() : null,
+      assignment_mode: assignmentMode,
       campus_zone: zone || null,
     }
     try {
@@ -4003,6 +4048,7 @@ function TaskNew({ setPage, setSelectedTask }) {
       skill_tags: skillTags,
       expected_duration: duration || null,
       bids_close_at: bidsClose ? new Date(bidsClose).toISOString() : null,
+      assignment_mode: assignmentMode,
       campus_zone: zone || null,
     }
     try {
@@ -4056,7 +4102,7 @@ function TaskNew({ setPage, setSelectedTask }) {
         <div style={{ display:'flex', gap:10, justifyContent:'center', flexWrap:'wrap' }}>
           <Btn onClick={() => { setSelectedTask(createdId); setPage('task-detail') }}>View Task</Btn>
           <Btn variant="secondary" onClick={() => { setSelectedTask(null); setPage('tasks-mine') }}>All My Tasks</Btn>
-          <Btn variant="ghost" onClick={() => { setTitle(''); setDesc(''); setBudget(''); setDead(''); setDuration(''); setBidsClose(''); setTags(''); setCreatedId(null); setStep(0) }}>Post Another</Btn>
+          <Btn variant="ghost" onClick={() => { setTitle(''); setDesc(''); setBudget(''); setDead(''); setDuration(''); setBidsClose(''); setAssignmentMode('bid'); setTags(''); setCreatedId(null); setStep(0) }}>Post Another</Btn>
         </div>
       </DCard>
     </div>
@@ -4075,14 +4121,38 @@ function TaskNew({ setPage, setSelectedTask }) {
             {zones.map(z => <option key={z} value={z}>{z}</option>)}
           </SelectField>
         </div>}
-        {step===1&&<div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:18 }}>
-          <Input label="Budget (R)" type="number" min="1" placeholder="e.g. 500" value={budget} onChange={e=>{setBudget(e.target.value);setErrors(v=>({...v,budget:null}))}} error={errors.budget} />
-          <Input label="Deadline" type="date" min={new Date().toISOString().slice(0,10)} value={deadline} onChange={e=>{setDead(e.target.value);setErrors(v=>({...v,deadline:null}))}} error={errors.deadline} />
-          <SelectField label="Expected duration" value={duration} onChange={e=>setDuration(e.target.value)}>
-            <option value="">Not sure</option>
-            {TASK_DURATIONS.map(d => <option key={d} value={d}>{d}</option>)}
-          </SelectField>
-          <Input label="Bidding closes" type="date" min={new Date().toISOString().slice(0,10)} value={bidsClose} onChange={e=>setBidsClose(e.target.value)} hint="Optional — no new bids after this date" />
+        {step===1&&<div style={{ display:'grid', gap:18 }}>
+          {/* How the task gets assigned — bidding vs first-come-first-serve. */}
+          <div>
+            <div style={{ fontSize:'.82rem', fontWeight:600, color:'var(--text-secondary)', marginBottom:8 }}>How do you want to assign it?</div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              {[
+                { v:'bid',  t:'Take bids',        d:'Earners bid, you pick who and at what price.' },
+                { v:'fcfs', t:'First come, first serve', d:'Fixed price — the first earner to claim gets it, instantly.' },
+              ].map(o => {
+                const on = assignmentMode === o.v
+                return (
+                  <button key={o.v} type="button" onClick={()=>setAssignmentMode(o.v)}
+                    style={{ textAlign:'left', padding:'12px 14px', borderRadius:'var(--radius-md)', cursor:'pointer',
+                      border:`1.5px solid ${on?'var(--text-primary)':'var(--border)'}`,
+                      background:on?'var(--bg-elevated)':'var(--bg-surface)', color:'var(--text-primary)',
+                      transition:'border-color 150ms ease' }}>
+                    <div style={{ fontWeight:700, fontSize:'.9rem' }}>{o.t}</div>
+                    <div style={{ fontSize:'.76rem', color:'var(--text-muted)', marginTop:3, lineHeight:1.35 }}>{o.d}</div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:18 }}>
+            <Input label={assignmentMode==='fcfs'?'Fixed price (R)':'Budget (R)'} type="number" min="1" placeholder="e.g. 500" value={budget} onChange={e=>{setBudget(e.target.value);setErrors(v=>({...v,budget:null}))}} error={errors.budget} hint={assignmentMode==='fcfs'?'The earner is paid exactly this — no negotiation':undefined} />
+            <Input label="Deadline" type="date" min={new Date().toISOString().slice(0,10)} value={deadline} onChange={e=>{setDead(e.target.value);setErrors(v=>({...v,deadline:null}))}} error={errors.deadline} />
+            <SelectField label="Expected duration" value={duration} onChange={e=>setDuration(e.target.value)}>
+              <option value="">Not sure</option>
+              {TASK_DURATIONS.map(d => <option key={d} value={d}>{d}</option>)}
+            </SelectField>
+            {assignmentMode==='bid' && <Input label="Bidding closes" type="date" min={new Date().toISOString().slice(0,10)} value={bidsClose} onChange={e=>setBidsClose(e.target.value)} hint="Optional — no new bids after this date" />}
+          </div>
         </div>}
         {step===2&&(() => {
           const current = tags.split(',').map(s=>s.trim()).filter(Boolean)
@@ -4427,6 +4497,83 @@ function MyBids({ setPage, setSelectedTask }) {
   )
 }
 
+// Buyer's catalogue-order history (pay-on-collection). Read-only, except a buyer
+// may cancel an order that's still pending.
+const MYORDER_BADGE = { pending:'pending', accepted:'accepted', ready:'in_progress', completed:'completed', cancelled:'rejected' }
+function MyOrders({ openBusiness }) {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [orders, setOrders] = useState(null)
+  const [busy, setBusy] = useState(null)
+
+  const load = () => fetch(`${API_BASE}/orders/mine`, { headers: { Authorization: `Bearer ${token()}` } })
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('load')))
+    .then(d => setOrders(d.orders || []))
+    .catch(() => setOrders([]))
+  useEffect(() => { load() }, []) // eslint-disable-line
+
+  async function cancel(order) {
+    setBusy(order.order_id)
+    try {
+      const res = await fetch(`${API_BASE}/orders/${order.order_id}/cancel`, { method:'PATCH', headers:{ Authorization:`Bearer ${token()}` } })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || 'Could not cancel order')
+      toast('Order cancelled', 'info')
+      await load()
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const statusLine = {
+    pending:  'Waiting for the business to confirm',
+    accepted: 'Confirmed — being prepared',
+    ready:    'Ready for collection — pay on collection',
+    completed:'Collected',
+    cancelled:'Cancelled',
+  }
+
+  return (
+    <div style={{ maxWidth:760, margin:'0 auto', padding:'8px 0 40px' }}>
+      <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.5rem', marginBottom:4 }}>My Orders</h1>
+      <p style={{ color:'var(--text-secondary)', fontSize:'.88rem', marginBottom:20 }}>Catalogue items you've ordered. Payment is settled with the business on collection.</p>
+      {orders === null ? <div style={{ padding:40, textAlign:'center' }}><Spinner /></div>
+        : orders.length === 0 ? <EmptyState icon="inbox" message="You haven't ordered anything yet" />
+        : (
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {orders.map(o => (
+              <DCard key={o.order_id} hover={false} style={{ padding:'14px 16px' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12, flexWrap:'wrap' }}>
+                  <div style={{ minWidth:0, flex:1 }}>
+                    <div style={{ fontWeight:700, fontSize:'.95rem' }}>{o.quantity}× {o.product_name}</div>
+                    <div style={{ fontSize:'.8rem', color:'var(--text-muted)', marginTop:2 }}>
+                      {o.business_name
+                        ? <span onClick={() => openBusiness?.(o.business_id)} style={{ cursor:'pointer', textDecoration:'underline', textUnderlineOffset:2 }}>{o.business_name}</span>
+                        : 'Business'} · {new Date(o.created_at).toLocaleDateString()}
+                    </div>
+                    <div style={{ fontSize:'.8rem', color:'var(--text-secondary)', marginTop:5 }}>{statusLine[o.status]}</div>
+                    {o.note && <div style={{ fontSize:'.82rem', color:'var(--text-secondary)', marginTop:6, lineHeight:1.5 }}>“{o.note}”</div>}
+                  </div>
+                  <div style={{ textAlign:'right' }}>
+                    <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.05rem' }}>{o.total_cents != null ? zar(o.total_cents) : 'On collection'}</div>
+                    <div style={{ marginTop:4 }}><Badge variant={MYORDER_BADGE[o.status] || 'default'}>{o.status}</Badge></div>
+                  </div>
+                </div>
+                {o.status === 'pending' && (
+                  <div style={{ marginTop:12 }}>
+                    <Btn size="sm" variant="danger" loading={busy===o.order_id} onClick={() => cancel(o)}>Cancel order</Btn>
+                  </div>
+                )}
+              </DCard>
+            ))}
+          </div>
+        )}
+    </div>
+  )
+}
+
 function Suggestions({ setPage, setSelectedTask }) {
   const { state } = useStore()
   const toast = useToast()
@@ -4752,6 +4899,7 @@ function Notifications({ setPage, setSelectedTask, openProfile }) {
     if (/^(task\.|bid\.)/.test(t) && ref)            { setSelectedTask(ref); setPage('task-detail'); return }
     if (t === 'message.received')                    { setPage('messages'); return }
     if (t === 'follow.new' && ref && openProfile)    { openProfile(ref); return }
+    if (t.startsWith('order.'))                      { setPage('my-orders'); return }
     if (t.startsWith('deal.'))                       { setPage('deals'); return }
     if (t.startsWith('booking.') || t.startsWith('retainer.')) { setPage('schedule'); return }
     if (t.startsWith('dispute.'))                    { setPage('tasks-mine'); return }
@@ -5117,7 +5265,15 @@ function BizLightbox({ images, index, onClose, onNav }) {
 // Public catalog on a business profile (Batch 5) — available items only.
 // Renders nothing if the business has no catalog, so it never leaves an empty header.
 function BusinessCatalogPublic({ businessId }) {
+  const { user } = useAuth()
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
   const [products, setProducts] = useState(null)
+  const [orderItem, setOrderItem] = useState(null)   // product being ordered, or null
+  const [qty, setQty] = useState('1')
+  const [note, setNote] = useState('')
+  const [phone, setPhone] = useState('')
+  const [placing, setPlacing] = useState(false)
   useEffect(() => {
     let cancelled = false
     fetch(`${API_BASE}/businesses/${businessId}/products`)
@@ -5126,11 +5282,38 @@ function BusinessCatalogPublic({ businessId }) {
       .catch(() => { if (!cancelled) setProducts([]) })
     return () => { cancelled = true }
   }, [businessId])
+
+  function startOrder(p) {
+    if (!user) { toast('Log in to place an order', 'info'); return }
+    setOrderItem(p); setQty('1'); setNote(''); setPhone('')
+  }
+  const orderQty = Math.max(1, Math.min(999, parseInt(qty, 10) || 1))
+  const orderTotal = orderItem && orderItem.price_cents != null ? orderItem.price_cents * orderQty : null
+
+  async function placeOrder() {
+    setPlacing(true)
+    try {
+      const res = await fetch(`${API_BASE}/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({ product_id: orderItem.product_id, quantity: orderQty, note: note.trim() || null, contact_phone: phone.trim() || null }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || 'Could not place order')
+      toast('Order placed — the business will confirm. Pay on collection.', 'success')
+      setOrderItem(null)
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setPlacing(false)
+    }
+  }
+
   if (!products || products.length === 0) return null
   return (
     <div style={{ marginTop: 24 }}>
       <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.1rem', marginBottom: 12 }}>Catalog</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
         {products.map(p => (
           <div key={p.product_id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: 10, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
             {p.image_url
@@ -5139,11 +5322,33 @@ function BusinessCatalogPublic({ businessId }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: '.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
               {p.description && <div style={{ fontSize: '.75rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.description}</div>}
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '.85rem', marginTop: 2 }}>{p.price_cents != null ? `R${(p.price_cents / 100).toFixed(2)}` : <span style={{ fontSize: '.68rem', color: 'var(--text-muted)', fontWeight: 600 }}>on request</span>}</div>
             </div>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '.85rem', whiteSpace: 'nowrap' }}>{p.price_cents != null ? `R${(p.price_cents / 100).toFixed(2)}` : <span style={{ fontSize: '.68rem', color: 'var(--text-muted)', fontWeight: 600 }}>on request</span>}</div>
+            <button type="button" onClick={() => startOrder(p)}
+              style={{ flexShrink: 0, alignSelf: 'stretch', padding: '0 14px', borderRadius: 9, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '.78rem', background: 'var(--text-primary)', color: 'var(--bg-base)' }}>
+              Order
+            </button>
           </div>
         ))}
       </div>
+
+      <Modal open={!!orderItem} onClose={() => setOrderItem(null)} title={orderItem ? `Order · ${orderItem.name}` : 'Order'} maxWidth={440}>
+        {orderItem && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ padding: '11px 13px', borderRadius: 'var(--radius-md)', background: 'var(--bg-elevated)', fontSize: '.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              <strong style={{ color: 'var(--text-primary)' }}>Pay on collection.</strong> This places an order with the business — no card payment here. They'll confirm and you settle up (cash/EFT) when you collect.
+            </div>
+            <Input label="Quantity" type="number" min="1" max="999" value={qty} onChange={e => setQty(e.target.value)} />
+            <Textarea label="Note (optional)" placeholder="Size, collection time, anything they should know…" value={note} onChange={e => setNote(e.target.value)} style={{ minHeight: 80 }} />
+            <Input label="Contact number (optional)" type="tel" placeholder="So they can reach you" value={phone} onChange={e => setPhone(e.target.value)} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 2px' }}>
+              <span style={{ fontSize: '.82rem', color: 'var(--text-secondary)' }}>Total</span>
+              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.05rem' }}>{orderTotal != null ? `R${(orderTotal / 100).toFixed(2)}` : 'Price on collection'}</span>
+            </div>
+            <Btn fullWidth loading={placing} onClick={placeOrder}>Place order</Btn>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
@@ -6781,6 +6986,7 @@ function BusinessDashboard({ onLogout, onViewLanding, theme, onToggleTheme }) {
         <div style={{ maxWidth:1100, margin:'0 auto', display:'flex', gap:4, padding:'0 20px' }}>
           <button onClick={() => setTab('page')}      style={bizTab(tab==='page')}>My Page</button>
           <button onClick={() => setTab('catalog')}   style={bizTab(tab==='catalog')}>Catalog</button>
+          <button onClick={() => setTab('orders')}    style={bizTab(tab==='orders')}>Orders</button>
           <button onClick={() => setTab('deals')}     style={bizTab(tab==='deals')}>Deals</button>
           <button onClick={() => setTab('bookings')}  style={bizTab(tab==='bookings')}>Bookings</button>
           <button onClick={() => setTab('clients')}   style={bizTab(tab==='clients')}>Clients</button>
@@ -6811,6 +7017,7 @@ function BusinessDashboard({ onLogout, onViewLanding, theme, onToggleTheme }) {
         )
          : tab === 'page' ? <BusinessPageEditor biz={biz} onSaved={setBiz} />
          : tab === 'catalog' ? <BusinessCatalog biz={biz} />
+         : tab === 'orders' ? <BusinessOrders />
          : tab === 'deals' ? <BusinessDeals biz={biz} />
          : tab === 'bookings' ? <AvailabilityManager hostType="business" />
          : tab === 'clients' ? <BusinessClients />
@@ -7017,6 +7224,98 @@ function DealForm({ biz, deal, onDone, onCancel }) {
 
 // Business dashboard "Catalog" tab (Batch 5) — the owner lists products/services.
 // Price is entered in Rand, stored in cents; blank = "price on request".
+// Owner's catalogue-order inbox (pay-on-collection). Orders arrive as 'pending';
+// the owner accepts → marks ready → completes, or cancels at any point.
+const ORDER_BADGE = { pending:'pending', accepted:'accepted', ready:'in_progress', completed:'completed', cancelled:'rejected' }
+function BusinessOrders() {
+  const toast = useToast()
+  const token = () => localStorage.getItem('rl_token')
+  const [orders, setOrders] = useState(null)
+  const [filter, setFilter] = useState('')   // '' = all
+  const [busy, setBusy] = useState(null)      // order_id being updated
+
+  const load = () => fetch(`${API_BASE}/orders/received${filter ? `?status=${filter}` : ''}`, { headers: { Authorization: `Bearer ${token()}` } })
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('load')))
+    .then(d => setOrders(d.orders || []))
+    .catch(() => setOrders([]))
+  useEffect(() => { load() }, [filter]) // eslint-disable-line
+
+  async function setStatus(order, status) {
+    setBusy(order.order_id)
+    try {
+      const res = await fetch(`${API_BASE}/orders/${order.order_id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({ status }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || 'Could not update order')
+      toast(`Order ${status === 'ready' ? 'marked ready' : status}`, 'success')
+      await load()
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const FILTERS = [['', 'All'], ['pending', 'Pending'], ['accepted', 'Accepted'], ['ready', 'Ready'], ['completed', 'Completed'], ['cancelled', 'Cancelled']]
+  // Next-step actions available per status (forward path + cancel).
+  const ACTIONS = {
+    pending:  [['accepted', 'Accept', 'primary'], ['cancelled', 'Decline', 'danger']],
+    accepted: [['ready', 'Mark ready', 'primary'], ['cancelled', 'Cancel', 'danger']],
+    ready:    [['completed', 'Mark collected', 'primary'], ['cancelled', 'Cancel', 'danger']],
+  }
+
+  return (
+    <div>
+      <h2 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.3rem', marginBottom:4 }}>Orders</h2>
+      <p style={{ color:'var(--text-secondary)', fontSize:'.88rem', marginBottom:16 }}>Catalogue orders from customers. Payment is arranged on collection — confirm each order and update its status as you go.</p>
+      <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:18 }}>
+        {FILTERS.map(([v, label]) => (
+          <button key={v} onClick={() => setFilter(v)}
+            style={{ padding:'6px 13px', borderRadius:999, cursor:'pointer', fontSize:'.78rem', fontWeight:600,
+              border:`1px solid ${filter===v?'var(--text-primary)':'var(--border)'}`,
+              background:filter===v?'var(--text-primary)':'var(--bg-surface)', color:filter===v?'var(--bg-base)':'var(--text-secondary)' }}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {orders === null ? <div style={{ padding:40, textAlign:'center' }}><Spinner /></div>
+        : orders.length === 0 ? <EmptyState icon="inbox" message={filter ? `No ${filter} orders` : 'No orders yet'} />
+        : (
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {orders.map(o => (
+              <DCard key={o.order_id} hover={false} style={{ padding:'14px 16px' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12, flexWrap:'wrap' }}>
+                  <div style={{ minWidth:0, flex:1 }}>
+                    <div style={{ fontWeight:700, fontSize:'.95rem' }}>{o.quantity}× {o.product_name}</div>
+                    <div style={{ fontSize:'.8rem', color:'var(--text-muted)', marginTop:2 }}>
+                      {o.buyer_name || 'A customer'} · {new Date(o.created_at).toLocaleDateString()}
+                      {o.contact_phone && <> · <a href={`tel:${o.contact_phone}`} style={{ color:'var(--accent)' }}>{o.contact_phone}</a></>}
+                    </div>
+                    {o.note && <div style={{ fontSize:'.82rem', color:'var(--text-secondary)', marginTop:6, lineHeight:1.5 }}>“{o.note}”</div>}
+                  </div>
+                  <div style={{ textAlign:'right' }}>
+                    <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.05rem' }}>{o.total_cents != null ? zar(o.total_cents) : 'On collection'}</div>
+                    <div style={{ marginTop:4 }}><Badge variant={ORDER_BADGE[o.status] || 'default'}>{o.status}</Badge></div>
+                  </div>
+                </div>
+                {ACTIONS[o.status] && (
+                  <div style={{ display:'flex', gap:8, marginTop:12, flexWrap:'wrap' }}>
+                    {ACTIONS[o.status].map(([status, label, variant]) => (
+                      <Btn key={status} size="sm" variant={variant} loading={busy===o.order_id} onClick={() => setStatus(o, status)}>{label}</Btn>
+                    ))}
+                  </div>
+                )}
+              </DCard>
+            ))}
+          </div>
+        )}
+    </div>
+  )
+}
+
 function BusinessCatalog({ biz }) {
   const toast = useToast()
   const token = () => localStorage.getItem('rl_token')
@@ -8601,6 +8900,7 @@ const DASH_ROUTES = {
   '/post':            'tasks-new',
   '/my-tasks':        'tasks-mine',
   '/my-bids':         'my-bids',
+  '/my-orders':       'my-orders',
   '/suggestions':     'suggestions',
   '/messages':        'messages',
   '/notifications':   'notifications',
@@ -9395,6 +9695,7 @@ export default function App() {
       case 'tasks-new':            return <TaskNew setPage={setDashPage} setSelectedTask={setSelectedTask} />
       case 'tasks-mine':           return <MyTasks setPage={setDashPage} setSelectedTask={setSelectedTask} />
       case 'my-bids':              return <MyBids setPage={setDashPage} setSelectedTask={setSelectedTask} />
+      case 'my-orders':            return <MyOrders openBusiness={(bid) => { try { sessionStorage.setItem('rl_pending_biz', bid) } catch { /* noop */ } setDashPage('local-browse') }} />
       case 'suggestions':          return <Suggestions setPage={setDashPage} setSelectedTask={setSelectedTask} />
       case 'messages':             return <Messages target={messageTarget} clearTarget={() => setMessageTarget(null)} />
       case 'notifications':        return <Notifications setPage={setDashPage} setSelectedTask={setSelectedTask} openProfile={(uid) => { setSelectedUser(uid); setDashPage('public-profile') }} />
