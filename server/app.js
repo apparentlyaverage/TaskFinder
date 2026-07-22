@@ -35,6 +35,7 @@ import schedulingRouter from './routes/scheduling.js'
 import retainersRouter from './routes/retainers.js'
 import pushRouter from './routes/push.js'
 import availabilityRouter from './routes/availability.js'
+import ordersRouter from './routes/orders.js'
 import jwt from 'jsonwebtoken'
 import { pool } from './db.js'
 
@@ -212,6 +213,7 @@ app.use('/scheduling', schedulingRouter)
 app.use('/retainers', retainersRouter)
 app.use('/push', pushRouter)
 app.use('/availability', availabilityRouter)
+app.use('/orders', ordersRouter)
 app.use('/', betaRouter)   // /feedback + /waitlist
 
 // 404 + error handlers
